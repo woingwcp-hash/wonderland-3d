@@ -10,12 +10,13 @@
         let gachaMachineGroup = new THREE.Group();
         let trainGroup = new THREE.Group();
         let marioStageGroup = new THREE.Group();
+        let treasureIslandGroup = new THREE.Group();
         let numberBlocksGroup = new THREE.Group();
         let countingObjectsGroup = new THREE.Group();
         let particlesGroup = new THREE.Group();
 
         // Interactive & Animated Lists
-        let interactiveBlocks = []; // Array of NumberBlock3D / MarioBrick3D wrappers
+        let interactiveBlocks = []; // Array of NumberBlock3D / MarioBrick3D / TreasureChest3D wrappers
         let spawnedCountingItems = []; // Array of { mesh, num, worldPos }
         let activeParticles = [];
         let cloudsList = [];
@@ -47,6 +48,21 @@
             runningToFlag: false,
             flagSlideY: 3.35,
             walkCycle: 0
+        };
+
+        // NEW: Treasure Island 3D Free-Roaming Hero State (尋寶小英雄)
+        let treasureHero = {
+            group: null,
+            compassRing: null,
+            currentX: 0,
+            currentZ: 3.1,
+            targetX: null,
+            targetZ: null,
+            moveDirX: 0,
+            moveDirZ: 0,
+            pendingChest: null,
+            walkCycle: 0,
+            facingAngle: Math.PI
         };
 
         // Gachapon animation state
@@ -108,39 +124,56 @@
             scene.add(gachaMachineGroup);
             scene.add(trainGroup);
             scene.add(marioStageGroup);
+            scene.add(treasureIslandGroup);
             scene.add(numberBlocksGroup);
             scene.add(countingObjectsGroup);
             scene.add(particlesGroup);
 
-            // Build Rich 3D Wonderland Scenery, 3D Gachapon, 3D Train & 3D Mario Stage
+            // Build Rich 3D Wonderland Scenery, 3D Gachapon, 3D Train, 3D Mario Stage & 3D Treasure Island
             buildWonderlandEnvironment();
             build3DGachaponMachine();
             build3DCartoonTrain();
             build3DMarioStage();
+            build3DTreasureIsland();
 
-            // Bind Unified Pointer Event (Single-finger Touch & Mouse Click) & Keyboard for Mario Mode
+            // Bind Unified Pointer Event (Single-finger Touch & Mouse Click) & Keyboard
             renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown, false);
             window.addEventListener('keydown', onWindowKeyDown, false);
+            window.addEventListener('keyup', onWindowKeyUp, false);
             window.addEventListener('resize', onWindowResize, false);
         }
 
-        // Responsive Camera adjustment so iPad Portrait, Landscape & Phones never clip 3D blocks
+        // Responsive Camera adjustment (Switches to elevated adventure view in Treasure Island Mode)
         function updateCameraForAspect() {
             if (!camera) return;
             const aspect = window.innerWidth / window.innerHeight;
             camera.aspect = aspect;
-            if (aspect < 0.75) {
-                // Tall mobile portrait
-                camera.position.set(0, 6.2, 16.8);
-                camera.lookAt(0, 1.1, 0);
-            } else if (aspect < 1.15) {
-                // Tablet portrait / square
-                camera.position.set(0, 5.6, 14.0);
-                camera.lookAt(0, 1.3, 0);
+
+            if (gameState && gameState.mode === 'treasure') {
+                if (aspect < 0.75) {
+                    camera.position.set(0, 12.2, 14.8);
+                    camera.lookAt(0, 0.2, 0.8);
+                } else if (aspect < 1.15) {
+                    camera.position.set(0, 10.4, 12.6);
+                    camera.lookAt(0, 0.3, 0.6);
+                } else {
+                    camera.position.set(0, 8.8, 10.4);
+                    camera.lookAt(0, 0.4, 0.5);
+                }
             } else {
-                // Landscape iPad / Interactive Whiteboard / Desktop
-                camera.position.set(0, 5.0, 11.6);
-                camera.lookAt(0, 1.4, 0);
+                if (aspect < 0.75) {
+                    // Tall mobile portrait
+                    camera.position.set(0, 6.2, 16.8);
+                    camera.lookAt(0, 1.1, 0);
+                } else if (aspect < 1.15) {
+                    // Tablet portrait / square
+                    camera.position.set(0, 5.6, 14.0);
+                    camera.lookAt(0, 1.3, 0);
+                } else {
+                    // Landscape iPad / Interactive Whiteboard / Desktop
+                    camera.position.set(0, 5.0, 11.6);
+                    camera.lookAt(0, 1.4, 0);
+                }
             }
             camera.updateProjectionMatrix();
         }
@@ -681,6 +714,249 @@
             marioStageGroup.add(hero);
         }
 
+        // Mode 5 Centerpiece: 3D Treasure Island & Free-Roaming Mario Explorer (尋寶小英雄)
+        function build3DTreasureIsland() {
+            treasureIslandGroup.clear();
+            treasureIslandGroup.visible = false;
+
+            // 1. Sparkling Ocean Water Ring around the island
+            const waterGeo = new THREE.CylinderGeometry(11.5, 11.5, 0.18, 48);
+            const waterMat = new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.25, metalness: 0.1 });
+            const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.set(0, -0.05, 0.4);
+            waterMesh.receiveShadow = true;
+            treasureIslandGroup.add(waterMesh);
+
+            // 2. Sandy Beach Rim
+            const sandGeo = new THREE.CylinderGeometry(6.8, 7.3, 0.26, 40);
+            const sandMat = new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 });
+            const sandMesh = new THREE.Mesh(sandGeo, sandMat);
+            sandMesh.position.set(0, 0.04, 0.4);
+            sandMesh.receiveShadow = true;
+            treasureIslandGroup.add(sandMesh);
+
+            // 3. Lush Green Adventure Island Top
+            const turfGeo = new THREE.CylinderGeometry(5.9, 6.2, 0.32, 40);
+            const turfMat = new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 });
+            const turfMesh = new THREE.Mesh(turfGeo, turfMat);
+            turfMesh.position.set(0, 0.12, 0.4);
+            turfMesh.receiveShadow = true;
+            treasureIslandGroup.add(turfMesh);
+
+            // 4. Cute Cobblestone Stepping Path in Center
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.6 });
+            [
+                { x: 0, z: 2.3, r: 0.45 },
+                { x: 0, z: 1.3, r: 0.5 },
+                { x: -1.2, z: 0.4, r: 0.42 },
+                { x: 1.2, z: 0.4, r: 0.42 },
+                { x: 0, z: -0.4, r: 0.45 }
+            ].forEach(st => {
+                const stone = new THREE.Mesh(new THREE.CylinderGeometry(st.r, st.r * 1.08, 0.06, 16), stoneMat);
+                stone.position.set(st.x, 0.29, st.z);
+                stone.receiveShadow = true;
+                treasureIslandGroup.add(stone);
+            });
+
+            // 5. Decorative Palm / Island Trees on Back Edge
+            const palmPositions = [
+                { x: -4.6, z: -2.2, s: 0.9 },
+                { x: 4.6, z: -2.2, s: 0.9 },
+                { x: -4.9, z: 1.6, s: 0.75 },
+                { x: 4.9, z: 1.6, s: 0.75 }
+            ];
+            palmPositions.forEach(p => {
+                const tree = new THREE.Group();
+                const trunk = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.16, 0.24, 1.3, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.8 })
+                );
+                trunk.position.y = 0.65;
+                trunk.castShadow = true;
+                tree.add(trunk);
+
+                const crown = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.75, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.5 })
+                );
+                crown.scale.set(1.2, 0.7, 1.2);
+                crown.position.y = 1.4;
+                crown.castShadow = true;
+                tree.add(crown);
+
+                tree.position.set(p.x, 0.25, p.z);
+                tree.scale.setScalar(p.s);
+                treasureIslandGroup.add(tree);
+            });
+
+            // 6. Glowing Compass Foot Ring under Treasure Hero
+            const ringGeo = new THREE.RingGeometry(0.52, 0.72, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xFACC15,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9
+            });
+            const compassRing = new THREE.Mesh(ringGeo, ringMat);
+            compassRing.rotation.x = Math.PI / 2;
+            compassRing.position.set(0, 0.31, 3.1);
+            treasureHero.compassRing = compassRing;
+            treasureIslandGroup.add(compassRing);
+
+            // 7. Clone the cute 3D Mario Hero for Treasure Island Exploration
+            const explorer = marioHero.group.clone();
+            explorer.position.set(0, 0.28, 3.1);
+            treasureHero.group = explorer;
+            treasureIslandGroup.add(explorer);
+        }
+
+        // Create a 3D Wooden & Gold Treasure Chest with a Big Number Badge & Hinged Lid
+        function create3DTreasureChest(num, x, z) {
+            const meta = getCognitiveItemMeta(num, 'number');
+            const group = new THREE.Group();
+            const baseY = 0.28;
+            group.position.set(x, baseY, z);
+
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.55 });
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.25, metalness: 0.35 });
+            const darkInsideMat = new THREE.MeshBasicMaterial({ color: 0x451A03 });
+
+            // Chest Base Box
+            const baseBox = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.82, 1.15), woodMat);
+            baseBox.position.y = 0.41;
+            baseBox.castShadow = true;
+            baseBox.receiveShadow = true;
+            baseBox.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
+            group.add(baseBox);
+
+            // Golden Trim Straps on Base
+            [-0.55, 0.55].forEach(sx => {
+                const strap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.84, 1.19), goldMat);
+                strap.position.set(sx, 0.41, 0);
+                group.add(strap);
+            });
+
+            // Glowing Gold Lock Plate on Front
+            const lockPlate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.1), goldMat);
+            lockPlate.position.set(0, 0.72, 0.58);
+            group.add(lockPlate);
+
+            // Inner Gold Glow when Chest Opens
+            const innerTreasure = new THREE.Mesh(
+                new THREE.BoxGeometry(1.35, 0.15, 0.95),
+                new THREE.MeshBasicMaterial({ color: 0xFDE047 })
+            );
+            innerTreasure.position.y = 0.78;
+            group.add(innerTreasure);
+
+            // Hinged Chest Lid (Pivots around back edge z = -0.55, y = 0.82)
+            const lidPivot = new THREE.Group();
+            lidPivot.position.set(0, 0.82, -0.55);
+
+            const lidBox = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 1.15), woodMat);
+            lidBox.position.set(0, 0.21, 0.55);
+            lidBox.castShadow = true;
+            lidBox.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
+            lidPivot.add(lidBox);
+
+            [-0.55, 0.55].forEach(sx => {
+                const lidStrap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.45, 1.19), goldMat);
+                lidStrap.position.set(sx, 0.21, 0.55);
+                lidPivot.add(lidStrap);
+            });
+            group.add(lidPivot);
+
+            // High-Contrast Floating Number Signboard above the Chest (Tilted toward top-down camera)
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = meta.hex;
+            roundRectCanvas(ctx, 8, 8, 240, 240, 44);
+            ctx.fill();
+
+            ctx.fillStyle = '#FFFFFF';
+            roundRectCanvas(ctx, 24, 24, 208, 208, 32);
+            ctx.fill();
+
+            ctx.fillStyle = '#0F172A';
+            ctx.font = '900 138px "Fredoka", "Noto Sans TC", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(num), 128, 118);
+
+            // Quantity dots at bottom of chest sign
+            ctx.fillStyle = meta.hex;
+            const dotR = 7;
+            const gap = 18;
+            const startX = 128 - ((num - 1) * gap) / 2;
+            for (let i = 0; i < num; i++) {
+                ctx.beginPath();
+                ctx.arc(startX + i * gap, 204, dotR, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const signTex = new THREE.CanvasTexture(canvas);
+            const signCard = new THREE.Mesh(
+                new THREE.BoxGeometry(1.38, 1.38, 0.16),
+                [
+                    new THREE.MeshStandardMaterial({ color: meta.hex }),
+                    new THREE.MeshStandardMaterial({ color: meta.hex }),
+                    new THREE.MeshStandardMaterial({ color: meta.hex }),
+                    new THREE.MeshStandardMaterial({ color: meta.hex }),
+                    new THREE.MeshBasicMaterial({ map: signTex }),
+                    new THREE.MeshStandardMaterial({ color: meta.hex })
+                ]
+            );
+            signCard.position.set(0, 1.98, 0);
+            signCard.rotation.x = -0.35; // Tilted slightly upward for top-down camera readability
+            signCard.castShadow = true;
+            signCard.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
+            group.add(signCard);
+
+            // Golden Ground Halo Ring around the Chest (For Visual Hint)
+            const haloGeo = new THREE.RingGeometry(1.05, 1.35, 32);
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0xFFEA00,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.0
+            });
+            const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+            haloMesh.rotation.x = Math.PI / 2;
+            haloMesh.position.set(0, 0.05, 0);
+            group.add(haloMesh);
+
+            const wrapper = {
+                num,
+                itemKey: num,
+                isMarioBrick: false,
+                isTreasureChest: true,
+                group,
+                bodyMesh: signCard,
+                extraHitMeshes: [baseBox, lidBox, signCard],
+                lidPivot,
+                lidOpen: false,
+                haloMesh,
+                baseX: x,
+                baseY,
+                baseZ: z,
+                baseScale: 1.0,
+                state: 'idle',
+                animTime: Math.random() * Math.PI * 2,
+                wrongTimer: 0,
+                celebrateTimer: 0,
+                bumpOffset: 0
+            };
+
+            baseBox.userData.parentWrapper = wrapper;
+            lidBox.userData.parentWrapper = wrapper;
+            signCard.userData.parentWrapper = wrapper;
+            numberBlocksGroup.add(group);
+            return wrapper;
+        }
+
         function updateMarioMissionSign(targetKey) {
             if (!marioHero.missionSignMesh) return;
             const meta = getCognitiveItemMeta(targetKey);
@@ -1133,18 +1409,31 @@
                 crownRing.position.y = 0.4;
                 itemGroup.add(crownRing);
             } else if (isCoin) {
-                // Shiny 3D Mario Gold Coin
-                const coinMat = new THREE.MeshStandardMaterial({
-                    color: 0xFFD700,
-                    roughness: 0.2,
-                    metalness: 0.6,
-                    emissive: 0xF59E0B,
-                    emissiveIntensity: 0.2
-                });
-                const coinCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.12, 24), coinMat);
-                coinCylinder.rotation.x = Math.PI / 2;
-                coinCylinder.castShadow = true;
-                itemGroup.add(coinCylinder);
+                // Shiny 3D Mario Gold Coin or Sparkling Ruby Gem in Treasure Mode
+                if (gameState.mode === 'treasure') {
+                    const gemMat = new THREE.MeshStandardMaterial({
+                        color: 0xE11D48,
+                        roughness: 0.12,
+                        metalness: 0.35,
+                        emissive: 0x9F1239,
+                        emissiveIntensity: 0.25
+                    });
+                    const gemMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), gemMat);
+                    gemMesh.castShadow = true;
+                    itemGroup.add(gemMesh);
+                } else {
+                    const coinMat = new THREE.MeshStandardMaterial({
+                        color: 0xFFD700,
+                        roughness: 0.2,
+                        metalness: 0.6,
+                        emissive: 0xF59E0B,
+                        emissiveIntensity: 0.2
+                    });
+                    const coinCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.12, 24), coinMat);
+                    coinCylinder.rotation.x = Math.PI / 2;
+                    coinCylinder.castShadow = true;
+                    itemGroup.add(coinCylinder);
+                }
             } else {
                 // Cute 3D Red Apple with Green Leaf
                 const appleMat = new THREE.MeshStandardMaterial({ color: 0xFF3B30, roughness: 0.25 });

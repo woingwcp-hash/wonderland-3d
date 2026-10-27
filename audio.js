@@ -213,6 +213,29 @@
             } catch (e) {}
         }
 
+        // Magical Treasure Chest Unlock Arpeggio Sound
+        function playChestOpenSound() {
+            if (!gameState.sfxEnabled) return;
+            try {
+                ensureAudioCtx();
+                if (!audioCtx) return;
+                const notes = [392.00, 493.88, 587.33, 783.99, 987.77, 1174.66];
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    const st = audioCtx.currentTime + i * 0.065;
+                    osc.frequency.setValueAtTime(freq, st);
+                    gain.gain.setValueAtTime(0.24, st);
+                    gain.gain.exponentialRampToValueAtTime(0.001, st + 0.32);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(st);
+                    osc.stop(st + 0.33);
+                });
+            } catch (e) {}
+        }
+
         // No-op stub: Speech synthesis completely removed as requested by user
         function speakCantonese() {
             // Intentionally empty: TTS voice readout disabled

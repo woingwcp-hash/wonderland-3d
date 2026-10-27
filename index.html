@@ -15,7 +15,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Toy Styles (Root level to match flat GitHub upload) -->
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body class="relative select-none">
 <!-- 3D WebGL Canvas Container -->
@@ -104,10 +104,10 @@
                 </button>
 
                 <div class="flex items-center gap-2.5">
-                    <span id="lobby-selected-subj-icon" class="text-3xl sm:text-4xl">🎨</span>
+                    <span id="lobby-selected-subj-icon" class="text-3xl sm:text-4xl">🔢</span>
                     <div class="text-left">
                         <div class="text-xs font-bold text-slate-400">目前已選主題</div>
-                        <h2 id="lobby-selected-subj-title" class="text-xl sm:text-2xl font-black text-slate-800">顏色樂園</h2>
+                        <h2 id="lobby-selected-subj-title" class="text-xl sm:text-2xl font-black text-slate-800">數字樂園</h2>
                     </div>
                 </div>
 
@@ -181,6 +181,22 @@
                         </p>
                     </div>
                 </button>
+
+                <!-- Game 5: Treasure Island Hero (Exclusive to Number Subject 數字樂園限定) -->
+                <button id="lobby-card-treasure" onclick="startGameFromLobby('treasure')" class="btn-toy group sm:col-span-2 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-100 hover:from-amber-200 hover:to-orange-200 p-5 rounded-3xl border-4 border-amber-400 items-center gap-4 text-left shadow-lg flex">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">
+                        🗺️
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="text-lg sm:text-2xl font-black text-slate-800">尋寶小英雄（3D 自由行路尋寶）</span>
+                            <span class="text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1 rounded-full shadow-sm">🔢 數字樂園限定新玩法</span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">
+                            用十字方向掣（上下左右）控制馬利奧小英雄喺 3D 尋寶島自由探索，或者直接撳寶箱去打開目標數字寶物！
+                        </p>
+                    </div>
+                </button>
             </div>
         </div>
     </div>
@@ -203,9 +219,9 @@
 
             <!-- Current Subject & Mode Status Badge -->
             <div id="top-current-status" class="hidden md:flex items-center gap-2 bg-indigo-950/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-2xl border-2 border-indigo-300/80 text-xs sm:text-sm font-bold shadow-sm">
-                <span id="status-subj-badge" class="bg-amber-400 text-amber-950 px-2 py-0.5 rounded-lg font-black">🎨 顏色</span>
+                <span id="status-subj-badge" class="bg-amber-400 text-amber-950 px-2 py-0.5 rounded-lg font-black">🔢 數字</span>
                 <span>・</span>
-                <span id="status-mode-badge">🔮 扭蛋尋寶</span>
+                <span id="status-mode-badge">🗺️ 尋寶小英雄</span>
             </div>
         </div>
 
@@ -219,7 +235,7 @@
 
             <!-- 5-Star Progress Bar -->
             <div class="flex items-center gap-1 bg-white/90 backdrop-blur-md px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border-2 border-yellow-300 shadow-sm" title="集齊5粒星可抽3D玩具獎印！">
-                <div id="stars-bar" class="flex items-center gap-1 text-base sm:text-xl"><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i></div>
+                <div id="stars-bar" class="flex items-center gap-1 text-base sm:text-xl"><i class="fa-solid fa-star text-amber-400 drop-shadow star-earned"></i><i class="fa-solid fa-star text-amber-400 drop-shadow star-earned"></i><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i><i class="fa-solid fa-star text-slate-200"></i></div>
             </div>
 
             <!-- Sound Effects Mute/Unmute Toggle (No TTS Voice) -->
@@ -256,14 +272,12 @@
     <div class="pointer-events-none absolute inset-x-0 bottom-3 sm:bottom-5 z-20 flex flex-col items-center justify-end px-3 sm:px-4 gap-2.5">
         
         <!-- Big Quantity Counting Counter Pill (Shows when counting 1..N objects/coins) -->
-        <div id="counting-banner" class="hidden pointer-events-auto transform transition-all duration-300 bg-gradient-to-r from-amber-400 via-orange-400 to-pink-500 p-1 rounded-3xl shadow-xl">
+        <div id="counting-banner" class="pointer-events-auto transform transition-all duration-300 bg-gradient-to-r from-amber-400 via-orange-400 to-pink-500 p-1 rounded-3xl shadow-xl hidden">
             <div class="bg-white/95 backdrop-blur px-5 py-2 rounded-[20px] flex items-center gap-3.5">
-                <span id="counting-emoji" class="text-3xl sm:text-4xl animate-bounce">🍎</span>
+                <span id="counting-emoji" class="text-3xl sm:text-4xl animate-bounce">💎</span>
                 <div class="flex flex-col">
                     <span class="text-xs font-bold text-slate-400 tracking-wider">一齊數數看（數與量結合）</span>
-                    <div id="counting-dots" class="flex items-center gap-1.5 mt-0.5 text-xl sm:text-2xl font-black text-orange-500">
-                        <!-- Dynamically filled: 1, 2, 3... -->
-                    </div>
+                    <div id="counting-dots" class="flex items-center gap-1.5 mt-0.5 text-xl sm:text-2xl font-black text-orange-500"><span class="inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned">1</span><span class="inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned">2</span><span class="inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned">3</span></div>
                 </div>
             </div>
         </div>
@@ -286,18 +300,50 @@
             </button>
         </div>
 
+        <!-- NEW: Treasure Island 4-Way D-Pad Controller (Only visible in Treasure Hero Mode) -->
+        <div id="treasure-dpad-bar" class="pointer-events-auto items-center justify-center gap-3 sm:gap-5 bg-slate-900/85 backdrop-blur-md px-4 py-2.5 sm:px-6 sm:py-3 rounded-3xl border-2 border-amber-400 shadow-2xl flex">
+            <div class="hidden sm:flex flex-col text-left pr-2 border-r border-slate-700">
+                <span class="text-xs font-black text-amber-300">🗺️ 尋寶方向盤</span>
+                <span class="text-[11px] font-bold text-slate-300">按住方向掣行去數字寶箱<br>或直接用手指撳 3D 寶箱</span>
+            </div>
+
+            <!-- Left Button -->
+            <button onpointerdown="setTreasureMoveDir(-1, 0)" onpointerup="setTreasureMoveDir(0, 0)" onpointerleave="setTreasureMoveDir(0, 0)" onclick="nudgeTreasureHero(-1, 0)" class="btn-toy bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-black w-14 h-12 sm:w-16 sm:h-14 rounded-2xl border-2 border-sky-200 flex flex-col items-center justify-center">
+                <i class="fa-solid fa-caret-left text-xl sm:text-2xl leading-none"></i>
+                <span class="text-[10px] sm:text-xs font-black">左</span>
+            </button>
+
+            <!-- Up & Down Column -->
+            <div class="flex flex-col gap-1.5">
+                <button onpointerdown="setTreasureMoveDir(0, -1)" onpointerup="setTreasureMoveDir(0, 0)" onpointerleave="setTreasureMoveDir(0, 0)" onclick="nudgeTreasureHero(0, -1)" class="btn-toy bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-amber-950 font-black w-16 h-11 sm:w-20 sm:h-12 rounded-2xl border-2 border-amber-200 flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-caret-up text-lg sm:text-xl"></i>
+                    <span class="text-xs sm:text-sm font-black">上</span>
+                </button>
+                <button onpointerdown="setTreasureMoveDir(0, 1)" onpointerup="setTreasureMoveDir(0, 0)" onpointerleave="setTreasureMoveDir(0, 0)" onclick="nudgeTreasureHero(0, 1)" class="btn-toy bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-amber-950 font-black w-16 h-11 sm:w-20 sm:h-12 rounded-2xl border-2 border-amber-200 flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-caret-down text-lg sm:text-xl"></i>
+                    <span class="text-xs sm:text-sm font-black">下</span>
+                </button>
+            </div>
+
+            <!-- Right Button -->
+            <button onpointerdown="setTreasureMoveDir(1, 0)" onpointerup="setTreasureMoveDir(0, 0)" onpointerleave="setTreasureMoveDir(0, 0)" onclick="nudgeTreasureHero(1, 0)" class="btn-toy bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-black w-14 h-12 sm:w-16 sm:h-14 rounded-2xl border-2 border-sky-200 flex flex-col items-center justify-center">
+                <i class="fa-solid fa-caret-right text-xl sm:text-2xl leading-none"></i>
+                <span class="text-[10px] sm:text-xs font-black">右</span>
+            </button>
+        </div>
+
         <!-- Main Visual Mission Bar (Replaced TTS speaker with Big Target Numeral Card) -->
         <div class="pointer-events-auto flex items-center gap-2.5 sm:gap-3.5 bg-white/95 backdrop-blur-md px-3.5 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-sky-300 shadow-2xl max-w-2xl w-full justify-between">
             <!-- Big Visual Target Numeral Badge (Clear non-verbal cue for toddlers) -->
             <button onclick="triggerVisualHint(true)" id="target-number-card" class="btn-toy flex-shrink-0 min-w-[60px] h-14 sm:min-w-[72px] sm:h-16 px-2.5 rounded-2xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-900 flex flex-col items-center justify-center border-2 border-amber-500 animate-pulse-soft" title="目標數字提示卡" style="background: linear-gradient(rgb(252, 211, 77), rgb(251, 191, 36)); color: rgb(15, 23, 42);">
-                <span id="target-badge-num" class="text-2xl sm:text-3xl font-black leading-none" style="font-family: 'Fredoka', sans-serif;">3</span>
-                <span id="target-badge-dots" class="text-[10px] sm:text-xs font-black text-amber-900 tracking-tighter mt-0.5">●●●</span>
+                <span id="target-badge-num" class="text-2xl sm:text-3xl font-black leading-none" style="font-family: 'Fredoka', sans-serif;">2</span>
+                <span id="target-badge-dots" class="text-[10px] sm:text-xs font-black text-amber-900 tracking-tighter mt-0.5">●●</span>
             </button>
 
             <!-- Instruction Text -->
             <div class="flex-1 text-center px-1">
-                <p id="prompt-text" class="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-wide leading-snug">請搵出「數字 3（三）」扭蛋尋寶！</p>
-                <p id="sub-prompt-text" class="text-xs sm:text-sm font-bold text-sky-600 mt-0.5">可對照左方目標提示卡，輕觸畫面中的立體「數字 3（三）」公仔</p>
+                <p id="prompt-text" class="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-wide leading-snug">🗺️ 尋寶任務：請帶小英雄去打開「數字 2（二）」嘅寶箱！</p>
+                <p id="sub-prompt-text" class="text-xs sm:text-sm font-bold text-sky-600 mt-0.5">可按右下角「上下左右」方向掣行過去，或直接用手指點擊 3D 寶箱</p>
             </div>
 
             <!-- Next Question / Range Toggle in Explore Mode -->
@@ -309,7 +355,7 @@
     </div>
 
     <!-- ==================== MODAL 1: TEACHER / PARENT SETTINGS (教學調適設定) ==================== -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="settings-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border-4 border-indigo-200 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between border-b-2 border-slate-100 pb-4 mb-5">
                 <div class="flex items-center gap-3">
@@ -333,13 +379,13 @@
                         🎓 1. 幼兒認知學習主題（可隨時於頂部切換）
                     </label>
                     <div class="grid grid-cols-3 gap-2.5">
-                        <button onclick="switchSubject('number'); syncSettingsUI();" id="set-subj-number" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="switchSubject('number'); syncSettingsUI();" id="set-subj-number" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             🔢 數字認知<br><span class="text-xs font-normal opacity-80">1 - 10 與數量</span>
                         </button>
-                        <button onclick="switchSubject('color'); syncSettingsUI();" id="set-subj-color" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="switchSubject('color'); syncSettingsUI();" id="set-subj-color" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-indigo-600 text-white border-indigo-600 shadow-md">
                             🎨 顏色認知<br><span class="text-xs font-normal opacity-80">6 種基礎色彩</span>
                         </button>
-                        <button onclick="switchSubject('shape'); syncSettingsUI();" id="set-subj-shape" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="switchSubject('shape'); syncSettingsUI();" id="set-subj-shape" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             🔺 形狀認知<br><span class="text-xs font-normal opacity-80">6 種立體幾何</span>
                         </button>
                     </div>
@@ -351,13 +397,13 @@
                         🔢 2. 認讀數字範圍（當選擇「數字主題」時適用）
                     </label>
                     <div class="grid grid-cols-3 gap-2.5">
-                        <button onclick="updateSetting('range', '1-5')" id="set-range-1-5" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('range', '1-5')" id="set-range-1-5" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-indigo-600 text-white border-indigo-600 shadow-md">
                             1 - 5<br><span class="text-xs font-normal opacity-80">初階 (K1)</span>
                         </button>
-                        <button onclick="updateSetting('range', '6-10')" id="set-range-6-10" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('range', '6-10')" id="set-range-6-10" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             6 - 10<br><span class="text-xs font-normal opacity-80">進階 (K2)</span>
                         </button>
-                        <button onclick="updateSetting('range', '1-10')" id="set-range-1-10" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('range', '1-10')" id="set-range-1-10" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             1 - 10<br><span class="text-xs font-normal opacity-80">綜合挑戰</span>
                         </button>
                     </div>
@@ -369,13 +415,13 @@
                         🎯 3. 選項數量（難度與無錯誤學習調適）
                     </label>
                     <div class="grid grid-cols-3 gap-2.5">
-                        <button onclick="updateSetting('choices', 1)" id="set-choices-1" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('choices', 1)" id="set-choices-1" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             1 選 1<br><span class="text-xs font-normal opacity-80">無錯誤學習</span>
                         </button>
-                        <button onclick="updateSetting('choices', 2)" id="set-choices-2" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('choices', 2)" id="set-choices-2" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             2 選 1<br><span class="text-xs font-normal opacity-80">基礎辨別</span>
                         </button>
-                        <button onclick="updateSetting('choices', 3)" id="set-choices-3" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                        <button onclick="updateSetting('choices', 3)" id="set-choices-3" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all bg-indigo-600 text-white border-indigo-600 shadow-md">
                             3 選 1<br><span class="text-xs font-normal opacity-80">標準挑戰</span>
                         </button>
                     </div>
@@ -387,11 +433,11 @@
                         🌿 3. 3D 場景背景（視覺干擾控制）
                     </label>
                     <div class="grid grid-cols-2 gap-2.5">
-                        <button onclick="updateSetting('lowDistraction', false)" id="set-bg-rich" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2">
+                        <button onclick="updateSetting('lowDistraction', false)" id="set-bg-rich" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 bg-indigo-600 text-white border-indigo-600 shadow-md">
                             <span>🌈</span>
                             <span>豐富 3D 樂園背景</span>
                         </button>
-                        <button onclick="updateSetting('lowDistraction', true)" id="set-bg-calm" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2">
+                        <button onclick="updateSetting('lowDistraction', true)" id="set-bg-calm" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100">
                             <span>🌿</span>
                             <span>低干擾純色背景</span>
                         </button>
@@ -468,9 +514,9 @@
     <!-- ==================== MODAL 3: GITHUB MULTI-FILE EXPORTER (GitHub 專案分拆與匯出中心) ==================== -->
 
     <!-- Modular Game Scripts (Root level to match flat GitHub upload) -->
-    <script src="./config.js"></script>
-    <script src="./audio.js"></script>
-    <script src="./scene3d.js"></script>
-    <script src="./main.js"></script>
+    <script src="config.js"></script>
+    <script src="audio.js"></script>
+    <script src="scene3d.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>

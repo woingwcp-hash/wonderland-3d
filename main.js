@@ -12,7 +12,8 @@
             gacha: '🔮 扭蛋尋寶',
             train: '🚂 認知小火車',
             mario: '🍄 認知大冒險',
-            explore: '🎨 自由探索'
+            explore: '🎨 自由探索',
+            treasure: '🗺️ 尋寶小英雄'
         };
 
         // Open the 2-Step Lobby Overlay ('subject' = Step 1, 'mode' = Step 2)
@@ -34,6 +35,19 @@
                 const meta = SUBJECT_DISPLAY_META[gameState.subject] || SUBJECT_DISPLAY_META.number;
                 document.getElementById('lobby-selected-subj-icon').textContent = meta.icon;
                 document.getElementById('lobby-selected-subj-title').textContent = meta.title;
+
+                // Show the 5th mode (尋寶小英雄) ONLY when inside Number Wonderland (🔢 數字樂園)
+                const treasureCard = document.getElementById('lobby-card-treasure');
+                if (treasureCard) {
+                    if (gameState.subject === 'number') {
+                        treasureCard.classList.remove('hidden');
+                        treasureCard.classList.add('flex');
+                    } else {
+                        treasureCard.classList.add('hidden');
+                        treasureCard.classList.remove('flex');
+                    }
+                }
+
                 stepSubj.classList.add('hidden');
                 stepMode.classList.remove('hidden');
             }
@@ -84,6 +98,11 @@
             gameState.subject = newSubject;
             gameState.isBusy = false;
 
+            // If user switches to Color or Shape while inside number-exclusive Treasure mode, switch to Gacha
+            if (newSubject !== 'number' && gameState.mode === 'treasure') {
+                gameState.mode = 'gacha';
+            }
+
             updateTopStatusBadge();
             updateRightButtonForMode();
             startNewRound();
@@ -113,13 +132,16 @@
 
             updateTopStatusBadge();
 
-            // Toggle visibility of 3D centerpieces & Mario Controls
+            // Toggle visibility of 3D centerpieces & Mode-specific Controllers
             gachaMachineGroup.visible = (newMode === 'gacha');
             trainGroup.visible = (newMode === 'train');
             marioStageGroup.visible = (newMode === 'mario');
+            treasureIslandGroup.visible = (newMode === 'treasure');
 
             const marioControls = document.getElementById('mario-controls-bar');
             const marioBadge = document.getElementById('mario-stage-badge');
+            const treasureDpad = document.getElementById('treasure-dpad-bar');
+
             if (newMode === 'mario') {
                 marioControls.classList.remove('hidden');
                 marioControls.classList.add('flex');
@@ -132,7 +154,18 @@
                 marioBadge.classList.remove('flex');
             }
 
+            if (treasureDpad) {
+                if (newMode === 'treasure') {
+                    treasureDpad.classList.remove('hidden');
+                    treasureDpad.classList.add('flex');
+                } else {
+                    treasureDpad.classList.add('hidden');
+                    treasureDpad.classList.remove('flex');
+                }
+            }
+
             document.getElementById('btn-visual-hint').style.display = (newMode === 'explore') ? 'none' : 'flex';
+            updateCameraForAspect();
             updateRightButtonForMode();
             startNewRound();
         }
@@ -215,6 +248,12 @@
                 return;
             }
 
+            if (gameState.mode === 'treasure') {
+                setupTreasureRound(choices, target, meta);
+                scheduleAutoVisualPrompt();
+                return;
+            }
+
             // Place 3D Cognitive Character Blocks in Foreground for Gacha & Train modes
             const spacing = numChoices === 1 ? 0 : (numChoices === 2 ? 3.4 : 3.1);
             const startX = -((numChoices - 1) * spacing) / 2;
@@ -277,6 +316,70 @@
                 `🍄 關卡 1-${gameState.marioStage}：請頂開「${meta.title}」嘅金磚塊！`,
                 `直接點擊空中磚塊，或用下方按鈕移動並跳起頂磚塊`
             );
+        }
+
+        // Setup Mode 5: Treasure Island Free-Roaming Hero Round (尋寶小英雄)
+        function setupTreasureRound(choices, target, meta) {
+            const numChoices = choices.length;
+            // Scenic Island Coordinates for 1, 2, or 3 Treasure Chests
+            const chestLayouts = {
+                1: [{ x: 0, z: -1.3 }],
+                2: [{ x: -2.5, z: -1.0 }, { x: 2.5, z: -1.0 }],
+                3: [{ x: -3.1, z: -0.5 }, { x: 0, z: -2.0 }, { x: 3.1, z: -0.5 }]
+            };
+            const coords = chestLayouts[numChoices] || chestLayouts[3];
+
+            choices.forEach((itemKey, idx) => {
+                const pt = coords[idx] || { x: 0, z: -1.2 };
+                const chest = create3DTreasureChest(itemKey, pt.x, pt.z);
+                interactiveBlocks.push(chest);
+            });
+
+            // Reset Explorer Hero at the front beach bridge of the island
+            treasureHero.currentX = 0;
+            treasureHero.currentZ = 3.1;
+            treasureHero.targetX = null;
+            treasureHero.targetZ = null;
+            treasureHero.moveDirX = 0;
+            treasureHero.moveDirZ = 0;
+            treasureHero.pendingChest = null;
+            treasureHero.facingAngle = Math.PI;
+            if (treasureHero.group) {
+                treasureHero.group.position.set(0, 0.28, 3.1);
+                treasureHero.group.rotation.y = Math.PI;
+            }
+            if (treasureHero.compassRing) {
+                treasureHero.compassRing.position.set(0, 0.31, 3.1);
+            }
+
+            setPromptUI(
+                `🗺️ 尋寶任務：請帶小英雄去打開「${meta.title}」嘅寶箱！`,
+                `可按右下角「上下左右」方向掣行過去，或直接用手指點擊 3D 寶箱`
+            );
+        }
+
+        // D-Pad Continuous & Step Movement Controls for Treasure Island Mode
+        function setTreasureMoveDir(dx, dz) {
+            if (gameState.mode !== 'treasure' || gameState.isBusy) {
+                treasureHero.moveDirX = 0;
+                treasureHero.moveDirZ = 0;
+                return;
+            }
+            treasureHero.moveDirX = dx;
+            treasureHero.moveDirZ = dz;
+            if (dx !== 0 || dz !== 0) {
+                treasureHero.targetX = null;
+                treasureHero.targetZ = null;
+                treasureHero.pendingChest = null;
+            }
+        }
+
+        function nudgeTreasureHero(dx, dz) {
+            if (gameState.mode !== 'treasure' || gameState.isBusy) return;
+            playPopSound(440);
+            treasureHero.targetX = Math.max(-4.3, Math.min(4.3, treasureHero.currentX + dx * 0.95));
+            treasureHero.targetZ = Math.max(-2.6, Math.min(3.5, treasureHero.currentZ + dz * 0.95));
+            treasureHero.pendingChest = null;
         }
 
         function setupExploreMode() {
@@ -344,14 +447,37 @@
         }
 
         function onWindowKeyDown(e) {
-            if (gameState.mode !== 'mario') return;
-            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                marioMoveStep(-1);
-            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                marioMoveStep(1);
-            } else if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'Enter') {
-                e.preventDefault();
-                marioJumpAction();
+            if (gameState.mode === 'mario') {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                    marioMoveStep(-1);
+                } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                    marioMoveStep(1);
+                } else if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'Enter') {
+                    e.preventDefault();
+                    marioJumpAction();
+                }
+            } else if (gameState.mode === 'treasure') {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                    setTreasureMoveDir(-1, treasureHero.moveDirZ);
+                } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                    setTreasureMoveDir(1, treasureHero.moveDirZ);
+                } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                    e.preventDefault();
+                    setTreasureMoveDir(treasureHero.moveDirX, -1);
+                } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                    e.preventDefault();
+                    setTreasureMoveDir(treasureHero.moveDirX, 1);
+                }
+            }
+        }
+
+        function onWindowKeyUp(e) {
+            if (gameState.mode !== 'treasure') return;
+            if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) {
+                setTreasureMoveDir(0, treasureHero.moveDirZ);
+            }
+            if (['ArrowUp', 'w', 'W', 'ArrowDown', 's', 'S'].includes(e.key)) {
+                setTreasureMoveDir(treasureHero.moveDirX, 0);
             }
         }
 
@@ -369,24 +495,40 @@
             const rightBlock = interactiveBlocks.find(b => b.itemKey === gameState.targetKey);
             if (rightBlock) {
                 rightBlock.state = 'hint';
-                rightBlock.haloMesh.material.opacity = 0.85;
-                if (manualClick) playPopSound(660);
+                rightBlock.haloMesh.material.opacity = 0.88;
+                if (manualClick) {
+                    playPopSound(660);
+                }
             }
         }
 
+        function setPromptUI(mainText, subText) {
+            document.getElementById('prompt-text').textContent = mainText;
+            document.getElementById('sub-prompt-text').textContent = subText;
+        }
+
         /********************************************************************
-         * 8. RAYCASTER TOUCH / CLICK INTERACTION HANDLER
+         * 8. SINGLE-FINGER TOUCH & CLICK INTERACTION (RAYCASTER)
          ********************************************************************/
         function onCanvasPointerDown(event) {
+            if (gameState.isBusy || gameState.inLobby) return;
             ensureAudioCtx();
+
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
             raycaster.setFromCamera(pointer, camera);
 
-            // Check if child tapped a 3D Number Block or Mario Floating Brick
-            const meshes = interactiveBlocks.map(b => b.bodyMesh);
+            // Check if child tapped a 3D Number Block, Mario Floating Brick, or 3D Treasure Chest
+            const meshes = [];
+            interactiveBlocks.forEach(b => {
+                if (b.extraHitMeshes) {
+                    meshes.push(...b.extraHitMeshes);
+                } else if (b.bodyMesh) {
+                    meshes.push(b.bodyMesh);
+                }
+            });
             const intersects = raycaster.intersectObjects(meshes, false);
 
             if (intersects.length > 0) {
@@ -405,6 +547,15 @@
                             playPopSound(500);
                             marioHero.autoJumpOnArrive = true;
                         }
+                    } else if (gameState.mode === 'treasure') {
+                        // In Treasure Mode: tapping a 3D chest makes the hero walk directly to that chest and open it!
+                        if (gameState.isBusy) return;
+                        playPopSound(520);
+                        treasureHero.moveDirX = 0;
+                        treasureHero.moveDirZ = 0;
+                        treasureHero.targetX = tappedWrapper.baseX;
+                        treasureHero.targetZ = tappedWrapper.baseZ + 1.05;
+                        treasureHero.pendingChest = tappedWrapper;
                     } else {
                         handleBlockTapped(tappedWrapper);
                     }
@@ -441,10 +592,14 @@
                 emitStarParticles(block.group.position);
 
                 const isMario = (gameState.mode === 'mario');
+                const isTreasure = (gameState.mode === 'treasure');
                 if (isMario) {
                     playCoinSound();
                     block.bumpOffset = 0.55;
                     gameState.marioStage += 1;
+                } else if (isTreasure) {
+                    playChestOpenSound();
+                    block.lidOpen = true;
                 } else if (gameState.mode === 'gacha') {
                     playSuccessChime();
                     gachaSpinTimer = 1.2;
@@ -457,10 +612,12 @@
 
                 if (gameState.settings.countObjects) {
                     setPromptUI(
-                        `答啱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅 3D 寶物！`,
+                        isTreasure
+                            ? `打開寶箱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅紅寶石！`
+                            : `答啱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅 3D 寶物！`,
                         `認知強化：${tappedMeta.title}`
                     );
-                    runQuantityCountingSequence(tappedKey, true, isMario);
+                    runQuantityCountingSequence(tappedKey, true, isMario || isTreasure);
                 } else {
                     setPromptUI(
                         `好叻呀！答啱喇，呢個係「${tappedMeta.title}」！`,
@@ -479,13 +636,23 @@
                 playGentleNudge();
                 block.state = 'wrong';
                 block.wrongTimer = 0.7;
-                if (block.isMarioBrick) {
+                if (block.isMarioBrick || block.isTreasureChest) {
                     block.bumpOffset = 0.25;
                 }
-                block.bodyMesh.material.forEach(m => {
-                    m.transparent = true;
-                    m.opacity = 0.55;
-                });
+                if (block.bodyMesh && Array.isArray(block.bodyMesh.material)) {
+                    block.bodyMesh.material.forEach(m => {
+                        m.transparent = true;
+                        m.opacity = 0.6;
+                    });
+                }
+                // In Treasure Mode: gently step back a tiny bit so hero doesn't endlessly re-trigger the same wrong chest
+                if (gameState.mode === 'treasure') {
+                    treasureHero.moveDirX = 0;
+                    treasureHero.moveDirZ = 0;
+                    treasureHero.pendingChest = null;
+                    treasureHero.targetX = treasureHero.currentX;
+                    treasureHero.targetZ = Math.min(3.4, treasureHero.currentZ + 0.85);
+                }
 
                 const targetMeta = getCognitiveItemMeta(gameState.targetKey);
                 setPromptUI(
@@ -520,7 +687,9 @@
             const banner = document.getElementById('counting-banner');
             const dotsContainer = document.getElementById('counting-dots');
             const emojiEl = document.getElementById('counting-emoji');
-            emojiEl.textContent = (meta.subject === 'number' && isCoin) ? '🪙' : meta.itemEmoji;
+            emojiEl.textContent = (meta.subject === 'number' && isCoin)
+                ? (gameState.mode === 'treasure' ? '💎' : '🪙')
+                : meta.itemEmoji;
             banner.classList.remove('hidden');
             dotsContainer.innerHTML = '';
 
@@ -550,7 +719,7 @@
             const totalDuration = 420 + count * 500 + 650;
             const endTimer = setTimeout(() => {
                 if (meta.subject === 'number') {
-                    const unitText = isCoin ? '粒金幣' : '個紅蘋果';
+                    const unitText = isCoin ? (gameState.mode === 'treasure' ? '粒紅寶石' : '粒金幣') : '個紅蘋果';
                     setPromptUI(
                         `好叻呀！總共有 ${count}（${NUMBER_WORDS_HK[count]}）${unitText}！`,
                         autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`
@@ -710,70 +879,61 @@
 
         function syncSettingsUI() {
             const s = gameState.settings;
-            const activeClass = 'setting-pill py-3 px-2 rounded-2xl font-black text-sm sm:text-base border-2 border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm';
-            const inactiveClass = 'setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
+            const activeClass = 'bg-indigo-600 text-white border-indigo-600 shadow-md';
+            const inactiveClass = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
 
+            // Subject pills in Settings
             ['number', 'color', 'shape'].forEach(subj => {
                 const el = document.getElementById(`set-subj-${subj}`);
-                if (el) el.className = (gameState.subject === subj) ? activeClass : inactiveClass;
+                if (el) el.className = `setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${gameState.subject === subj ? activeClass : inactiveClass}`;
             });
 
-            // Dim number range selector if currently in Color or Shape mode
-            const rangeBox = document.getElementById('setting-number-range-box');
-            if (rangeBox) {
-                rangeBox.style.opacity = gameState.subject === 'number' ? '1' : '0.45';
-            }
-
+            // Range pills
             ['1-5', '6-10', '1-10'].forEach(r => {
                 const el = document.getElementById(`set-range-${r}`);
-                if (el) el.className = (s.range === r) ? activeClass : inactiveClass;
+                if (el) el.className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${s.range === r ? activeClass : inactiveClass}`;
             });
 
+            // Choices pills
             [1, 2, 3].forEach(c => {
                 const el = document.getElementById(`set-choices-${c}`);
-                if (el) el.className = (s.choices === c) ? activeClass : inactiveClass;
+                if (el) el.className = `setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${s.choices === c ? activeClass : inactiveClass}`;
             });
 
-            document.getElementById('set-bg-rich').className = !s.lowDistraction ? activeClass : inactiveClass;
-            document.getElementById('set-bg-calm').className = s.lowDistraction ? activeClass : inactiveClass;
+            // Background distraction pills
+            document.getElementById('set-bg-rich').className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${!s.lowDistraction ? activeClass : inactiveClass}`;
+            document.getElementById('set-bg-calm').className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${s.lowDistraction ? activeClass : inactiveClass}`;
 
             // Toggle switches
-            const apBtn = document.getElementById('toggle-autoprompt');
-            apBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.autoPrompt ? 'bg-emerald-500' : 'bg-slate-300'}`;
-            apBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.autoPrompt ? 'translate-x-6' : 'translate-x-0'}`;
+            const autoBtn = document.getElementById('toggle-autoprompt');
+            autoBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.autoPrompt ? 'bg-emerald-500' : 'bg-slate-300'}`;
+            autoBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.autoPrompt ? 'translate-x-6' : 'translate-x-0'}`;
 
-            const cntBtn = document.getElementById('toggle-counting');
-            cntBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.countObjects ? 'bg-emerald-500' : 'bg-slate-300'}`;
-            cntBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.countObjects ? 'translate-x-6' : 'translate-x-0'}`;
-        }
-
-        function setPromptUI(mainText, subText) {
-            document.getElementById('prompt-text').textContent = mainText;
-            if (subText) {
-                document.getElementById('sub-prompt-text').textContent = subText;
-            }
+            const countBtn = document.getElementById('toggle-counting');
+            countBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.countObjects ? 'bg-emerald-500' : 'bg-slate-300'}`;
+            countBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.countObjects ? 'translate-x-6' : 'translate-x-0'}`;
         }
 
         /********************************************************************
-         * 11. MAIN ANIMATION LOOP (THREE.JS 60FPS)
+         * 11. MAIN 60FPS 3D ANIMATION LOOP
          ********************************************************************/
         function animate() {
             requestAnimationFrame(animate);
             const dt = Math.min(clock.getDelta(), 0.1);
             const elapsed = clock.getElapsedTime();
 
-            // 1. Gently drift 3D clouds in background
-            cloudsList.forEach(cloud => {
-                cloud.position.x = cloud.userData.baseX + Math.sin(elapsed * cloud.userData.speed) * 1.4;
+            // 1. Drift Clouds Gently
+            cloudsList.forEach(c => {
+                c.position.x = c.userData.baseX + Math.sin(elapsed * c.userData.speed) * 1.4;
             });
 
-            // 2. Spin Gachapon Dial when celebrating
+            // 2. Spin Gachapon Dial when active
             if (gachaSpinTimer > 0 && gachaDialMesh) {
                 gachaSpinTimer -= dt;
                 gachaDialMesh.rotation.z += dt * 10;
             }
 
-            // 3. Animate Cartoon Train arrival & wheel rotation
+            // 3. Move 3D Cartoon Train smoothly
             if (trainGroup.visible) {
                 const mover = trainGroup.getObjectByName('trainMover');
                 if (mover) {
@@ -787,9 +947,15 @@
                 }
             }
 
-            // 4. Animate 3D Number Character Blocks & Mario Floating Bricks
+            // 4. Animate 3D Number Character Blocks, Mario Floating Bricks & 3D Treasure Chests
             interactiveBlocks.forEach(block => {
                 block.animTime += dt;
+
+                // Smoothly swing open Treasure Chest lid when unlocked
+                if (block.isTreasureChest && block.lidPivot) {
+                    const targetLidRot = block.lidOpen ? -1.25 : 0;
+                    block.lidPivot.rotation.x = THREE.MathUtils.lerp(block.lidPivot.rotation.x, targetLidRot, dt * 8);
+                }
 
                 // Decay Mario brick bump offset smoothly
                 if (block.bumpOffset && block.bumpOffset > 0) {
@@ -798,28 +964,38 @@
                 const bumpY = block.bumpOffset ? Math.sin(block.bumpOffset * Math.PI) * 0.55 : 0;
 
                 if (block.state === 'idle') {
-                    block.group.position.y = block.baseY + Math.sin(block.animTime * 2.4) * 0.07 + bumpY;
-                    block.group.rotation.z = Math.sin(block.animTime * 1.5) * 0.025;
-                    block.group.rotation.y = THREE.MathUtils.lerp(block.group.rotation.y, 0, dt * 5);
+                    if (block.isTreasureChest) {
+                        block.group.position.y = block.baseY + bumpY * 0.4;
+                        block.bodyMesh.position.y = 1.98 + Math.sin(block.animTime * 2.6) * 0.08;
+                    } else {
+                        block.group.position.y = block.baseY + Math.sin(block.animTime * 2.4) * 0.07 + bumpY;
+                        block.group.rotation.z = Math.sin(block.animTime * 1.5) * 0.025;
+                        block.group.rotation.y = THREE.MathUtils.lerp(block.group.rotation.y, 0, dt * 5);
+                    }
                     block.group.scale.setScalar(THREE.MathUtils.lerp(block.group.scale.x, block.baseScale, dt * 6));
                 } else if (block.state === 'hint') {
                     // Noticeable bouncy Visual Prompt + Golden Halo pulse
-                    block.group.position.y = block.baseY + Math.abs(Math.sin(block.animTime * 6.5)) * 0.42 + bumpY;
+                    if (block.isTreasureChest) {
+                        block.group.position.y = block.baseY + Math.abs(Math.sin(block.animTime * 6.5)) * 0.25;
+                        block.haloMesh.rotation.z += dt * 2.5;
+                    } else {
+                        block.group.position.y = block.baseY + Math.abs(Math.sin(block.animTime * 6.5)) * 0.42 + bumpY;
+                        block.haloMesh.rotation.z += dt * 2.5;
+                    }
                     const pulseScale = block.baseScale * (1.12 + Math.sin(block.animTime * 6.5) * 0.07);
                     block.group.scale.setScalar(pulseScale);
-                    block.haloMesh.rotation.z += dt * 2.5;
                 } else if (block.state === 'wrong') {
                     // Gentle non-frustrating horizontal wobble
                     block.wrongTimer -= dt;
                     block.group.position.y = block.baseY + bumpY;
-                    block.group.rotation.z = Math.sin(block.animTime * 28) * 0.16;
+                    block.group.rotation.z = Math.sin(block.animTime * 28) * 0.14;
                     if (block.wrongTimer <= 0) {
                         block.state = 'idle';
                         block.group.rotation.z = 0;
                     }
                 } else if (block.state === 'celebrate') {
                     // Happy jump & spin
-                    if (block.isMarioBrick) {
+                    if (block.isMarioBrick || block.isTreasureChest) {
                         block.group.position.y = block.baseY + bumpY;
                         block.group.scale.setScalar(block.baseScale * 1.08);
                     } else {
@@ -834,6 +1010,69 @@
                     }
                 }
             });
+
+            // 4C. Animate Treasure Island 3D Explorer Hero (D-Pad & Tap-to-Walk + Chest Proximity Detection)
+            if (treasureIslandGroup.visible && treasureHero.group) {
+                let vx = 0;
+                let vz = 0;
+                const walkSpeed = 5.2;
+
+                if (treasureHero.moveDirX !== 0 || treasureHero.moveDirZ !== 0) {
+                    vx = treasureHero.moveDirX * walkSpeed;
+                    vz = treasureHero.moveDirZ * walkSpeed;
+                } else if (treasureHero.targetX !== null && treasureHero.targetZ !== null) {
+                    const dx = treasureHero.targetX - treasureHero.currentX;
+                    const dz = treasureHero.targetZ - treasureHero.currentZ;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist > 0.08) {
+                        vx = (dx / dist) * walkSpeed;
+                        vz = (dz / dist) * walkSpeed;
+                    } else {
+                        treasureHero.currentX = treasureHero.targetX;
+                        treasureHero.currentZ = treasureHero.targetZ;
+                        treasureHero.targetX = null;
+                        treasureHero.targetZ = null;
+                        if (treasureHero.pendingChest && !gameState.isBusy) {
+                            const chestToOpen = treasureHero.pendingChest;
+                            treasureHero.pendingChest = null;
+                            handleBlockTapped(chestToOpen);
+                        }
+                    }
+                }
+
+                const isWalking = Math.hypot(vx, vz) > 0.05;
+                if (isWalking) {
+                    treasureHero.currentX = Math.max(-4.5, Math.min(4.5, treasureHero.currentX + vx * dt));
+                    treasureHero.currentZ = Math.max(-2.7, Math.min(3.6, treasureHero.currentZ + vz * dt));
+                    treasureHero.walkCycle += dt * 15;
+                    treasureHero.facingAngle = Math.atan2(vx, vz);
+                }
+
+                treasureHero.group.position.x = treasureHero.currentX;
+                treasureHero.group.position.z = treasureHero.currentZ;
+                treasureHero.group.position.y = 0.28 + (isWalking ? Math.abs(Math.sin(treasureHero.walkCycle)) * 0.16 : Math.sin(elapsed * 3) * 0.03);
+                treasureHero.group.rotation.y = THREE.MathUtils.lerp(treasureHero.group.rotation.y, treasureHero.facingAngle, dt * 10);
+
+                if (treasureHero.compassRing) {
+                    treasureHero.compassRing.position.x = treasureHero.currentX;
+                    treasureHero.compassRing.position.z = treasureHero.currentZ;
+                    treasureHero.compassRing.rotation.z += dt * 2.0;
+                }
+
+                // Proximity Check: If Hero walks close to any 3D Treasure Chest via D-Pad, open/check it automatically!
+                if (!gameState.isBusy && isWalking) {
+                    for (let i = 0; i < interactiveBlocks.length; i++) {
+                        const chest = interactiveBlocks[i];
+                        if (chest.isTreasureChest && chest.state !== 'wrong') {
+                            const distToChest = Math.hypot(treasureHero.currentX - chest.baseX, treasureHero.currentZ - (chest.baseZ + 0.65));
+                            if (distToChest < 1.18) {
+                                handleBlockTapped(chest);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
             if (marioStageGroup.visible && marioHero.group) {
