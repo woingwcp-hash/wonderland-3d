@@ -720,175 +720,181 @@
             marioStageGroup.add(hero);
         }
 
-        // Mode 5 Centerpiece: 3D Big Treasure Island 2.0 (尋寶小英雄 - 超大奇幻冒險島)
+        // Mode 5 Centerpiece: 3D Story-Driven Maze Island (尋寶小英雄 - 迷宮故事解鎖版)
         function build3DTreasureIsland() {
             treasureIslandGroup.clear();
             treasureIslandGroup.visible = false;
             treasureHero.bouncePads = [];
             treasureHero.miniCoins = [];
+            treasureHero.mazeWalls = [];
+            treasureHero.magicGates = {};
+            if (!treasureHero.storyChapter) treasureHero.storyChapter = 1;
 
-            // 1. 廣闊碧海環繞底座
-            const waterGeo = new THREE.CylinderGeometry(24, 24, 0.22, 48);
-            const waterMat = new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.25, metalness: 0.1 });
-            const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-            waterMesh.position.set(0, -0.02, -0.5);
-            waterMesh.receiveShadow = true;
+            // 1. 廣闊碧海底座
+            const waterMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(26, 26, 0.22, 48),
+                new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.25 })
+            );
+            waterMesh.position.set(0, -0.04, -0.5);
             treasureIslandGroup.add(waterMesh);
 
-            // 2. 超大黃金沙灘外圈
-            const sandGeo = new THREE.CylinderGeometry(12.6, 13.4, 0.3, 48);
-            const sandMat = new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 });
-            const sandMesh = new THREE.Mesh(sandGeo, sandMat);
-            sandMesh.position.set(0, 0.06, -0.5);
-            sandMesh.receiveShadow = true;
-            treasureIslandGroup.add(sandMesh);
+            // 2. 三大故事區域地面（第1區：綠野迷宮、第2區：黃金沙洲、第3區：皇冠城堡）
+            const zone1Floor = new THREE.Mesh(
+                new THREE.BoxGeometry(19.6, 0.34, 6.2),
+                new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 })
+            );
+            zone1Floor.position.set(0, 0.14, 4.9);
+            zone1Floor.receiveShadow = true;
+            treasureIslandGroup.add(zone1Floor);
 
-            // 3. 翠綠冒險主島草地
-            const turfGeo = new THREE.CylinderGeometry(11.4, 11.9, 0.36, 48);
-            const turfMat = new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 });
-            const turfMesh = new THREE.Mesh(turfGeo, turfMat);
-            turfMesh.position.set(0, 0.14, -0.5);
-            turfMesh.receiveShadow = true;
-            treasureIslandGroup.add(turfMesh);
+            const zone2Floor = new THREE.Mesh(
+                new THREE.BoxGeometry(19.6, 0.34, 4.8),
+                new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.75 })
+            );
+            zone2Floor.position.set(0, 0.14, -0.6);
+            zone2Floor.receiveShadow = true;
+            treasureIslandGroup.add(zone2Floor);
 
-            // 4. 橫貫島嶼中央的清澈小河
-            const riverGeo = new THREE.BoxGeometry(22.6, 0.14, 2.2);
-            const riverMat = new THREE.MeshStandardMaterial({ color: 0x0EA5E9, roughness: 0.2 });
-            const riverMesh = new THREE.Mesh(riverGeo, riverMat);
-            riverMesh.position.set(0, 0.26, -1.2);
-            treasureIslandGroup.add(riverMesh);
+            const zone3Floor = new THREE.Mesh(
+                new THREE.BoxGeometry(19.6, 0.34, 5.6),
+                new THREE.MeshStandardMaterial({ color: 0xC084FC, roughness: 0.65 })
+            );
+            zone3Floor.position.set(0, 0.14, -5.8);
+            zone3Floor.receiveShadow = true;
+            treasureIslandGroup.add(zone3Floor);
 
-            // 5. 左右兩座彩虹木橋
-            [-4.2, 4.2].forEach(bx => {
-                const bridge = new THREE.Group();
-                const deck = new THREE.Mesh(
-                    new THREE.BoxGeometry(2.3, 0.18, 2.8),
-                    new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.6 })
+            // Helper: 建立 3D 迷宮牆並加入碰撞清單
+            function addMazeWall(x, z, w, d, colorHex, gapType = 'center', gateId = 0) {
+                const wallGroup = new THREE.Group();
+                const wallMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.55 });
+                const mainBlock = new THREE.Mesh(new THREE.BoxGeometry(w, 1.25, d), wallMat);
+                mainBlock.position.y = 0.62;
+                mainBlock.castShadow = true;
+                mainBlock.receiveShadow = true;
+                wallGroup.add(mainBlock);
+
+                // 頂部圓潤裝飾邊
+                const topTrim = new THREE.Mesh(
+                    new THREE.BoxGeometry(w + 0.12, 0.22, d + 0.12),
+                    new THREE.MeshStandardMaterial({ color: gateId > 0 ? 0xFEF08A : 0xDCFCE7, roughness: 0.4 })
                 );
-                deck.position.y = 0.36;
-                deck.receiveShadow = true;
-                bridge.add(deck);
+                topTrim.position.y = 1.28;
+                wallGroup.add(topTrim);
 
-                [-1.02, 1.02].forEach(rx => {
-                    const rail = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.16, 0.52, 2.8),
-                        new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.4 })
-                    );
-                    rail.position.set(rx, 0.62, 0);
-                    bridge.add(rail);
-                });
-                bridge.position.set(bx, 0, -1.2);
-                treasureIslandGroup.add(bridge);
+                wallGroup.position.set(x, 0.3, z);
+                treasureIslandGroup.add(wallGroup);
+
+                const wallObj = {
+                    x, z,
+                    halfW: w / 2,
+                    halfD: d / 2,
+                    gapType, // 'center' (行去 X=0 過閘) | 'sides' (行去左右兩邊 X=+-4.4 繞過) | 'left' | 'right'
+                    gateId,  // 0 = 永久迷宮牆, 1 = 第1道魔法門, 2 = 第2道魔法門
+                    mesh: wallGroup
+                };
+                treasureHero.mazeWalls.push(wallObj);
+                return wallObj;
+            }
+
+            // 3. 第 1 區【綠野樹籬迷宮】牆壁 (Z: 2.0 ~ 7.5)
+            // 中央樹籬牆（擋住直線，要行左右通道 X = -4.3 或 +4.3）
+            addMazeWall(0, 4.9, 5.2, 0.75, 0x16A34A, 'sides', 0);
+            // 左右兩側小迷宮折角牆
+            addMazeWall(-6.8, 3.6, 3.6, 0.75, 0x16A34A, 'center', 0);
+            addMazeWall(6.8, 3.6, 3.6, 0.75, 0x16A34A, 'center', 0);
+
+            // 4. 第 1 道邊界牆與【🌈 彩虹魔法閘門】(Z = 1.8，通往第 2 區)
+            addMazeWall(-5.8, 1.8, 7.6, 0.8, 0x15803D, 'center', 0);
+            addMazeWall(5.8, 1.8, 7.6, 0.8, 0x15803D, 'center', 0);
+            const gate1Wall = addMazeWall(0, 1.8, 3.8, 0.65, 0xEC4899, 'center', 1);
+
+            // 為第 1 道魔法門加上鎖匙拱門裝飾
+            const arch1 = new THREE.Mesh(
+                new THREE.TorusGeometry(2.1, 0.22, 12, 28, Math.PI),
+                new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.3 })
+            );
+            arch1.position.set(0, 0.3, 1.8);
+            treasureIslandGroup.add(arch1);
+            treasureHero.magicGates[1] = gate1Wall;
+
+            // 5. 第 2 區【黃金遺跡迷宮】牆壁 (Z: -2.8 ~ 1.8)
+            // 左右兩座黃金迷宮牆（中間留通道，兩側留寶箱位）
+            addMazeWall(-3.6, -0.4, 4.2, 0.75, 0xD97706, 'center', 0);
+            addMazeWall(3.6, -0.4, 4.2, 0.75, 0xD97706, 'center', 0);
+            // 中央偏北小沙牆（引導向左右兩邊探索）
+            addMazeWall(0, -1.7, 3.8, 0.7, 0xB45309, 'sides', 0);
+
+            // 6. 第 2 道邊界牆與【👑 皇家水晶閘門】(Z = -3.0，通往第 3 區)
+            addMazeWall(-5.8, -3.0, 7.6, 0.8, 0x7E22CE, 'center', 0);
+            addMazeWall(5.8, -3.0, 7.6, 0.8, 0x7E22CE, 'center', 0);
+            const gate2Wall = addMazeWall(0, -3.0, 3.8, 0.65, 0x06B6D4, 'center', 2);
+
+            const arch2 = new THREE.Mesh(
+                new THREE.TorusGeometry(2.1, 0.22, 12, 28, Math.PI),
+                new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.2 })
+            );
+            arch2.position.set(0, 0.3, -3.0);
+            treasureIslandGroup.add(arch2);
+            treasureHero.magicGates[2] = gate2Wall;
+
+            // 7. 第 3 區【奇幻皇冠城堡迷宮】牆壁與終極城堡 (Z: -8.2 ~ -3.0)
+            addMazeWall(0, -4.7, 4.6, 0.75, 0x6366F1, 'sides', 0);
+
+            // 北面終點大型 3D 奇幻城堡地標
+            const castleGroup = new THREE.Group();
+            const mainTower = new THREE.Mesh(
+                new THREE.BoxGeometry(3.6, 2.6, 1.8),
+                new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.4 })
+            );
+            mainTower.position.y = 1.3;
+            castleGroup.add(mainTower);
+
+            [-2.1, 2.1].forEach(tx => {
+                const sideTower = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.75, 0.85, 3.0, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xE0E7FF, roughness: 0.4 })
+                );
+                sideTower.position.set(tx, 1.5, 0);
+                castleGroup.add(sideTower);
+
+                const roof = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.95, 1.2, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xEC4899, roughness: 0.3 })
+                );
+                roof.position.set(tx, 3.5, 0);
+                castleGroup.add(roof);
             });
+            castleGroup.position.set(0, 0.3, -8.3);
+            treasureIslandGroup.add(castleGroup);
 
-            // 6. 十字鵝卵石冒險步道
-            const pathMat = new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.7 });
-            const southRoad = new THREE.Mesh(new THREE.BoxGeometry(15, 0.05, 1.6), pathMat);
-            southRoad.position.set(0, 0.33, 2.5);
-            treasureIslandGroup.add(southRoad);
-
-            const northRoad = new THREE.Mesh(new THREE.BoxGeometry(15, 0.05, 1.6), pathMat);
-            northRoad.position.set(0, 0.33, -4.8);
-            treasureIslandGroup.add(northRoad);
-
-            // 7. 西北地標：巨型彩色蘑菇森林
+            // 8. 彈彈跳蘑菇墊（分佈喺迷宮轉角位）
             [
-                { x: -7.5, z: -6.2, s: 1.25, c: 0xF43F5E },
-                { x: -8.8, z: -4.2, s: 1.0, c: 0xA855F7 },
-                { x: -6.2, z: -7.5, s: 1.1, c: 0xF97316 }
-            ].forEach(m => {
-                const mg = new THREE.Group();
-                const stem = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.32 * m.s, 0.45 * m.s, 1.1 * m.s, 16),
-                    new THREE.MeshStandardMaterial({ color: 0xFFFBEB, roughness: 0.6 })
-                );
-                stem.position.y = 0.55 * m.s;
-                mg.add(stem);
-
-                const cap = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.95 * m.s, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.6),
-                    new THREE.MeshStandardMaterial({ color: m.c, roughness: 0.4 })
-                );
-                cap.position.y = 0.95 * m.s;
-                mg.add(cap);
-                mg.position.set(m.x, 0.3, m.z);
-                treasureIslandGroup.add(mg);
-            });
-
-            // 8. 東北地標：黃金小金字塔區
-            [
-                { x: 7.6, z: -6.4, r: 1.7, h: 2.2, c: 0xFBBF24 },
-                { x: 9.2, z: -4.3, r: 1.25, h: 1.6, c: 0xF59E0B }
-            ].forEach(p => {
-                const pyr = new THREE.Mesh(
-                    new THREE.ConeGeometry(p.r, p.h, 4),
-                    new THREE.MeshStandardMaterial({ color: p.c, roughness: 0.45 })
-                );
-                pyr.position.set(p.x, 0.3 + p.h / 2, p.z);
-                pyr.rotation.y = Math.PI / 4;
-                treasureIslandGroup.add(pyr);
-            });
-
-            // 9. 環島椰子樹與玩具樹
-            [
-                { x: -8.8, z: 3.5, s: 1.0 },
-                { x: 8.8, z: 3.5, s: 1.0 },
-                { x: -9.2, z: 0.4, s: 0.85 },
-                { x: 9.2, z: 0.4, s: 0.85 },
-                { x: -3.2, z: -8.2, s: 0.95 },
-                { x: 3.2, z: -8.2, s: 0.95 }
-            ].forEach(p => {
-                const tree = new THREE.Group();
-                const trunk = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.18, 0.28, 1.4, 12),
-                    new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.8 })
-                );
-                trunk.position.y = 0.7;
-                trunk.castShadow = true;
-                tree.add(trunk);
-
-                const crown = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.85, 16, 16),
-                    new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.5 })
-                );
-                crown.scale.set(1.2, 0.75, 1.2);
-                crown.position.y = 1.5;
-                crown.castShadow = true;
-                tree.add(crown);
-
-                tree.position.set(p.x, 0.28, p.z);
-                tree.scale.setScalar(p.s);
-                treasureIslandGroup.add(tree);
-            });
-
-            // 10. 3個「彈彈跳蘑菇墊」
-            [
-                { x: 0, z: -1.2 },
-                { x: -5.2, z: 2.5 },
-                { x: 5.2, z: 2.5 }
+                { x: -4.4, z: 4.9 }, // 第1區左通道彈床
+                { x: 4.4,  z: 4.9 }, // 第1區右通道彈床
+                { x: 0,    z: -0.4 } // 第2區中央通道彈床
             ].forEach(pc => {
                 const pad = new THREE.Group();
                 const base = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.82, 0.95, 0.26, 24),
+                    new THREE.CylinderGeometry(0.75, 0.88, 0.24, 24),
                     new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.35 })
                 );
-                base.position.y = 0.13;
+                base.position.y = 0.12;
                 pad.add(base);
 
                 const inner = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.62, 0.62, 0.3, 20),
+                    new THREE.CylinderGeometry(0.55, 0.55, 0.28, 20),
                     new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.3 })
                 );
-                inner.position.y = 0.15;
+                inner.position.y = 0.14;
                 pad.add(inner);
 
-                pad.position.set(pc.x, 0.28, pc.z);
+                pad.position.set(pc.x, 0.3, pc.z);
                 pad.userData = { x: pc.x, z: pc.z };
                 treasureIslandGroup.add(pad);
                 treasureHero.bouncePads.push(pad);
             });
 
-            // 11. 點擊草地導航光圈
+            // 9. 點擊草地導航光圈
             const clickRing = new THREE.Mesh(
                 new THREE.RingGeometry(0.4, 0.68, 24),
                 new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
@@ -899,16 +905,12 @@
             treasureHero.clickMarker = clickRing;
             treasureIslandGroup.add(clickRing);
 
-            // 12. 小英雄腳下黃金指南針光圈 + 尋寶方向箭咀
+            // 10. 小英雄腳下黃金指南針光圈 + 尋寶方向箭咀
             const compassGroup = new THREE.Group();
-            const ringGeo = new THREE.RingGeometry(0.58, 0.78, 32);
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: 0xFACC15,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.9
-            });
-            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            const ringMesh = new THREE.Mesh(
+                new THREE.RingGeometry(0.58, 0.78, 32),
+                new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+            );
             ringMesh.rotation.x = -Math.PI / 2;
             compassGroup.add(ringMesh);
 
@@ -920,19 +922,19 @@
             arrowMesh.position.set(0, 0.06, 1.05);
             compassGroup.add(arrowMesh);
 
-            compassGroup.position.set(0, 0.34, 6.2);
+            compassGroup.position.set(0, 0.34, 6.6);
             treasureHero.compassRing = compassGroup;
             treasureHero.compassArrow = arrowMesh;
             treasureIslandGroup.add(compassGroup);
 
-            // 13. 複製 3D 馬利奧小英雄作為尋寶探險家
+            // 11. 複製 3D 馬利奧小英雄作為迷宮探險家
             const explorer = marioHero.group.clone();
-            explorer.position.set(0, 0.3, 6.2);
+            explorer.position.set(0, 0.3, 6.6);
             treasureHero.group = explorer;
             treasureIslandGroup.add(explorer);
         }
 
-        // 在大冒險島步道與木橋上生成沿途可執嘅 3D 小金幣
+        // 在已解鎖的迷宮走廊生成沿途 3D 小金幣
         function spawnTreasureMiniCoins() {
             if (!treasureIslandGroup) return;
             if (treasureHero.miniCoins && treasureHero.miniCoins.length > 0) {
@@ -940,17 +942,20 @@
             }
             treasureHero.miniCoins = [];
 
+            const ch = treasureHero.storyChapter || 1;
             const coinCoords = [
-                [-4.2, -1.2], [4.2, -1.2],
-                [-2.4, 2.5], [2.4, 2.5],
-                [0, 4.2], [0, 0.8],
-                [-2.5, -4.8], [2.5, -4.8],
-                [-6.5, -1.2], [6.5, -1.2]
+                [-3.5, 6.0], [3.5, 6.0], [-4.2, 3.5], [4.2, 3.5] // 第1區迷宮走廊金幣
             ];
+            if (ch >= 2) {
+                coinCoords.push([0, 1.8], [-4.5, 0.6], [4.5, 0.6], [0, -0.4]); // 第2區金幣
+            }
+            if (ch >= 3) {
+                coinCoords.push([0, -3.0], [-4.2, -4.7], [4.2, -4.7], [0, -6.2]); // 第3區金幣
+            }
 
             coinCoords.forEach(([cx, cz]) => {
                 const coin = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.34, 0.34, 0.1, 20),
+                    new THREE.CylinderGeometry(0.32, 0.32, 0.1, 20),
                     new THREE.MeshStandardMaterial({
                         color: 0xFFD700,
                         roughness: 0.2,
