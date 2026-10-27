@@ -50,12 +50,18 @@
             walkCycle: 0
         };
 
-        // NEW: Treasure Island 3D Free-Roaming Hero State (尋寶小英雄)
+        // NEW: Treasure Island 3D Free-Roaming Hero State (尋寶小英雄 2.0 大地圖版)
         let treasureHero = {
             group: null,
             compassRing: null,
+            compassArrow: null,
+            clickMarker: null,
+            miniCoins: [],
+            bouncePads: [],
             currentX: 0,
-            currentZ: 3.1,
+            currentZ: 6.2,
+            jumpY: 0,
+            jumpVel: 0,
             targetX: null,
             targetZ: null,
             moveDirX: 0,
@@ -714,114 +720,263 @@
             marioStageGroup.add(hero);
         }
 
-        // Mode 5 Centerpiece: 3D Treasure Island & Free-Roaming Mario Explorer (尋寶小英雄)
+        // Mode 5 Centerpiece: 3D Big Treasure Island 2.0 (尋寶小英雄 - 超大奇幻冒險島)
         function build3DTreasureIsland() {
             treasureIslandGroup.clear();
             treasureIslandGroup.visible = false;
+            treasureHero.bouncePads = [];
+            treasureHero.miniCoins = [];
 
-            // 1. Sparkling Ocean Water Ring around the island
-            const waterGeo = new THREE.CylinderGeometry(11.5, 11.5, 0.18, 48);
+            // 1. 廣闊碧海環繞底座
+            const waterGeo = new THREE.CylinderGeometry(24, 24, 0.22, 48);
             const waterMat = new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.25, metalness: 0.1 });
             const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-            waterMesh.position.set(0, -0.05, 0.4);
+            waterMesh.position.set(0, -0.02, -0.5);
             waterMesh.receiveShadow = true;
             treasureIslandGroup.add(waterMesh);
 
-            // 2. Sandy Beach Rim
-            const sandGeo = new THREE.CylinderGeometry(6.8, 7.3, 0.26, 40);
+            // 2. 超大黃金沙灘外圈
+            const sandGeo = new THREE.CylinderGeometry(12.6, 13.4, 0.3, 48);
             const sandMat = new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 });
             const sandMesh = new THREE.Mesh(sandGeo, sandMat);
-            sandMesh.position.set(0, 0.04, 0.4);
+            sandMesh.position.set(0, 0.06, -0.5);
             sandMesh.receiveShadow = true;
             treasureIslandGroup.add(sandMesh);
 
-            // 3. Lush Green Adventure Island Top
-            const turfGeo = new THREE.CylinderGeometry(5.9, 6.2, 0.32, 40);
+            // 3. 翠綠冒險主島草地
+            const turfGeo = new THREE.CylinderGeometry(11.4, 11.9, 0.36, 48);
             const turfMat = new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 });
             const turfMesh = new THREE.Mesh(turfGeo, turfMat);
-            turfMesh.position.set(0, 0.12, 0.4);
+            turfMesh.position.set(0, 0.14, -0.5);
             turfMesh.receiveShadow = true;
             treasureIslandGroup.add(turfMesh);
 
-            // 4. Cute Cobblestone Stepping Path in Center
-            const stoneMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.6 });
-            [
-                { x: 0, z: 2.3, r: 0.45 },
-                { x: 0, z: 1.3, r: 0.5 },
-                { x: -1.2, z: 0.4, r: 0.42 },
-                { x: 1.2, z: 0.4, r: 0.42 },
-                { x: 0, z: -0.4, r: 0.45 }
-            ].forEach(st => {
-                const stone = new THREE.Mesh(new THREE.CylinderGeometry(st.r, st.r * 1.08, 0.06, 16), stoneMat);
-                stone.position.set(st.x, 0.29, st.z);
-                stone.receiveShadow = true;
-                treasureIslandGroup.add(stone);
+            // 4. 橫貫島嶼中央的清澈小河
+            const riverGeo = new THREE.BoxGeometry(22.6, 0.14, 2.2);
+            const riverMat = new THREE.MeshStandardMaterial({ color: 0x0EA5E9, roughness: 0.2 });
+            const riverMesh = new THREE.Mesh(riverGeo, riverMat);
+            riverMesh.position.set(0, 0.26, -1.2);
+            treasureIslandGroup.add(riverMesh);
+
+            // 5. 左右兩座彩虹木橋
+            [-4.2, 4.2].forEach(bx => {
+                const bridge = new THREE.Group();
+                const deck = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.3, 0.18, 2.8),
+                    new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.6 })
+                );
+                deck.position.y = 0.36;
+                deck.receiveShadow = true;
+                bridge.add(deck);
+
+                [-1.02, 1.02].forEach(rx => {
+                    const rail = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.16, 0.52, 2.8),
+                        new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.4 })
+                    );
+                    rail.position.set(rx, 0.62, 0);
+                    bridge.add(rail);
+                });
+                bridge.position.set(bx, 0, -1.2);
+                treasureIslandGroup.add(bridge);
             });
 
-            // 5. Decorative Palm / Island Trees on Back Edge
-            const palmPositions = [
-                { x: -4.6, z: -2.2, s: 0.9 },
-                { x: 4.6, z: -2.2, s: 0.9 },
-                { x: -4.9, z: 1.6, s: 0.75 },
-                { x: 4.9, z: 1.6, s: 0.75 }
-            ];
-            palmPositions.forEach(p => {
+            // 6. 十字鵝卵石冒險步道
+            const pathMat = new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.7 });
+            const southRoad = new THREE.Mesh(new THREE.BoxGeometry(15, 0.05, 1.6), pathMat);
+            southRoad.position.set(0, 0.33, 2.5);
+            treasureIslandGroup.add(southRoad);
+
+            const northRoad = new THREE.Mesh(new THREE.BoxGeometry(15, 0.05, 1.6), pathMat);
+            northRoad.position.set(0, 0.33, -4.8);
+            treasureIslandGroup.add(northRoad);
+
+            // 7. 西北地標：巨型彩色蘑菇森林
+            [
+                { x: -7.5, z: -6.2, s: 1.25, c: 0xF43F5E },
+                { x: -8.8, z: -4.2, s: 1.0, c: 0xA855F7 },
+                { x: -6.2, z: -7.5, s: 1.1, c: 0xF97316 }
+            ].forEach(m => {
+                const mg = new THREE.Group();
+                const stem = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.32 * m.s, 0.45 * m.s, 1.1 * m.s, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xFFFBEB, roughness: 0.6 })
+                );
+                stem.position.y = 0.55 * m.s;
+                mg.add(stem);
+
+                const cap = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.95 * m.s, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.6),
+                    new THREE.MeshStandardMaterial({ color: m.c, roughness: 0.4 })
+                );
+                cap.position.y = 0.95 * m.s;
+                mg.add(cap);
+                mg.position.set(m.x, 0.3, m.z);
+                treasureIslandGroup.add(mg);
+            });
+
+            // 8. 東北地標：黃金小金字塔區
+            [
+                { x: 7.6, z: -6.4, r: 1.7, h: 2.2, c: 0xFBBF24 },
+                { x: 9.2, z: -4.3, r: 1.25, h: 1.6, c: 0xF59E0B }
+            ].forEach(p => {
+                const pyr = new THREE.Mesh(
+                    new THREE.ConeGeometry(p.r, p.h, 4),
+                    new THREE.MeshStandardMaterial({ color: p.c, roughness: 0.45 })
+                );
+                pyr.position.set(p.x, 0.3 + p.h / 2, p.z);
+                pyr.rotation.y = Math.PI / 4;
+                treasureIslandGroup.add(pyr);
+            });
+
+            // 9. 環島椰子樹與玩具樹
+            [
+                { x: -8.8, z: 3.5, s: 1.0 },
+                { x: 8.8, z: 3.5, s: 1.0 },
+                { x: -9.2, z: 0.4, s: 0.85 },
+                { x: 9.2, z: 0.4, s: 0.85 },
+                { x: -3.2, z: -8.2, s: 0.95 },
+                { x: 3.2, z: -8.2, s: 0.95 }
+            ].forEach(p => {
                 const tree = new THREE.Group();
                 const trunk = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.16, 0.24, 1.3, 12),
+                    new THREE.CylinderGeometry(0.18, 0.28, 1.4, 12),
                     new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.8 })
                 );
-                trunk.position.y = 0.65;
+                trunk.position.y = 0.7;
                 trunk.castShadow = true;
                 tree.add(trunk);
 
                 const crown = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.75, 16, 16),
+                    new THREE.SphereGeometry(0.85, 16, 16),
                     new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.5 })
                 );
-                crown.scale.set(1.2, 0.7, 1.2);
-                crown.position.y = 1.4;
+                crown.scale.set(1.2, 0.75, 1.2);
+                crown.position.y = 1.5;
                 crown.castShadow = true;
                 tree.add(crown);
 
-                tree.position.set(p.x, 0.25, p.z);
+                tree.position.set(p.x, 0.28, p.z);
                 tree.scale.setScalar(p.s);
                 treasureIslandGroup.add(tree);
             });
 
-            // 6. Glowing Compass Foot Ring under Treasure Hero
-            const ringGeo = new THREE.RingGeometry(0.52, 0.72, 32);
+            // 10. 3個「彈彈跳蘑菇墊」
+            [
+                { x: 0, z: -1.2 },
+                { x: -5.2, z: 2.5 },
+                { x: 5.2, z: 2.5 }
+            ].forEach(pc => {
+                const pad = new THREE.Group();
+                const base = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.82, 0.95, 0.26, 24),
+                    new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.35 })
+                );
+                base.position.y = 0.13;
+                pad.add(base);
+
+                const inner = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.62, 0.62, 0.3, 20),
+                    new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.3 })
+                );
+                inner.position.y = 0.15;
+                pad.add(inner);
+
+                pad.position.set(pc.x, 0.28, pc.z);
+                pad.userData = { x: pc.x, z: pc.z };
+                treasureIslandGroup.add(pad);
+                treasureHero.bouncePads.push(pad);
+            });
+
+            // 11. 點擊草地導航光圈
+            const clickRing = new THREE.Mesh(
+                new THREE.RingGeometry(0.4, 0.68, 24),
+                new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+            );
+            clickRing.rotation.x = -Math.PI / 2;
+            clickRing.position.set(0, 0.36, 0);
+            clickRing.visible = false;
+            treasureHero.clickMarker = clickRing;
+            treasureIslandGroup.add(clickRing);
+
+            // 12. 小英雄腳下黃金指南針光圈 + 尋寶方向箭咀
+            const compassGroup = new THREE.Group();
+            const ringGeo = new THREE.RingGeometry(0.58, 0.78, 32);
             const ringMat = new THREE.MeshBasicMaterial({
                 color: 0xFACC15,
                 side: THREE.DoubleSide,
                 transparent: true,
                 opacity: 0.9
             });
-            const compassRing = new THREE.Mesh(ringGeo, ringMat);
-            compassRing.rotation.x = Math.PI / 2;
-            compassRing.position.set(0, 0.31, 3.1);
-            treasureHero.compassRing = compassRing;
-            treasureIslandGroup.add(compassRing);
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = -Math.PI / 2;
+            compassGroup.add(ringMesh);
 
-            // 7. Clone the cute 3D Mario Hero for Treasure Island Exploration
+            const arrowMesh = new THREE.Mesh(
+                new THREE.ConeGeometry(0.28, 0.55, 3),
+                new THREE.MeshBasicMaterial({ color: 0xEA580C })
+            );
+            arrowMesh.rotation.x = Math.PI / 2;
+            arrowMesh.position.set(0, 0.06, 1.05);
+            compassGroup.add(arrowMesh);
+
+            compassGroup.position.set(0, 0.34, 6.2);
+            treasureHero.compassRing = compassGroup;
+            treasureHero.compassArrow = arrowMesh;
+            treasureIslandGroup.add(compassGroup);
+
+            // 13. 複製 3D 馬利奧小英雄作為尋寶探險家
             const explorer = marioHero.group.clone();
-            explorer.position.set(0, 0.28, 3.1);
+            explorer.position.set(0, 0.3, 6.2);
             treasureHero.group = explorer;
             treasureIslandGroup.add(explorer);
         }
 
-        // Create a 3D Wooden & Gold Treasure Chest with a Big Number Badge & Hinged Lid
+        // 在大冒險島步道與木橋上生成沿途可執嘅 3D 小金幣
+        function spawnTreasureMiniCoins() {
+            if (!treasureIslandGroup) return;
+            if (treasureHero.miniCoins && treasureHero.miniCoins.length > 0) {
+                treasureHero.miniCoins.forEach(c => treasureIslandGroup.remove(c));
+            }
+            treasureHero.miniCoins = [];
+
+            const coinCoords = [
+                [-4.2, -1.2], [4.2, -1.2],
+                [-2.4, 2.5], [2.4, 2.5],
+                [0, 4.2], [0, 0.8],
+                [-2.5, -4.8], [2.5, -4.8],
+                [-6.5, -1.2], [6.5, -1.2]
+            ];
+
+            coinCoords.forEach(([cx, cz]) => {
+                const coin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.34, 0.34, 0.1, 20),
+                    new THREE.MeshStandardMaterial({
+                        color: 0xFFD700,
+                        roughness: 0.2,
+                        metalness: 0.65,
+                        emissive: 0xF59E0B,
+                        emissiveIntensity: 0.25
+                    })
+                );
+                coin.rotation.x = Math.PI / 2;
+                coin.position.set(cx, 0.72, cz);
+                coin.userData = { collected: false, baseY: 0.72 };
+                treasureIslandGroup.add(coin);
+                treasureHero.miniCoins.push(coin);
+            });
+        }
+
+        // 建立帶有「高空飄浮數字氣球」的 3D 魔法寶箱
         function create3DTreasureChest(num, x, z) {
             const meta = getCognitiveItemMeta(num, 'number');
             const group = new THREE.Group();
-            const baseY = 0.28;
+            const baseY = 0.3;
             group.position.set(x, baseY, z);
 
             const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.55 });
             const goldMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.25, metalness: 0.35 });
-            const darkInsideMat = new THREE.MeshBasicMaterial({ color: 0x451A03 });
 
-            // Chest Base Box
             const baseBox = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.82, 1.15), woodMat);
             baseBox.position.y = 0.41;
             baseBox.castShadow = true;
@@ -829,19 +984,16 @@
             baseBox.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
             group.add(baseBox);
 
-            // Golden Trim Straps on Base
             [-0.55, 0.55].forEach(sx => {
                 const strap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.84, 1.19), goldMat);
                 strap.position.set(sx, 0.41, 0);
                 group.add(strap);
             });
 
-            // Glowing Gold Lock Plate on Front
             const lockPlate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.1), goldMat);
             lockPlate.position.set(0, 0.72, 0.58);
             group.add(lockPlate);
 
-            // Inner Gold Glow when Chest Opens
             const innerTreasure = new THREE.Mesh(
                 new THREE.BoxGeometry(1.35, 0.15, 0.95),
                 new THREE.MeshBasicMaterial({ color: 0xFDE047 })
@@ -849,7 +1001,6 @@
             innerTreasure.position.y = 0.78;
             group.add(innerTreasure);
 
-            // Hinged Chest Lid (Pivots around back edge z = -0.55, y = 0.82)
             const lidPivot = new THREE.Group();
             lidPivot.position.set(0, 0.82, -0.55);
 
@@ -866,7 +1017,6 @@
             });
             group.add(lidPivot);
 
-            // High-Contrast Floating Number Signboard above the Chest (Tilted toward top-down camera)
             const canvas = document.createElement('canvas');
             canvas.width = 256;
             canvas.height = 256;
@@ -886,7 +1036,6 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(String(num), 128, 118);
 
-            // Quantity dots at bottom of chest sign
             ctx.fillStyle = meta.hex;
             const dotR = 7;
             const gap = 18;
@@ -899,7 +1048,7 @@
 
             const signTex = new THREE.CanvasTexture(canvas);
             const signCard = new THREE.Mesh(
-                new THREE.BoxGeometry(1.38, 1.38, 0.16),
+                new THREE.BoxGeometry(1.42, 1.42, 0.16),
                 [
                     new THREE.MeshStandardMaterial({ color: meta.hex }),
                     new THREE.MeshStandardMaterial({ color: meta.hex }),
@@ -910,13 +1059,29 @@
                 ]
             );
             signCard.position.set(0, 1.98, 0);
-            signCard.rotation.x = -0.35; // Tilted slightly upward for top-down camera readability
+            signCard.rotation.x = -0.32;
             signCard.castShadow = true;
             signCard.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
             group.add(signCard);
 
-            // Golden Ground Halo Ring around the Chest (For Visual Hint)
-            const haloGeo = new THREE.RingGeometry(1.05, 1.35, 32);
+            const balloonGroup = new THREE.Group();
+            const rope = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.025, 0.025, 1.4, 8),
+                new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+            );
+            rope.position.y = 3.1;
+            balloonGroup.add(rope);
+
+            const balloonBall = new THREE.Mesh(
+                new THREE.SphereGeometry(0.68, 20, 20),
+                new THREE.MeshStandardMaterial({ color: meta.hex, roughness: 0.25 })
+            );
+            balloonBall.position.y = 4.05;
+            balloonBall.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
+            balloonGroup.add(balloonBall);
+            group.add(balloonGroup);
+
+            const haloGeo = new THREE.RingGeometry(1.1, 1.42, 32);
             const haloMat = new THREE.MeshBasicMaterial({
                 color: 0xFFEA00,
                 side: THREE.DoubleSide,
@@ -924,7 +1089,7 @@
                 opacity: 0.0
             });
             const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-            haloMesh.rotation.x = Math.PI / 2;
+            haloMesh.rotation.x = -Math.PI / 2;
             haloMesh.position.set(0, 0.05, 0);
             group.add(haloMesh);
 
@@ -935,7 +1100,8 @@
                 isTreasureChest: true,
                 group,
                 bodyMesh: signCard,
-                extraHitMeshes: [baseBox, lidBox, signCard],
+                balloonGroup,
+                extraHitMeshes: [baseBox, lidBox, signCard, balloonBall],
                 lidPivot,
                 lidOpen: false,
                 haloMesh,
@@ -953,10 +1119,10 @@
             baseBox.userData.parentWrapper = wrapper;
             lidBox.userData.parentWrapper = wrapper;
             signCard.userData.parentWrapper = wrapper;
+            balloonBall.userData.parentWrapper = wrapper;
             numberBlocksGroup.add(group);
             return wrapper;
         }
-
         function updateMarioMissionSign(targetKey) {
             if (!marioHero.missionSignMesh) return;
             const meta = getCognitiveItemMeta(targetKey);
