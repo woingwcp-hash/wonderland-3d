@@ -318,26 +318,46 @@
             );
         }
 
-        // Setup Mode 5: Treasure Island Free-Roaming Hero Round (尋寶小英雄)
+       // Setup Mode 5: Treasure Island 2.0 Free-Roaming Hero Round (尋寶小英雄大地圖版)
         function setupTreasureRound(choices, target, meta) {
-            const numChoices = choices.length;
-            // Scenic Island Coordinates for 1, 2, or 3 Treasure Chests
-            const chestLayouts = {
-                1: [{ x: 0, z: -1.3 }],
-                2: [{ x: -2.5, z: -1.0 }, { x: 2.5, z: -1.0 }],
-                3: [{ x: -3.1, z: -0.5 }, { x: 0, z: -2.0 }, { x: 3.1, z: -0.5 }]
-            };
-            const coords = chestLayouts[numChoices] || chestLayouts[3];
+            let finalChoices = [...choices];
+            if (gameState.settings.choices >= 3) {
+                const pool = getPoolForCurrentSubject();
+                const extra = pool.filter(k => !finalChoices.includes(k)).sort(() => Math.random() - 0.5);
+                if (extra.length > 0) {
+                    finalChoices.push(extra[0]);
+                    finalChoices.sort(() => Math.random() - 0.5);
+                }
+            }
 
-            choices.forEach((itemKey, idx) => {
-                const pt = coords[idx] || { x: 0, z: -1.2 };
+            const landmarkCoords = [
+                { x: -4.8, z: -4.8 },
+                { x: 4.8,  z: -4.8 },
+                { x: -5.8, z: 1.2 },
+                { x: 5.8,  z: 1.2 },
+                { x: 0,    z: -6.2 }
+            ];
+
+            const activeCoords = finalChoices.length === 1
+                ? [{ x: 0, z: -4.5 }]
+                : (finalChoices.length === 2
+                    ? [{ x: -4.5, z: -4.5 }, { x: 4.5, z: -4.5 }]
+                    : landmarkCoords.slice(0, finalChoices.length));
+
+            finalChoices.forEach((itemKey, idx) => {
+                const pt = activeCoords[idx] || { x: 0, z: -4.5 };
                 const chest = create3DTreasureChest(itemKey, pt.x, pt.z);
                 interactiveBlocks.push(chest);
             });
 
-            // Reset Explorer Hero at the front beach bridge of the island
+            if (typeof spawnTreasureMiniCoins === 'function') {
+                spawnTreasureMiniCoins();
+            }
+
             treasureHero.currentX = 0;
-            treasureHero.currentZ = 3.1;
+            treasureHero.currentZ = 6.2;
+            treasureHero.jumpY = 0;
+            treasureHero.jumpVel = 0;
             treasureHero.targetX = null;
             treasureHero.targetZ = null;
             treasureHero.moveDirX = 0;
@@ -345,20 +365,22 @@
             treasureHero.pendingChest = null;
             treasureHero.facingAngle = Math.PI;
             if (treasureHero.group) {
-                treasureHero.group.position.set(0, 0.28, 3.1);
+                treasureHero.group.position.set(0, 0.3, 6.2);
                 treasureHero.group.rotation.y = Math.PI;
             }
             if (treasureHero.compassRing) {
-                treasureHero.compassRing.position.set(0, 0.31, 3.1);
+                treasureHero.compassRing.position.set(0, 0.34, 6.2);
+            }
+            if (treasureHero.clickMarker) {
+                treasureHero.clickMarker.visible = false;
             }
 
             setPromptUI(
-                `🗺️ 尋寶任務：請帶小英雄去打開「${meta.title}」嘅寶箱！`,
-                `可按右下角「上下左右」方向掣行過去，或直接用手指點擊 3D 寶箱`
+                `🗺️ 尋寶任務：跟住腳下箭咀，過橋搵「${meta.title}」寶箱！`,
+                `可按方向掣、直接撳草地行路、踩蘑菇彈床，或直接撳遠處嘅 3D 寶箱！`
             );
         }
 
-        // D-Pad Continuous & Step Movement Controls for Treasure Island Mode
         function setTreasureMoveDir(dx, dz) {
             if (gameState.mode !== 'treasure' || gameState.isBusy) {
                 treasureHero.moveDirX = 0;
@@ -371,14 +393,15 @@
                 treasureHero.targetX = null;
                 treasureHero.targetZ = null;
                 treasureHero.pendingChest = null;
+                if (treasureHero.clickMarker) treasureHero.clickMarker.visible = false;
             }
         }
 
         function nudgeTreasureHero(dx, dz) {
             if (gameState.mode !== 'treasure' || gameState.isBusy) return;
             playPopSound(440);
-            treasureHero.targetX = Math.max(-4.3, Math.min(4.3, treasureHero.currentX + dx * 0.95));
-            treasureHero.targetZ = Math.max(-2.6, Math.min(3.5, treasureHero.currentZ + dz * 0.95));
+            treasureHero.targetX = Math.max(-9.2, Math.min(9.2, treasureHero.currentX + dx * 1.6));
+            treasureHero.targetZ = Math.max(-7.5, Math.min(7.2, treasureHero.currentZ + dz * 1.6));
             treasureHero.pendingChest = null;
         }
 
@@ -520,7 +543,6 @@
 
             raycaster.setFromCamera(pointer, camera);
 
-            // Check if child tapped a 3D Number Block, Mario Floating Brick, or 3D Treasure Chest
             const meshes = [];
             interactiveBlocks.forEach(b => {
                 if (b.extraHitMeshes) {
@@ -535,7 +557,6 @@
                 const tappedWrapper = intersects[0].object.userData.parentWrapper;
                 if (tappedWrapper) {
                     if (gameState.mode === 'mario') {
-                        // In Mario Mode: tapping a floating brick makes the hero run under it and jump!
                         if (gameState.isBusy || marioHero.isJumping) return;
                         const idx = interactiveBlocks.indexOf(tappedWrapper);
                         if (idx !== -1) gameState.marioSelectedIdx = idx;
@@ -548,7 +569,6 @@
                             marioHero.autoJumpOnArrive = true;
                         }
                     } else if (gameState.mode === 'treasure') {
-                        // In Treasure Mode: tapping a 3D chest makes the hero walk directly to that chest and open it!
                         if (gameState.isBusy) return;
                         playPopSound(520);
                         treasureHero.moveDirX = 0;
@@ -556,8 +576,30 @@
                         treasureHero.targetX = tappedWrapper.baseX;
                         treasureHero.targetZ = tappedWrapper.baseZ + 1.05;
                         treasureHero.pendingChest = tappedWrapper;
+                        if (treasureHero.clickMarker) {
+                            treasureHero.clickMarker.position.set(tappedWrapper.baseX, 0.36, tappedWrapper.baseZ + 1.05);
+                            treasureHero.clickMarker.visible = true;
+                        }
                     } else {
                         handleBlockTapped(tappedWrapper);
+                    }
+                    return;
+                }
+            }
+
+            if (gameState.mode === 'treasure' && !gameState.isBusy) {
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.3);
+                const hitPt = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(groundPlane, hitPt)) {
+                    playPopSound(460);
+                    treasureHero.moveDirX = 0;
+                    treasureHero.moveDirZ = 0;
+                    treasureHero.pendingChest = null;
+                    treasureHero.targetX = THREE.MathUtils.clamp(hitPt.x, -9.2, 9.2);
+                    treasureHero.targetZ = THREE.MathUtils.clamp(hitPt.z, -7.5, 7.2);
+                    if (treasureHero.clickMarker) {
+                        treasureHero.clickMarker.position.set(treasureHero.targetX, 0.36, treasureHero.targetZ);
+                        treasureHero.clickMarker.visible = true;
                     }
                 }
             }
@@ -1011,11 +1053,11 @@
                 }
             });
 
-            // 4C. Animate Treasure Island 3D Explorer Hero (D-Pad & Tap-to-Walk + Chest Proximity Detection)
+            // 4C. Animate Treasure Island 2.0 Explorer Hero (Camera Follow + Compass + Mini-Coins + Bounce Pads)
             if (treasureIslandGroup.visible && treasureHero.group) {
                 let vx = 0;
                 let vz = 0;
-                const walkSpeed = 5.2;
+                const walkSpeed = 6.2;
 
                 if (treasureHero.moveDirX !== 0 || treasureHero.moveDirZ !== 0) {
                     vx = treasureHero.moveDirX * walkSpeed;
@@ -1024,7 +1066,7 @@
                     const dx = treasureHero.targetX - treasureHero.currentX;
                     const dz = treasureHero.targetZ - treasureHero.currentZ;
                     const dist = Math.hypot(dx, dz);
-                    if (dist > 0.08) {
+                    if (dist > 0.12) {
                         vx = (dx / dist) * walkSpeed;
                         vz = (dz / dist) * walkSpeed;
                     } else {
@@ -1032,6 +1074,7 @@
                         treasureHero.currentZ = treasureHero.targetZ;
                         treasureHero.targetX = null;
                         treasureHero.targetZ = null;
+                        if (treasureHero.clickMarker) treasureHero.clickMarker.visible = false;
                         if (treasureHero.pendingChest && !gameState.isBusy) {
                             const chestToOpen = treasureHero.pendingChest;
                             treasureHero.pendingChest = null;
@@ -1042,30 +1085,96 @@
 
                 const isWalking = Math.hypot(vx, vz) > 0.05;
                 if (isWalking) {
-                    treasureHero.currentX = Math.max(-4.5, Math.min(4.5, treasureHero.currentX + vx * dt));
-                    treasureHero.currentZ = Math.max(-2.7, Math.min(3.6, treasureHero.currentZ + vz * dt));
-                    treasureHero.walkCycle += dt * 15;
+                    treasureHero.currentX = Math.max(-9.2, Math.min(9.2, treasureHero.currentX + vx * dt));
+                    treasureHero.currentZ = Math.max(-7.5, Math.min(7.2, treasureHero.currentZ + vz * dt));
+                    treasureHero.walkCycle += dt * 16;
                     treasureHero.facingAngle = Math.atan2(vx, vz);
                 }
 
+                if (treasureHero.jumpY > 0 || treasureHero.jumpVel > 0) {
+                    treasureHero.jumpY += treasureHero.jumpVel * dt;
+                    treasureHero.jumpVel -= 18.0 * dt;
+                    if (treasureHero.jumpY <= 0) {
+                        treasureHero.jumpY = 0;
+                        treasureHero.jumpVel = 0;
+                    }
+                }
+
+                const walkBounce = isWalking ? Math.abs(Math.sin(treasureHero.walkCycle)) * 0.18 : Math.sin(elapsed * 3) * 0.03;
                 treasureHero.group.position.x = treasureHero.currentX;
                 treasureHero.group.position.z = treasureHero.currentZ;
-                treasureHero.group.position.y = 0.28 + (isWalking ? Math.abs(Math.sin(treasureHero.walkCycle)) * 0.16 : Math.sin(elapsed * 3) * 0.03);
+                treasureHero.group.position.y = 0.3 + walkBounce + (treasureHero.jumpY || 0);
                 treasureHero.group.rotation.y = THREE.MathUtils.lerp(treasureHero.group.rotation.y, treasureHero.facingAngle, dt * 10);
 
+                // 動態鏡頭平滑跟隨小英雄
+                const camTargetX = gameState.isBusy ? 0 : treasureHero.currentX * 0.65;
+                const camTargetZ = gameState.isBusy ? 10.4 : treasureHero.currentZ + 8.8;
+                const camTargetY = gameState.isBusy ? 8.2 : 9.2;
+                camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTargetX, dt * 4.5);
+                camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTargetY, dt * 4.5);
+                camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTargetZ, dt * 4.5);
+                const lookX = gameState.isBusy ? 0 : treasureHero.currentX * 0.7;
+                const lookZ = gameState.isBusy ? 1.0 : treasureHero.currentZ - 1.2;
+                camera.lookAt(lookX, 0.5, lookZ);
+
+                // 更新腳下黃金指南針位置與箭咀方向
                 if (treasureHero.compassRing) {
                     treasureHero.compassRing.position.x = treasureHero.currentX;
                     treasureHero.compassRing.position.z = treasureHero.currentZ;
-                    treasureHero.compassRing.rotation.z += dt * 2.0;
+                    const rightChest = interactiveBlocks.find(b => b.itemKey === gameState.targetKey);
+                    if (rightChest) {
+                        const angleToRight = Math.atan2(
+                            rightChest.baseX - treasureHero.currentX,
+                            rightChest.baseZ - treasureHero.currentZ
+                        );
+                        treasureHero.compassRing.rotation.y = angleToRight;
+                    }
                 }
 
-                // Proximity Check: If Hero walks close to any 3D Treasure Chest via D-Pad, open/check it automatically!
+                // 檢查有無行過執到沿途 3D 小金幣
+                if (treasureHero.miniCoins) {
+                    treasureHero.miniCoins.forEach((coin, cIdx) => {
+                        if (!coin.userData.collected) {
+                            coin.rotation.z += dt * 3.5;
+                            coin.position.y = coin.userData.baseY + Math.sin(elapsed * 4 + cIdx) * 0.08;
+                            if (Math.hypot(treasureHero.currentX - coin.position.x, treasureHero.currentZ - coin.position.z) < 0.95) {
+                                coin.userData.collected = true;
+                                playCoinSound();
+                                emitStarParticles(coin.position);
+                            }
+                        } else if (coin.scale.x > 0.05) {
+                            coin.position.y += dt * 4;
+                            coin.scale.multiplyScalar(0.85);
+                        } else {
+                            coin.visible = false;
+                        }
+                    });
+                }
+
+                // 檢查有無踩中彈彈跳蘑菇墊
+                if (treasureHero.bouncePads && (!treasureHero.jumpY || treasureHero.jumpY < 0.08)) {
+                    treasureHero.bouncePads.forEach(pad => {
+                        if (Math.hypot(treasureHero.currentX - pad.userData.x, treasureHero.currentZ - pad.userData.z) < 0.95) {
+                            treasureHero.jumpVel = 7.8;
+                            playMarioJumpSound();
+                            emitStarParticles(pad.position);
+                        }
+                    });
+                }
+
+                // 寶箱高空數字氣球飄浮 + 行近寶箱自動開箱判定
+                interactiveBlocks.forEach(chest => {
+                    if (chest.isTreasureChest && chest.balloonGroup) {
+                        chest.balloonGroup.position.y = Math.sin(elapsed * 2.5 + chest.animTime) * 0.16;
+                    }
+                });
+
                 if (!gameState.isBusy && isWalking) {
                     for (let i = 0; i < interactiveBlocks.length; i++) {
                         const chest = interactiveBlocks[i];
                         if (chest.isTreasureChest && chest.state !== 'wrong') {
                             const distToChest = Math.hypot(treasureHero.currentX - chest.baseX, treasureHero.currentZ - (chest.baseZ + 0.65));
-                            if (distToChest < 1.18) {
+                            if (distToChest < 1.25) {
                                 handleBlockTapped(chest);
                                 break;
                             }
