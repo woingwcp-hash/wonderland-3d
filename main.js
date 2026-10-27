@@ -321,36 +321,41 @@
             );
         }
 
-       // Setup Mode 5: Story-Driven Maze Island (第1關綠野 -> 第2關黃金 -> 第3關城堡)
+       // Setup Mode 5: Continuous 3-Zone Adventure (不走回頭路連續推進！)
         function setupTreasureRound(choices, target, meta) {
             if (!treasureHero.storyChapter) treasureHero.storyChapter = 1;
             const ch = treasureHero.storyChapter;
+            treasureHero.activeChestPos = null;
 
-            // 每個章節嘅寶箱嚴格擺喺「該章節專屬區域」，遠離牆邊與彈床，絕不隔牆誤觸！
+            // 三大區域寶箱座標（擺喺步道兩旁與廣場，完全唔會遮擋中央魔法大門！）
             const zoneChests = {
-                1: [ // 第1章：全部喺綠色區（粉紅門 Z=1.8 之前），繞過樹籬就搵到！
-                    { x: -6.2, z: 5.2 },
-                    { x: 6.2,  z: 5.2 },
-                    { x: 0,    z: 3.3 }
+                1: [ // 第 1 區：🌳 精靈森林島 (Z = 4.2)
+                    { x: -4.8, z: 4.2 },
+                    { x: 4.8,  z: 4.2 },
+                    { x: 0,    z: 4.2 }
                 ],
-                2: [ // 第2章：粉紅門已開！寶箱全部喺中間黃色區（Z = -0.3 至 -1.5）
-                    { x: -6.8, z: -0.4 },
-                    { x: 6.8,  z: -0.4 },
-                    { x: -2.8, z: -1.8 },
-                    { x: 2.8,  z: -1.8 }
+                2: [ // 第 2 區：🏜️ 黃金遺跡洲 (Z = -0.8)
+                    { x: -4.8, z: -0.8 },
+                    { x: 4.8,  z: -0.8 },
+                    { x: 0,    z: -0.8 }
                 ],
-                3: [ // 第3章：藍門已開！寶箱全部喺北面紫色城堡前（Z = -5.5 至 -6.4）
-                    { x: -6.2, z: -5.8 },
-                    { x: 6.2,  z: -5.8 },
-                    { x: 0,    z: -6.3 }
+                3: [ // 第 3 區：🏰 奇幻皇冠城堡 (Z = -6.8)
+                    { x: -4.8, z: -6.8 },
+                    { x: 4.8,  z: -6.8 },
+                    { x: 0,    z: -6.8 }
                 ]
             };
 
             const poolCoords = zoneChests[Math.min(3, ch)] || zoneChests[1];
-            const activeCoords = choices.slice(0, poolCoords.length);
+            // 如選擇 2選1，只用左右兩個位，中間大路完全暢通
+            const activeCoords = choices.length === 1
+                ? [{ x: 0, z: poolCoords[0].z }]
+                : (choices.length === 2
+                    ? [poolCoords[0], poolCoords[1]]
+                    : poolCoords.slice(0, choices.length));
 
-            activeCoords.forEach((itemKey, idx) => {
-                const pt = poolCoords[idx];
+            choices.forEach((itemKey, idx) => {
+                const pt = activeCoords[idx] || poolCoords[0];
                 const chest = create3DTreasureChest(itemKey, pt.x, pt.z);
                 interactiveBlocks.push(chest);
             });
@@ -359,9 +364,21 @@
                 spawnTreasureMiniCoins();
             }
 
-            // 小英雄起點
-            treasureHero.currentX = 0;
-            treasureHero.currentZ = 6.6;
+            // 只有喺第 1 章開局（或完成晒成個島新一輪開始）先將小英雄放喺起點；
+            // 第 1->2 章、第 2->3 章小英雄會留喺原地，直接穿過打開咗嘅大門向前行！
+            if (!treasureHero.keepHeroPosition) {
+                treasureHero.currentX = 0;
+                treasureHero.currentZ = 6.8;
+                treasureHero.facingAngle = Math.PI;
+                if (treasureHero.group) {
+                    treasureHero.group.position.set(0, 0.32, 6.8);
+                    treasureHero.group.rotation.y = Math.PI;
+                }
+                if (treasureHero.compassRing) {
+                    treasureHero.compassRing.position.set(0, 0.35, 6.8);
+                }
+            }
+            treasureHero.keepHeroPosition = false;
             treasureHero.jumpY = 0;
             treasureHero.jumpVel = 0;
             treasureHero.targetX = null;
@@ -369,32 +386,24 @@
             treasureHero.moveDirX = 0;
             treasureHero.moveDirZ = 0;
             treasureHero.pendingChest = null;
-            treasureHero.facingAngle = Math.PI;
-            if (treasureHero.group) {
-                treasureHero.group.position.set(0, 0.3, 6.6);
-                treasureHero.group.rotation.y = Math.PI;
-            }
-            if (treasureHero.compassRing) {
-                treasureHero.compassRing.position.set(0, 0.34, 6.6);
-            }
             if (treasureHero.clickMarker) {
                 treasureHero.clickMarker.visible = false;
             }
 
             if (ch === 1) {
                 setPromptUI(
-                    `📖 第 1 章【綠野迷宮】：搵出「${meta.title}」寶箱解開粉紅大門！`,
-                    `寶箱就喺綠色迷宮入面！答啱就會打開「🌈 粉紅魔法門」通往黃色沙洲！`
+                    `🌳 第 1 站【精靈森林】：請搵出「${meta.title}」寶箱奪取魔法鎖匙！`,
+                    `打開正確寶箱就會飛出金鎖匙，幫你打開前面嘅「🌸 森林雙開大門」！`
                 );
             } else if (ch === 2) {
                 setPromptUI(
-                    `🔓 粉紅門開咗喇！第 2 章【黃金迷宮】：去黃色區搵「${meta.title}」！`,
-                    `穿過中間打開咗嘅拱門進入黃色迷宮，答啱就會解鎖「👑 藍色水晶門」！`
+                    `🏜️ 大門開咗喇！第 2 站【黃金遺跡】：向前行去搵「${meta.title}」寶箱！`,
+                    `唔使返轉頭！直接跟住金幣穿過拱門行入黃色遺跡洲搵寶箱啦！`
                 );
             } else {
                 setPromptUI(
-                    `🏰 全島打通！第 3 章【城堡迷宮】：直衝紫色城堡區搵「${meta.title}」！`,
-                    `兩道魔法門都開晒喇！帶小英雄行去最北面城堡前面開寶箱啦！`
+                    `🏰 彩虹橋升起喇！第 3 站【皇冠城堡】：過河搵「${meta.title}」寶箱！`,
+                    `行過七彩浮橋直達紫色皇冠城堡，打開最後嘅皇家寶箱啦！`
                 );
             }
         }
@@ -418,8 +427,8 @@
         function nudgeTreasureHero(dx, dz) {
             if (gameState.mode !== 'treasure' || gameState.isBusy) return;
             playPopSound(440);
-            treasureHero.targetX = Math.max(-8.8, Math.min(8.8, treasureHero.currentX + dx * 1.5));
-            treasureHero.targetZ = Math.max(-7.2, Math.min(7.2, treasureHero.currentZ + dz * 1.5));
+            treasureHero.targetX = Math.max(-7.2, Math.min(7.2, treasureHero.currentX + dx * 1.6));
+            treasureHero.targetZ = Math.max(-8.2, Math.min(7.4, treasureHero.currentZ + dz * 1.6));
             treasureHero.pendingChest = null;
         }
 
@@ -644,7 +653,7 @@
                 return;
             }
 
-            // Mode 1, Mode 2 & Mode 4 (Mario): Check if Correct Answer
+            // Check if Correct Answer
             if (tappedKey === gameState.targetKey) {
                 gameState.isBusy = true;
                 block.state = 'celebrate';
@@ -660,7 +669,30 @@
                 } else if (isTreasure) {
                     playChestOpenSound();
                     block.lidOpen = true;
-                    treasureHero.storyChapter = Math.min(3, (treasureHero.storyChapter || 1) + 1);
+                    // 記錄打開咗邊個寶箱，等鏡頭特寫同紅寶石直接喺呢個寶箱正上方彈出！
+                    treasureHero.activeChestPos = { x: block.baseX, z: block.baseZ };
+
+                    const currentCh = treasureHero.storyChapter || 1;
+                    if (currentCh < 3) {
+                        // 發射 3D 金鎖匙飛去打開下一道魔法門，並保留小英雄原地推進！
+                        if (treasureHero.flyingKey && treasureHero.gates[currentCh]) {
+                            const fk = treasureHero.flyingKey;
+                            fk.active = true;
+                            fk.progress = 0;
+                            fk.targetGateId = currentCh;
+                            fk.startPos.set(block.baseX, 1.4, block.baseZ);
+                            fk.endPos.set(0, 1.3, treasureHero.gates[currentCh].zPos);
+                            fk.mesh.position.copy(fk.startPos);
+                            fk.mesh.visible = true;
+                        }
+                        treasureHero.storyChapter = currentCh + 1;
+                        treasureHero.keepHeroPosition = true;
+                    } else {
+                        // 完成第 3 章皇冠城堡！播放過關號角，下一輪重新由第 1 章出發
+                        playStageClearFanfare();
+                        treasureHero.storyChapter = 1;
+                        treasureHero.keepHeroPosition = false;
+                    }
                 } else if (gameState.mode === 'gacha') {
                     playSuccessChime();
                     gachaSpinTimer = 1.2;
@@ -674,7 +706,7 @@
                 if (gameState.settings.countObjects) {
                     setPromptUI(
                         isTreasure
-                            ? `打開寶箱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅紅寶石！`
+                            ? `打開寶箱喇！係「${tappedMeta.title}」！睇下寶箱彈出嚟嘅紅寶石同魔法金鎖匙！`
                             : `答啱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅 3D 寶物！`,
                         `認知強化：${tappedMeta.title}`
                     );
@@ -693,7 +725,7 @@
                     }
                 }
             } else {
-                // Wrong Answer: Gentle wobble, slight dim (No harsh red X!)
+                // 答錯溫和搖晃提示，並將小英雄輕輕退後一步避免重複卡住
                 playGentleNudge();
                 block.state = 'wrong';
                 block.wrongTimer = 0.7;
@@ -706,32 +738,29 @@
                         m.opacity = 0.6;
                     });
                 }
-                // In Treasure Mode: gently step back a tiny bit so hero doesn't endlessly re-trigger the same wrong chest
                 if (gameState.mode === 'treasure') {
                     treasureHero.moveDirX = 0;
                     treasureHero.moveDirZ = 0;
                     treasureHero.pendingChest = null;
                     treasureHero.targetX = treasureHero.currentX;
-                    treasureHero.targetZ = Math.min(3.4, treasureHero.currentZ + 0.85);
+                    treasureHero.targetZ = Math.min(7.2, treasureHero.currentZ + 1.4);
                 }
 
                 const targetMeta = getCognitiveItemMeta(gameState.targetKey);
                 setPromptUI(
                     `呢個係「${tappedMeta.title}」，唔緊要，我哋再搵下「${targetMeta.title}」啦！`,
-                    `無挫敗感提示：請再試一次`
+                    `無挫敗感提示：請跟住腳下橙色箭咀搵正確寶箱`
                 );
 
-                // Trigger visual hint on the right block shortly after a wrong tap
                 setTimeout(() => {
                     triggerVisualHint(false);
                 }, 900);
             }
         }
 
-        // Trigger Hero running to the Goal Flagpole in Mario Mode
         function triggerMarioGoalRun() {
             marioHero.runningToFlag = true;
-            marioHero.targetX = 4.55; // Right in front of the flagpole
+            marioHero.targetX = 4.55;
             playStageClearFanfare();
             emitStarParticles(new THREE.Vector3(5.1, 3.5, 0.8));
             setTimeout(() => {
@@ -739,7 +768,7 @@
             }, 2200);
         }
 
-        // Sequential 3D Object Spawning (1..N Apples/Coins for Numbers, 3 Matching 3D Objects for Colors/Shapes)
+        // 數與量點數動畫（喺尋寶模式會直接由打開嗰個寶箱頂部彈出紅寶石！）
         function runQuantityCountingSequence(itemKey, autoAdvanceAfter, isCoin = false) {
             clearCountingObjects();
             const meta = getCognitiveItemMeta(itemKey);
@@ -754,36 +783,49 @@
             banner.classList.remove('hidden');
             dotsContainer.innerHTML = '';
 
-            const spacing = count > 6 ? 1.12 : 1.45;
-            const startX = -((count - 1) * spacing) / 2;
-            const zPos = isCoin ? 2.25 : 3.15;
+            const isTreasureChestOpen = (gameState.mode === 'treasure' && treasureHero.activeChestPos);
+            const centerX = isTreasureChestOpen ? treasureHero.activeChestPos.x : 0;
+            const spacing = isTreasureChestOpen
+                ? (count > 5 ? 0.68 : 0.88)
+                : (count > 6 ? 1.12 : 1.45);
+            const startX = centerX - ((count - 1) * spacing) / 2;
+            const zPos = isTreasureChestOpen
+                ? (treasureHero.activeChestPos.z + 0.35)
+                : (isCoin ? 2.25 : 3.15);
 
             for (let i = 1; i <= count; i++) {
                 const t = setTimeout(() => {
                     const xPos = startX + (i - 1) * spacing;
                     createSingleCounting3DItem(i, count, xPos, zPos, isCoin, itemKey);
+
+                    // 尋寶模式：將紅寶石高度提升到寶箱正上方 (Y = 2.25)，唔會再被地面或牆遮住！
+                    if (isTreasureChestOpen && spawnedCountingItems.length > 0) {
+                        const newest = spawnedCountingItems[spawnedCountingItems.length - 1];
+                        newest.baseY = 2.25;
+                        newest.group.position.y = 2.25;
+                    }
+
                     if (isCoin) {
                         playCoinSound();
                     } else {
                         playCountingNote(i);
                     }
 
-                    // Add badge to bottom banner
                     const badge = document.createElement('span');
                     badge.className = 'inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned';
                     badge.textContent = meta.subject === 'number' ? String(i) : `${meta.title} ×${i}`;
                     dotsContainer.appendChild(badge);
-                }, 420 + (i - 1) * 500);
+                }, 420 + (i - 1) * 480);
                 activeCountingTimeouts.push(t);
             }
 
-            const totalDuration = 420 + count * 500 + 650;
+            const totalDuration = 420 + count * 480 + 650;
             const endTimer = setTimeout(() => {
                 if (meta.subject === 'number') {
                     const unitText = isCoin ? (gameState.mode === 'treasure' ? '粒紅寶石' : '粒金幣') : '個紅蘋果';
                     setPromptUI(
                         `好叻呀！總共有 ${count}（${NUMBER_WORDS_HK[count]}）${unitText}！`,
-                        autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`
+                        autoAdvanceAfter ? `魔法大門已經打開，準備繼續向前探索...` : `繼續點擊其他立體公仔探索啦！`
                     );
                 } else {
                     setPromptUI(
@@ -801,8 +843,8 @@
                             }
                             setTimeout(() => {
                                 if (!isToyModalOpen()) startNewRound();
-                            }, 700);
-                        }, 1200);
+                            }, 650);
+                        }, 1100);
                         activeCountingTimeouts.push(nextTimer);
                     }
                 } else {
@@ -1072,25 +1114,55 @@
                 }
             });
 
-            // 4C. Animate Story Maze Island (真實迷宮牆阻擋 + 魔法門升降 + 360度靈敏開箱)
+            // 4C. Animate Treasure Island 3.0 (雙開魔法門 + 彩虹浮橋 + 飛翔金鎖匙 + 智能過橋導航 + 寶箱特寫鏡頭)
             if (treasureIslandGroup.visible && treasureHero.group) {
                 const ch = treasureHero.storyChapter || 1;
 
-                // 1. 魔法大門升降動畫（第2章降落粉紅門，第3章降落藍門）
-                if (treasureHero.magicGates) {
+                // 1. 🔑 3D 魔法金鎖匙拋物線飛翔動畫
+                if (treasureHero.flyingKey && treasureHero.flyingKey.active) {
+                    const fk = treasureHero.flyingKey;
+                    fk.progress = Math.min(1, fk.progress + dt * 1.45);
+                    fk.mesh.position.lerpVectors(fk.startPos, fk.endPos, fk.progress);
+                    fk.mesh.position.y += Math.sin(fk.progress * Math.PI) * 2.4;
+                    fk.mesh.rotation.y += dt * 12;
+                    fk.mesh.rotation.z = Math.sin(fk.progress * Math.PI) * 0.5;
+                    if (fk.progress >= 1) {
+                        fk.active = false;
+                        fk.mesh.visible = false;
+                        playSuccessChime();
+                        emitStarParticles(fk.endPos);
+                    }
+                }
+
+                // 2. 🌸 雙扇魔法大門向左右兩邊推開動畫 + 鎖頭消失
+                if (treasureHero.gates) {
                     [1, 2].forEach(gId => {
-                        const gateObj = treasureHero.magicGates[gId];
-                        if (gateObj && gateObj.mesh) {
+                        const gate = treasureHero.gates[gId];
+                        if (gate) {
                             const isUnlocked = (gId === 1 && ch >= 2) || (gId === 2 && ch >= 3);
-                            const targetY = isUnlocked ? -1.5 : 0.3;
-                            gateObj.mesh.position.y = THREE.MathUtils.lerp(gateObj.mesh.position.y, targetY, dt * 5.0);
+                            const targetAngle = isUnlocked ? 1.75 : 0;
+                            gate.leftPivot.rotation.y = THREE.MathUtils.lerp(gate.leftPivot.rotation.y, -targetAngle, dt * 5);
+                            gate.rightPivot.rotation.y = THREE.MathUtils.lerp(gate.rightPivot.rotation.y, targetAngle, dt * 5);
+                            if (gate.lockGroup) {
+                                gate.lockGroup.visible = !isUnlocked;
+                            }
                         }
                     });
                 }
 
+                // 3. 🌉 第 3 章解鎖時，河面一格一格升起彩虹浮橋！
+                if (treasureHero.bridgePlanks) {
+                    const bridgeUnlocked = (ch >= 3);
+                    treasureHero.bridgePlanks.forEach(bp => {
+                        const targetY = bridgeUnlocked ? 0.28 : -0.45;
+                        bp.mesh.position.y = THREE.MathUtils.lerp(bp.mesh.position.y, targetY, dt * (4 + bp.index * 0.8));
+                    });
+                }
+
+                // 4. 小英雄移動與「智能過門／過橋自動導航」（保證 100% 唔會卡喺圍欄或河邊！）
                 let vx = 0;
                 let vz = 0;
-                const walkSpeed = 6.4;
+                const walkSpeed = 6.5;
 
                 if (treasureHero.moveDirX !== 0 || treasureHero.moveDirZ !== 0) {
                     vx = treasureHero.moveDirX * walkSpeed;
@@ -1109,77 +1181,64 @@
                     }
                 }
 
-                // 2. 迷宮牆真實碰撞檢查（唔會再穿牆！）
                 const isWalking = Math.hypot(vx, vz) > 0.05;
                 if (isWalking) {
-                    const heroR = 0.48;
-                    const walls = treasureHero.mazeWalls || [];
+                    // 根據目前已解鎖嘅章節決定最北可以去到邊度
+                    const minAllowedZ = (ch === 1) ? 2.55 : (ch === 2 ? -2.75 : -8.2);
+                    let nextX = Math.max(-6.8, Math.min(6.8, treasureHero.currentX + vx * dt));
+                    let nextZ = Math.max(minAllowedZ, Math.min(7.3, treasureHero.currentZ + vz * dt));
 
-                    const checkHitWall = (tx, tz) => {
-                        for (let i = 0; i < walls.length; i++) {
-                            const w = walls[i];
-                            if (w.gateId === 1 && ch >= 2) continue; // 粉紅門已開可通過
-                            if (w.gateId === 2 && ch >= 3) continue; // 藍門已開可通過
-                            if (Math.abs(tx - w.x) < w.halfW + heroR && Math.abs(tz - w.z) < w.halfD + heroR) {
-                                return w;
-                            }
-                        }
-                        return null;
-                    };
+                    // 檢查 nextZ 係咪正處於「第1道花叢門 (Z: 1.55 ~ 2.45)」或者「第2道彩虹橋 (Z: -5.2 ~ -2.8)」
+                    const inGate1Zone = (nextZ >= 1.55 && nextZ <= 2.45);
+                    const inBridgeZone = (nextZ >= -5.25 && nextZ <= -2.85);
 
-                    const nextX = Math.max(-8.8, Math.min(8.8, treasureHero.currentX + vx * dt));
-                    const nextZ = Math.max(-7.2, Math.min(7.2, treasureHero.currentZ + vz * dt));
-
-                    if (!checkHitWall(nextX, treasureHero.currentZ)) {
+                    if ((inGate1Zone || inBridgeZone) && Math.abs(nextX) > 1.35) {
+                        // 如果小英雄喺左右兩邊想過門／過橋，自動順滑引導佢行去中間拱門 (X = 0)！
+                        const steerDir = -Math.sign(treasureHero.currentX);
+                        treasureHero.currentX += steerDir * walkSpeed * dt;
+                        vx = steerDir * walkSpeed;
+                    } else {
                         treasureHero.currentX = nextX;
-                    }
-                    const hitZ = checkHitWall(treasureHero.currentX, nextZ);
-                    if (!hitZ) {
                         treasureHero.currentZ = nextZ;
-                    } else if (Math.abs(vx) < 2.0 && hitZ.gateId === 0) {
-                        // 撞到橫牆時自動順住牆邊滑向缺口通道
-                        const guideX = (hitZ.gapType === 'sides') ? (treasureHero.currentX >= 0 ? 4.3 : -4.3) : 0;
-                        const slideDir = Math.sign(guideX - treasureHero.currentX) || 1;
-                        const slideX = treasureHero.currentX + slideDir * walkSpeed * 0.85 * dt;
-                        if (!checkHitWall(slideX, treasureHero.currentZ)) {
-                            treasureHero.currentX = slideX;
-                        }
                     }
 
                     treasureHero.walkCycle += dt * 16;
                     treasureHero.facingAngle = Math.atan2(vx, vz);
                 }
 
-                // 3. 蘑菇彈床跳躍物理
-                if (treasureHero.jumpY > 0 || treasureHero.jumpVel > 0) {
-                    treasureHero.jumpY += treasureHero.jumpVel * dt;
-                    treasureHero.jumpVel -= 18.0 * dt;
-                    if (treasureHero.jumpY <= 0) {
-                        treasureHero.jumpY = 0;
-                        treasureHero.jumpVel = 0;
-                    }
-                }
-
                 const walkBounce = isWalking ? Math.abs(Math.sin(treasureHero.walkCycle)) * 0.18 : Math.sin(elapsed * 3) * 0.03;
                 treasureHero.group.position.set(
                     treasureHero.currentX,
-                    0.3 + walkBounce + (treasureHero.jumpY || 0),
+                    0.32 + walkBounce,
                     treasureHero.currentZ
                 );
                 treasureHero.group.rotation.y = THREE.MathUtils.lerp(treasureHero.group.rotation.y, treasureHero.facingAngle, dt * 10);
 
-                // 4. 鏡頭平滑跟隨
-                const camTargetX = gameState.isBusy ? 0 : treasureHero.currentX * 0.6;
-                const camTargetZ = gameState.isBusy ? 10.4 : treasureHero.currentZ + 8.5;
-                const camTargetY = gameState.isBusy ? 8.4 : 10.5;
+                // 5. 🎥 智能鏡頭：平時跟住小英雄；開箱數紅寶石時，自動 Zoom-in 特寫打開嗰個寶箱！
+                let camTargetX, camTargetY, camTargetZ, lookX, lookY, lookZ;
+                if (gameState.isBusy && treasureHero.activeChestPos) {
+                    camTargetX = treasureHero.activeChestPos.x * 0.82;
+                    camTargetY = 6.8;
+                    camTargetZ = treasureHero.activeChestPos.z + 7.2;
+                    lookX = treasureHero.activeChestPos.x;
+                    lookY = 1.35;
+                    lookZ = treasureHero.activeChestPos.z;
+                } else {
+                    camTargetX = treasureHero.currentX * 0.65;
+                    camTargetY = 9.6;
+                    camTargetZ = treasureHero.currentZ + 8.2;
+                    lookX = treasureHero.currentX * 0.7;
+                    lookY = 0.4;
+                    lookZ = treasureHero.currentZ - 1.5;
+                }
                 camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTargetX, dt * 4.5);
                 camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTargetY, dt * 4.5);
                 camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTargetZ, dt * 4.5);
-                camera.lookAt(gameState.isBusy ? 0 : treasureHero.currentX * 0.65, 0.4, gameState.isBusy ? 1.0 : treasureHero.currentZ - 1.5);
+                camera.lookAt(lookX, lookY, lookZ);
 
-                // 5. 腳下黃金指南針指向正確寶箱
+                // 6. 🧭 腳下黃金指南針指向正確目標寶箱
                 if (treasureHero.compassRing) {
-                    treasureHero.compassRing.position.set(treasureHero.currentX, 0.34, treasureHero.currentZ);
+                    treasureHero.compassRing.position.set(treasureHero.currentX, 0.35, treasureHero.currentZ);
                     const rightChest = interactiveBlocks.find(b => b.itemKey === gameState.targetKey);
                     if (rightChest) {
                         treasureHero.compassRing.rotation.y = Math.atan2(
@@ -1189,7 +1248,7 @@
                     }
                 }
 
-                // 6. 執沿途小金幣
+                // 7. 🎵 執沿途引路金幣（配 Do-Re-Mi 木琴上行音階！）
                 if (treasureHero.miniCoins) {
                     treasureHero.miniCoins.forEach((coin, cIdx) => {
                         if (!coin.userData.collected) {
@@ -1197,7 +1256,7 @@
                             coin.position.y = coin.userData.baseY + Math.sin(elapsed * 4 + cIdx) * 0.08;
                             if (Math.hypot(treasureHero.currentX - coin.position.x, treasureHero.currentZ - coin.position.z) < 0.95) {
                                 coin.userData.collected = true;
-                                playCoinSound();
+                                playCountingNote(coin.userData.noteIndex || 1);
                                 emitStarParticles(coin.position);
                             }
                         } else if (coin.scale.x > 0.05) {
@@ -1209,21 +1268,10 @@
                     });
                 }
 
-                // 7. 踩蘑菇彈床
-                if (treasureHero.bouncePads && (!treasureHero.jumpY || treasureHero.jumpY < 0.08)) {
-                    treasureHero.bouncePads.forEach(pad => {
-                        if (Math.hypot(treasureHero.currentX - pad.userData.x, treasureHero.currentZ - pad.userData.z) < 0.9) {
-                            treasureHero.jumpVel = 7.8;
-                            playMarioJumpSound();
-                            emitStarParticles(pad.position);
-                        }
-                    });
-                }
-
-                // 8. 360度寶箱觸發判定（無論從正面、側面行近寶箱 1.55 距離內都會即刻打開！）
+                // 8. 🎈 寶箱氣球飄浮 + 360度無死角開箱判定
                 interactiveBlocks.forEach(chest => {
                     if (chest.isTreasureChest && chest.balloonGroup) {
-                        chest.balloonGroup.position.y = Math.sin(elapsed * 2.5 + chest.animTime) * 0.16;
+                        chest.balloonGroup.position.y = Math.sin(elapsed * 2.5 + chest.animTime) * 0.15;
                     }
                 });
 
@@ -1231,11 +1279,11 @@
                     for (let i = 0; i < interactiveBlocks.length; i++) {
                         const chest = interactiveBlocks[i];
                         if (chest.isTreasureChest && chest.state !== 'wrong') {
-                            const distToChestCenter = Math.hypot(
+                            const distToChest = Math.hypot(
                                 treasureHero.currentX - chest.baseX,
                                 treasureHero.currentZ - chest.baseZ
                             );
-                            if (distToChestCenter < 1.55) {
+                            if (distToChest < 1.55) {
                                 treasureHero.targetX = null;
                                 treasureHero.targetZ = null;
                                 treasureHero.pendingChest = null;
@@ -1246,7 +1294,6 @@
                     }
                 }
             }
-
             // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
             if (marioStageGroup.visible && marioHero.group) {
                 const dx = marioHero.targetX - marioHero.currentX;
