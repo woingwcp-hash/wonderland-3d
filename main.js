@@ -1,11 +1,109 @@
 /********************************************************************
-         * [FILE: js/main.js]
-         * 7. CORE GAMEPLAY LOGIC & MODES (扭蛋尋寶 / 數字小火車 / 自由點讀 / 數字大冒險)
+         * [FILE: main.js]
+         * 7. CORE GAMEPLAY LOGIC, LOBBY NAVIGATION & MODES
          ********************************************************************/
-        function getPoolFromRange(rangeStr) {
+        const SUBJECT_DISPLAY_META = {
+            number: { icon: '🔢', title: '數字樂園', short: '🔢 數字' },
+            color: { icon: '🎨', title: '顏色樂園', short: '🎨 顏色' },
+            shape: { icon: '🔺', title: '形狀樂園', short: '🔺 形狀' }
+        };
+
+        const MODE_DISPLAY_META = {
+            gacha: '🔮 扭蛋尋寶',
+            train: '🚂 認知小火車',
+            mario: '🍄 認知大冒險',
+            explore: '🎨 自由探索'
+        };
+
+        // Open the 2-Step Lobby Overlay ('subject' = Step 1, 'mode' = Step 2)
+        function openLobby(step = 'subject') {
+            playPopSound(520);
+            gameState.inLobby = true;
+            clearTimeout(autoPromptTimer);
+
+            const overlay = document.getElementById('lobby-overlay');
+            const stepSubj = document.getElementById('lobby-step-subject');
+            const stepMode = document.getElementById('lobby-step-mode');
+
+            overlay.classList.remove('hidden');
+
+            if (step === 'subject') {
+                stepSubj.classList.remove('hidden');
+                stepMode.classList.add('hidden');
+            } else {
+                const meta = SUBJECT_DISPLAY_META[gameState.subject] || SUBJECT_DISPLAY_META.number;
+                document.getElementById('lobby-selected-subj-icon').textContent = meta.icon;
+                document.getElementById('lobby-selected-subj-title').textContent = meta.title;
+                stepSubj.classList.add('hidden');
+                stepMode.classList.remove('hidden');
+            }
+        }
+
+        // Step 1 -> Step 2: User clicked Numbers, Colors, or Shapes card
+        function selectSubjectFromLobby(subjectKey) {
+            playPopSound(600);
+            gameState.subject = subjectKey;
+            updateTopStatusBadge();
+            openLobby('mode');
+        }
+
+        // Step 2 -> Start Gameplay: User clicked one of the 4 game cards
+        function startGameFromLobby(modeKey) {
+            playSuccessChime();
+            gameState.inLobby = false;
+            document.getElementById('lobby-overlay').classList.add('hidden');
+            switchMode(modeKey);
+        }
+
+        function updateTopStatusBadge() {
+            const sMeta = SUBJECT_DISPLAY_META[gameState.subject] || SUBJECT_DISPLAY_META.number;
+            const mText = MODE_DISPLAY_META[gameState.mode] || MODE_DISPLAY_META.gacha;
+            const subjBadge = document.getElementById('status-subj-badge');
+            const modeBadge = document.getElementById('status-mode-badge');
+            if (subjBadge) subjBadge.textContent = sMeta.short;
+            if (modeBadge) modeBadge.textContent = mText;
+        }
+
+        function getPoolForCurrentSubject() {
+            if (gameState.subject === 'color') {
+                return COLOR_CURRICULUM.map(c => c.id);
+            }
+            if (gameState.subject === 'shape') {
+                return SHAPE_CURRICULUM.map(s => s.id);
+            }
+            // Default: 'number'
+            const rangeStr = gameState.settings.range;
             if (rangeStr === '1-5') return [1, 2, 3, 4, 5];
             if (rangeStr === '6-10') return [6, 7, 8, 9, 10];
             return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        }
+
+        // Switch between Numbers (數字), Colors (顏色), and Shapes (形狀)
+        function switchSubject(newSubject) {
+            playPopSound(560);
+            gameState.subject = newSubject;
+            gameState.isBusy = false;
+
+            updateTopStatusBadge();
+            updateRightButtonForMode();
+            startNewRound();
+        }
+
+        function updateRightButtonForMode() {
+            const rightLabel = document.getElementById('right-btn-label');
+            const rightIcon = document.getElementById('right-btn-icon');
+            if (gameState.mode === 'explore') {
+                if (gameState.subject === 'number') {
+                    rightLabel.textContent = gameState.explorePage === '1-5' ? '切換 6-10' : '切換 1-5';
+                    rightIcon.className = 'fa-solid fa-repeat';
+                } else {
+                    rightLabel.textContent = '重新排列';
+                    rightIcon.className = 'fa-solid fa-rotate';
+                }
+            } else {
+                rightLabel.textContent = '下一關';
+                rightIcon.className = 'fa-solid fa-forward-step';
+            }
         }
 
         function switchMode(newMode) {
@@ -13,16 +111,7 @@
             gameState.mode = newMode;
             gameState.isBusy = false;
 
-            // Update Top Mode Buttons UI
-            ['gacha', 'train', 'explore', 'mario'].forEach(m => {
-                const btn = document.getElementById(`mode-btn-${m}`);
-                if (!btn) return;
-                if (m === newMode) {
-                    btn.className = 'btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-amber-400 bg-amber-400 text-amber-950';
-                } else {
-                    btn.className = 'btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-white/80 bg-white/90 text-slate-700 hover:bg-sky-50';
-                }
-            });
+            updateTopStatusBadge();
 
             // Toggle visibility of 3D centerpieces & Mario Controls
             gachaMachineGroup.visible = (newMode === 'gacha');
@@ -44,39 +133,50 @@
             }
 
             document.getElementById('btn-visual-hint').style.display = (newMode === 'explore') ? 'none' : 'flex';
-
-            // Update Right Action Button label
-            const rightLabel = document.getElementById('right-btn-label');
-            const rightIcon = document.getElementById('right-btn-icon');
-            if (newMode === 'explore') {
-                rightLabel.textContent = gameState.explorePage === '1-5' ? '切換 6-10' : '切換 1-5';
-                rightIcon.className = 'fa-solid fa-repeat';
-            } else {
-                rightLabel.textContent = '下一關';
-                rightIcon.className = 'fa-solid fa-forward-step';
-            }
-
+            updateRightButtonForMode();
             startNewRound();
         }
 
-        function updateTargetBadgeUI(num, isExplore = false) {
+        function updateTargetBadgeUI(targetKey, isExplore = false) {
+            const cardEl = document.getElementById('target-number-card');
             const numEl = document.getElementById('target-badge-num');
             const dotsEl = document.getElementById('target-badge-dots');
+
             if (isExplore) {
-                numEl.textContent = '1-10';
-                dotsEl.textContent = '🎨 點讀';
+                cardEl.style.background = 'linear-gradient(to bottom, #FCD34D, #F59E0B)';
+                cardEl.style.color = '#0F172A';
+                numEl.textContent = gameState.subject === 'number' ? '1-10' : (gameState.subject === 'color' ? '🎨' : '🔺');
+                dotsEl.textContent = '自由探索';
                 return;
             }
-            numEl.textContent = String(num);
-            dotsEl.textContent = '●'.repeat(Math.min(num, 5)) + (num > 5 ? '\n' + '●'.repeat(num - 5) : '');
+
+            const meta = getCognitiveItemMeta(targetKey);
+            if (meta.subject === 'color') {
+                cardEl.style.background = meta.hex;
+                cardEl.style.color = (meta.key === 'yellow') ? '#0F172A' : '#FFFFFF';
+                numEl.textContent = meta.shortLabel;
+                dotsEl.textContent = meta.title;
+                dotsEl.className = 'text-[11px] sm:text-xs font-black tracking-tighter mt-0.5';
+            } else if (meta.subject === 'shape') {
+                cardEl.style.background = 'linear-gradient(to bottom, #FFFBEB, #FEF3C7)';
+                cardEl.style.color = meta.hex;
+                numEl.textContent = meta.badgeSymbol;
+                dotsEl.textContent = meta.title;
+                dotsEl.className = 'text-[11px] sm:text-xs font-black text-slate-800 tracking-tighter mt-0.5';
+            } else {
+                cardEl.style.background = 'linear-gradient(to bottom, #FCD34D, #FBBF24)';
+                cardEl.style.color = '#0F172A';
+                numEl.textContent = String(meta.key);
+                dotsEl.textContent = meta.subBadge;
+                dotsEl.className = 'text-[10px] sm:text-xs font-black text-amber-900 tracking-tighter mt-0.5';
+            }
         }
 
         function handleRightActionBtn() {
             playPopSound(480);
-            if (gameState.mode === 'explore') {
+            if (gameState.mode === 'explore' && gameState.subject === 'number') {
                 gameState.explorePage = (gameState.explorePage === '1-5') ? '6-10' : '1-5';
-                document.getElementById('right-btn-label').textContent =
-                    gameState.explorePage === '1-5' ? '切換 6-10' : '切換 1-5';
+                updateRightButtonForMode();
                 startNewRound();
             } else {
                 startNewRound();
@@ -95,39 +195,40 @@
                 return;
             }
 
-            const pool = getPoolFromRange(gameState.settings.range);
+            const pool = getPoolForCurrentSubject();
             const target = pool[Math.floor(Math.random() * pool.length)];
+            gameState.targetKey = target;
             gameState.targetNumber = target;
             updateTargetBadgeUI(target, false);
 
             // Build options array based on 1, 2, or 3 choices setting
             const numChoices = gameState.settings.choices;
-            const distractors = pool.filter(n => n !== target).sort(() => Math.random() - 0.5);
+            const distractors = pool.filter(k => k !== target).sort(() => Math.random() - 0.5);
             const choices = [target, ...distractors.slice(0, numChoices - 1)].sort(() => Math.random() - 0.5);
             gameState.currentOptions = choices;
 
-            const hkWord = NUMBER_WORDS_HK[target];
+            const meta = getCognitiveItemMeta(target);
 
             if (gameState.mode === 'mario') {
-                setupMarioRound(choices, target, hkWord);
+                setupMarioRound(choices, target, meta);
                 scheduleAutoVisualPrompt();
                 return;
             }
 
-            // Place 3D Number Character Blocks in Foreground for Gacha & Train modes
+            // Place 3D Cognitive Character Blocks in Foreground for Gacha & Train modes
             const spacing = numChoices === 1 ? 0 : (numChoices === 2 ? 3.4 : 3.1);
             const startX = -((numChoices - 1) * spacing) / 2;
 
-            choices.forEach((num, idx) => {
+            choices.forEach((itemKey, idx) => {
                 const xPos = startX + idx * spacing;
-                const block = create3DNumberCharacter(num, xPos, 1.35, 1.08);
+                const block = create3DNumberCharacter(itemKey, xPos, 1.35, 1.08);
                 interactiveBlocks.push(block);
             });
 
             if (gameState.mode === 'gacha') {
                 setPromptUI(
-                    `請搵出數字「${target}」（${hkWord}）扭蛋尋寶！`,
-                    `可對照左方目標卡，輕觸畫面中的立體數字「${target}」`
+                    `請搵出「${meta.title}」扭蛋尋寶！`,
+                    `可對照左方目標提示卡，輕觸畫面中的立體「${meta.title}」公仔`
                 );
             } else if (gameState.mode === 'train') {
                 updateTrainSignTexture(target);
@@ -135,16 +236,18 @@
                 trainAnimState.targetX = 0;
                 playTrainWhistle();
                 setPromptUI(
-                    `小火車載住數字「${target}」（${hkWord}），請搵出一樣嘅數字！`,
-                    `字形配對：請輕觸與火車牌相同的立體數字「${target}」`
+                    `小火車載住「${meta.title}」，請搵出一樣嘅積木公仔！`,
+                    `視覺配對：請輕觸與火車牌相同的立體「${meta.title}」`
                 );
             }
 
             // Start 6-second Auto Visual Prompt Timer if enabled
-            scheduleAutoVisualPrompt();
+            if (!gameState.inLobby) {
+                scheduleAutoVisualPrompt();
+            }
         }
 
-        function setupMarioRound(choices, target, hkWord) {
+        function setupMarioRound(choices, target, meta) {
             document.getElementById('mario-stage-text').textContent = `1-${gameState.marioStage}`;
             updateMarioMissionSign(target);
 
@@ -152,16 +255,16 @@
             const spacing = numChoices === 1 ? 0 : (numChoices === 2 ? 3.1 : 2.75);
             const startX = -((numChoices - 1) * spacing) / 2;
 
-            choices.forEach((num, idx) => {
+            choices.forEach((itemKey, idx) => {
                 const xPos = startX + idx * spacing;
-                const brick = create3DMarioBrick(num, xPos, 3.05, 0.8);
+                const brick = create3DMarioBrick(itemKey, xPos, 3.05, 0.8);
                 interactiveBlocks.push(brick);
             });
 
             // Reset Mario Hero position under middle/first brick & reset Flagpole
             gameState.marioSelectedIdx = Math.floor((numChoices - 1) / 2);
             const startBrickX = interactiveBlocks[gameState.marioSelectedIdx].baseX;
-            marioHero.currentX = -4.0; // Emerge from near the green pipe
+            marioHero.currentX = -4.0;
             marioHero.targetX = startBrickX;
             marioHero.currentY = marioHero.baseY;
             marioHero.isJumping = false;
@@ -171,27 +274,39 @@
             if (marioHero.flagMesh) marioHero.flagMesh.position.y = 3.35;
 
             setPromptUI(
-                `🍄 關卡 1-${gameState.marioStage}：請頂開數字「${target}」（${hkWord}）嘅金磚塊！`,
-                `直接點擊空中數字磚塊，或用下方按鈕移動並跳起頂磚塊`
+                `🍄 關卡 1-${gameState.marioStage}：請頂開「${meta.title}」嘅金磚塊！`,
+                `直接點擊空中磚塊，或用下方按鈕移動並跳起頂磚塊`
             );
         }
 
         function setupExploreMode() {
-            updateTargetBadgeUI(1, true);
-            const nums = gameState.explorePage === '1-5' ? [1, 2, 3, 4, 5] : [6, 7, 8, 9, 10];
-            const spacing = 2.25;
-            const startX = -((nums.length - 1) * spacing) / 2;
+            updateTargetBadgeUI(null, true);
+            let items = [];
+            if (gameState.subject === 'number') {
+                items = gameState.explorePage === '1-5' ? [1, 2, 3, 4, 5] : [6, 7, 8, 9, 10];
+            } else {
+                items = getPoolForCurrentSubject();
+            }
 
-            nums.forEach((num, idx) => {
+            const spacing = items.length > 5 ? 1.92 : 2.25;
+            const startX = -((items.length - 1) * spacing) / 2;
+
+            items.forEach((itemKey, idx) => {
                 const xPos = startX + idx * spacing;
-                const zPos = 0.6 + Math.abs(idx - 2) * 0.35; // Gentle 3D arc
-                const block = create3DNumberCharacter(num, xPos, zPos, 0.92);
+                const centerIdx = (items.length - 1) / 2;
+                const zPos = 0.55 + Math.abs(idx - centerIdx) * 0.28;
+                const blockScale = items.length > 5 ? 0.84 : 0.92;
+                const block = create3DNumberCharacter(itemKey, xPos, zPos, blockScale);
                 interactiveBlocks.push(block);
             });
 
+            const subjLabel = gameState.subject === 'number'
+                ? `數字 ${gameState.explorePage}`
+                : (gameState.subject === 'color' ? '6 種基礎顏色' : '6 種立體形狀');
+
             setPromptUI(
-                `自由點讀（數字 ${gameState.explorePage}）：隨便撳下任何一個數字公仔啦！`,
-                `探索模式：輕觸立體數字即會彈出對應數量的 3D 紅蘋果與音階`
+                `自由探索（${subjLabel}）：隨便撳下任何一個立體公仔啦！`,
+                `探索模式：輕觸公仔即會彈出對應嘅 3D 實物與悅耳音階`
             );
         }
 
@@ -251,7 +366,7 @@
 
         function triggerVisualHint(manualClick = false) {
             if (gameState.mode === 'explore' || gameState.isBusy) return;
-            const rightBlock = interactiveBlocks.find(b => b.num === gameState.targetNumber);
+            const rightBlock = interactiveBlocks.find(b => b.itemKey === gameState.targetKey);
             if (rightBlock) {
                 rightBlock.state = 'hint';
                 rightBlock.haloMesh.material.opacity = 0.85;
@@ -301,8 +416,8 @@
             if (gameState.isBusy) return;
             clearTimeout(autoPromptTimer);
 
-            const tappedNum = block.num;
-            const hkWord = NUMBER_WORDS_HK[tappedNum];
+            const tappedKey = block.itemKey;
+            const tappedMeta = getCognitiveItemMeta(tappedKey);
 
             // Mode 3: Free Exploration Mode
             if (gameState.mode === 'explore') {
@@ -311,15 +426,15 @@
                 block.celebrateTimer = 1.2;
                 emitStarParticles(block.group.position);
                 setPromptUI(
-                    `呢個係數字 ${tappedNum}（${hkWord}）！有 ${tappedNum} 個紅蘋果！`,
-                    `再撳其他數字公仔探索下啦！`
+                    `呢個係「${tappedMeta.title}」！一齊睇下 ${tappedMeta.itemEmoji} ${tappedMeta.itemName}！`,
+                    `再撳其他立體公仔探索下啦！`
                 );
-                runQuantityCountingSequence(tappedNum, false, false);
+                runQuantityCountingSequence(tappedKey, false, false);
                 return;
             }
 
             // Mode 1, Mode 2 & Mode 4 (Mario): Check if Correct Answer
-            if (tappedNum === gameState.targetNumber) {
+            if (tappedKey === gameState.targetKey) {
                 gameState.isBusy = true;
                 block.state = 'celebrate';
                 block.haloMesh.material.opacity = 0;
@@ -341,15 +456,14 @@
                 awardStarProgress();
 
                 if (gameState.settings.countObjects) {
-                    const itemLabel = isMario ? '粒閃亮金幣' : '個紅蘋果';
                     setPromptUI(
-                        `答啱喇！係數字 ${tappedNum}（${hkWord}）！一齊數下有幾多${itemLabel}！`,
-                        `數與量結合：1 至 ${tappedNum}`
+                        `答啱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅 3D 寶物！`,
+                        `認知強化：${tappedMeta.title}`
                     );
-                    runQuantityCountingSequence(tappedNum, true, isMario);
+                    runQuantityCountingSequence(tappedKey, true, isMario);
                 } else {
                     setPromptUI(
-                        `好叻呀！答啱喇，呢個係數字 ${tappedNum}（${hkWord}）！`,
+                        `好叻呀！答啱喇，呢個係「${tappedMeta.title}」！`,
                         `準備進入下一關...`
                     );
                     if (isMario) {
@@ -373,9 +487,9 @@
                     m.opacity = 0.55;
                 });
 
-                const targetHK = NUMBER_WORDS_HK[gameState.targetNumber];
+                const targetMeta = getCognitiveItemMeta(gameState.targetKey);
                 setPromptUI(
-                    `呢個係 ${tappedNum}，唔緊要，我哋再搵下數字 ${gameState.targetNumber}（${targetHK}）啦！`,
+                    `呢個係「${tappedMeta.title}」，唔緊要，我哋再搵下「${targetMeta.title}」啦！`,
                     `無挫敗感提示：請再試一次`
                 );
 
@@ -397,55 +511,63 @@
             }, 2200);
         }
 
-        // Sequential 1..N 3D Object Spawning (Apples or Mario Gold Coins)
-        function runQuantityCountingSequence(num, autoAdvanceAfter, isCoin = false) {
+        // Sequential 3D Object Spawning (1..N Apples/Coins for Numbers, 3 Matching 3D Objects for Colors/Shapes)
+        function runQuantityCountingSequence(itemKey, autoAdvanceAfter, isCoin = false) {
             clearCountingObjects();
-            const hkWord = NUMBER_WORDS_HK[num];
+            const meta = getCognitiveItemMeta(itemKey);
+            const count = meta.spawnCount;
 
             const banner = document.getElementById('counting-banner');
             const dotsContainer = document.getElementById('counting-dots');
             const emojiEl = document.getElementById('counting-emoji');
-            emojiEl.textContent = isCoin ? '🪙' : '🍎';
+            emojiEl.textContent = (meta.subject === 'number' && isCoin) ? '🪙' : meta.itemEmoji;
             banner.classList.remove('hidden');
             dotsContainer.innerHTML = '';
 
-            const spacing = num > 6 ? 1.12 : 1.35;
-            const startX = -((num - 1) * spacing) / 2;
+            const spacing = count > 6 ? 1.12 : 1.45;
+            const startX = -((count - 1) * spacing) / 2;
             const zPos = isCoin ? 2.25 : 3.15;
 
-            for (let i = 1; i <= num; i++) {
+            for (let i = 1; i <= count; i++) {
                 const t = setTimeout(() => {
                     const xPos = startX + (i - 1) * spacing;
-                    createSingleCounting3DItem(i, num, xPos, zPos, isCoin);
+                    createSingleCounting3DItem(i, count, xPos, zPos, isCoin, itemKey);
                     if (isCoin) {
                         playCoinSound();
                     } else {
                         playCountingNote(i);
                     }
 
-                    // Add number badge to bottom banner
+                    // Add badge to bottom banner
                     const badge = document.createElement('span');
-                    badge.className = 'inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-lg sm:text-2xl font-black star-earned';
-                    badge.textContent = i;
+                    badge.className = 'inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned';
+                    badge.textContent = meta.subject === 'number' ? String(i) : `${meta.title} ×${i}`;
                     dotsContainer.appendChild(badge);
-                }, 450 + (i - 1) * 520);
+                }, 420 + (i - 1) * 500);
                 activeCountingTimeouts.push(t);
             }
 
-            const totalDuration = 450 + num * 520 + 650;
+            const totalDuration = 420 + count * 500 + 650;
             const endTimer = setTimeout(() => {
-                const unitText = isCoin ? '粒金幣' : '個紅蘋果';
-                setPromptUI(
-                    `好叻呀！總共有 ${num}（${hkWord}）${unitText}！`,
-                    autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他數字探索啦！`
-                );
+                if (meta.subject === 'number') {
+                    const unitText = isCoin ? '粒金幣' : '個紅蘋果';
+                    setPromptUI(
+                        `好叻呀！總共有 ${count}（${NUMBER_WORDS_HK[count]}）${unitText}！`,
+                        autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`
+                    );
+                } else {
+                    setPromptUI(
+                        `好叻呀！呢個就係「${meta.title}」！（${meta.itemEmoji} ${meta.itemName}）`,
+                        autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`
+                    );
+                }
                 if (autoAdvanceAfter) {
                     if (gameState.mode === 'mario') {
                         triggerMarioGoalRun();
                     } else {
                         const nextTimer = setTimeout(() => {
                             if (gameState.mode === 'train') {
-                                trainAnimState.targetX = 14; // Drive train off to right
+                                trainAnimState.targetX = 14;
                             }
                             setTimeout(() => {
                                 if (!isToyModalOpen()) startNewRound();
@@ -588,8 +710,19 @@
 
         function syncSettingsUI() {
             const s = gameState.settings;
-            const activeClass = 'setting-pill py-3 px-3 rounded-2xl font-black text-sm sm:text-base border-2 border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm';
-            const inactiveClass = 'setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
+            const activeClass = 'setting-pill py-3 px-2 rounded-2xl font-black text-sm sm:text-base border-2 border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm';
+            const inactiveClass = 'setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
+
+            ['number', 'color', 'shape'].forEach(subj => {
+                const el = document.getElementById(`set-subj-${subj}`);
+                if (el) el.className = (gameState.subject === subj) ? activeClass : inactiveClass;
+            });
+
+            // Dim number range selector if currently in Color or Shape mode
+            const rangeBox = document.getElementById('setting-number-range-box');
+            if (rangeBox) {
+                rangeBox.style.opacity = gameState.subject === 'number' ? '1' : '0.45';
+            }
 
             ['1-5', '6-10', '1-10'].forEach(r => {
                 const el = document.getElementById(`set-range-${r}`);
@@ -810,5 +943,6 @@
             initThreeScene();
             renderStarsBar();
             switchMode('gacha');
+            openLobby('subject');
             animate();
         };

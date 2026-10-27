@@ -24,38 +24,189 @@
     <!-- Floating 2D Labels for Spawned 3D Counting Objects -->
     <div id="counting-labels-container" class="pointer-events-none absolute inset-0 z-10 overflow-hidden"></div>
 
-    <!-- Top Navigation & Status Bar -->
-    <header class="relative z-20 flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-6 sm:py-3 pointer-events-none">
-        <!-- Left: Brand & Game Mode Switcher -->
-        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 pointer-events-auto">
-            <div class="hidden xl:flex items-center gap-2 bg-white/90 backdrop-blur-md px-3.5 py-2 rounded-2xl border-2 border-sky-200 shadow-sm mr-1">
-                <span class="text-2xl">🎡</span>
-                <span class="font-black text-sky-800 text-lg tracking-wide">數字奇幻樂園</span>
+    <!-- ==================== NEW: TWO-STEP INTERACTIVE LOBBY OVERLAY ==================== -->
+    <div id="lobby-overlay" class="fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6 bg-sky-950/35 backdrop-blur-md transition-opacity duration-300">
+        
+        <!-- STEP 1: Choose Cognitive Subject (數字 / 顏色 / 形狀) -->
+        <div id="lobby-step-subject" class="w-full max-w-4xl bg-white/95 backdrop-blur-xl rounded-[36px] p-6 sm:p-9 border-4 border-sky-200 shadow-2xl text-center">
+            <div class="inline-flex items-center gap-2 bg-sky-100 text-sky-700 font-black px-4 py-1.5 rounded-full text-xs sm:text-sm mb-3">
+                <span>🎡 歡迎來到 3D 互動學習世界</span>
+            </div>
+            <h1 class="text-2xl sm:text-4xl md:text-5xl font-black text-slate-800 tracking-wide">
+                幼兒 3D 認知奇幻樂園
+            </h1>
+            <p class="text-sm sm:text-lg font-bold text-slate-500 mt-2 mb-6 sm:mb-8">
+                請選擇今日想挑戰嘅學習主題：
+            </p>
+
+            <!-- 3 Big Subject Toy Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                <!-- Card 1: Numbers -->
+                <button onclick="selectSubjectFromLobby('number')" class="btn-toy group relative bg-gradient-to-b from-amber-300 via-amber-400 to-orange-400 hover:from-amber-200 hover:to-orange-300 p-6 sm:p-7 rounded-[28px] border-4 border-white text-left flex sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-4 text-amber-950">
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 rounded-3xl bg-white/90 shadow-inner flex items-center justify-center text-5xl sm:text-6xl group-hover:scale-110 transition-transform">
+                        🔢
+                    </div>
+                    <div class="flex-1 sm:text-center">
+                        <div class="text-2xl sm:text-3xl font-black tracking-wide">數字樂園</div>
+                        <p class="text-xs sm:text-sm font-bold text-amber-900/80 mt-1">
+                            認讀數字 1 - 10 與數量點數
+                        </p>
+                        <div class="mt-3 inline-flex items-center gap-1.5 bg-white/90 text-orange-600 font-black text-xs sm:text-sm px-3.5 py-1 rounded-full shadow-sm">
+                            <span>進入揀遊戲</span>
+                            <i class="fa-solid fa-circle-arrow-right"></i>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- Card 2: Colors -->
+                <button onclick="selectSubjectFromLobby('color')" class="btn-toy group relative bg-gradient-to-b from-pink-400 via-rose-400 to-red-400 hover:from-pink-300 hover:to-red-300 p-6 sm:p-7 rounded-[28px] border-4 border-white text-left flex sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-4 text-white">
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 rounded-3xl bg-white/90 shadow-inner flex items-center justify-center text-5xl sm:text-6xl group-hover:scale-110 transition-transform">
+                        🎨
+                    </div>
+                    <div class="flex-1 sm:text-center">
+                        <div class="text-2xl sm:text-3xl font-black tracking-wide">顏色樂園</div>
+                        <p class="text-xs sm:text-sm font-bold text-white/90 mt-1">
+                            認識紅、黃、藍、綠、橙、紫
+                        </p>
+                        <div class="mt-3 inline-flex items-center gap-1.5 bg-white/95 text-rose-600 font-black text-xs sm:text-sm px-3.5 py-1 rounded-full shadow-sm">
+                            <span>進入揀遊戲</span>
+                            <i class="fa-solid fa-circle-arrow-right"></i>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- Card 3: Shapes -->
+                <button onclick="selectSubjectFromLobby('shape')" class="btn-toy group relative bg-gradient-to-b from-sky-400 via-cyan-400 to-teal-400 hover:from-sky-300 hover:to-teal-300 p-6 sm:p-7 rounded-[28px] border-4 border-white text-left flex sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-4 text-white">
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 rounded-3xl bg-white/90 shadow-inner flex items-center justify-center text-5xl sm:text-6xl group-hover:scale-110 transition-transform">
+                        🔺
+                    </div>
+                    <div class="flex-1 sm:text-center">
+                        <div class="text-2xl sm:text-3xl font-black tracking-wide">形狀樂園</div>
+                        <p class="text-xs sm:text-sm font-bold text-white/90 mt-1">
+                            圓形、正方形、三角形、星形等
+                        </p>
+                        <div class="mt-3 inline-flex items-center gap-1.5 bg-white/95 text-teal-600 font-black text-xs sm:text-sm px-3.5 py-1 rounded-full shadow-sm">
+                            <span>進入揀遊戲</span>
+                            <i class="fa-solid fa-circle-arrow-right"></i>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- STEP 2: Choose Game Mode (扭蛋尋寶 / 認知小火車 / 自由探索 / 認知大冒險) -->
+        <div id="lobby-step-mode" class="w-full max-w-4xl bg-white/95 backdrop-blur-xl rounded-[36px] p-6 sm:p-8 border-4 border-amber-200 shadow-2xl hidden">
+            <!-- Header with Back Button -->
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-100 pb-4 mb-6">
+                <button onclick="openLobby('subject')" class="btn-toy-sm flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black px-4 py-2.5 rounded-2xl border-2 border-slate-200 text-sm sm:text-base">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>返回揀主題</span>
+                </button>
+
+                <div class="flex items-center gap-2.5">
+                    <span id="lobby-selected-subj-icon" class="text-3xl sm:text-4xl">🎨</span>
+                    <div class="text-left">
+                        <div class="text-xs font-bold text-slate-400">目前已選主題</div>
+                        <h2 id="lobby-selected-subj-title" class="text-xl sm:text-2xl font-black text-slate-800">顏色樂園</h2>
+                    </div>
+                </div>
+
+                <div class="hidden sm:block text-xs font-bold text-sky-600 bg-sky-50 px-3.5 py-2 rounded-xl border border-sky-200">
+                    👇 請揀選想玩嘅 3D 遊戲模式
+                </div>
             </div>
 
-            <!-- Mode 1: 3D Gachapon -->
-            <button id="mode-btn-gacha" onclick="switchMode('gacha')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-amber-400 bg-amber-400 text-amber-950">
-                <span class="text-lg sm:text-xl">🔮</span>
-                <span>扭蛋尋寶</span>
+            <!-- 4 Big Game Mode Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                <!-- Game 1: Gachapon -->
+                <button onclick="startGameFromLobby('gacha')" class="btn-toy group bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 p-5 rounded-3xl border-4 border-amber-300 flex items-center gap-4 text-left">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-amber-400 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">
+                        🔮
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg sm:text-2xl font-black text-slate-800">扭蛋尋寶</span>
+                            <span class="text-xs font-black bg-amber-400 text-amber-950 px-2.5 py-1 rounded-full">玩法 1</span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                            觀察目標提示卡，喺 3D 扭蛋機前搵出正確嘅立體公仔！
+                        </p>
+                    </div>
+                </button>
+
+                <!-- Game 2: Train -->
+                <button onclick="startGameFromLobby('train')" class="btn-toy group bg-gradient-to-r from-sky-50 to-blue-50 hover:from-sky-100 hover:to-blue-100 p-5 rounded-3xl border-4 border-sky-300 flex items-center gap-4 text-left">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-sky-500 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">
+                        🚂
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg sm:text-2xl font-black text-slate-800">認知小火車</span>
+                            <span class="text-xs font-black bg-sky-500 text-white px-2.5 py-1 rounded-full">玩法 2</span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                            3D 小火車駛入車站！睇下車頭展示牌，幫火車配對相同嘅積木！
+                        </p>
+                    </div>
+                </button>
+
+                <!-- Game 3: Mario Adventure -->
+                <button onclick="startGameFromLobby('mario')" class="btn-toy group bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 p-5 rounded-3xl border-4 border-red-300 flex items-center gap-4 text-left">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-red-500 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">
+                        🍄
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg sm:text-2xl font-black text-slate-800">認知大冒險</span>
+                            <span class="text-xs font-black bg-red-500 text-white px-2.5 py-1 rounded-full">人氣闖關</span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                            馬利奧風格 3D 闖關！控制主角跳起頂開正確嘅空中金磚塊過關！
+                        </p>
+                    </div>
+                </button>
+
+                <!-- Game 4: Free Explore -->
+                <button onclick="startGameFromLobby('explore')" class="btn-toy group bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 p-5 rounded-3xl border-4 border-emerald-300 flex items-center gap-4 text-left">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">
+                        🎨
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg sm:text-2xl font-black text-slate-800">自由探索</span>
+                            <span class="text-xs font-black bg-emerald-500 text-white px-2.5 py-1 rounded-full">無壓力點讀</span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                            全排展示所有 3D 公仔，隨便輕觸即可彈出 3D 實物與木琴音階！
+                        </p>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation & Status Bar -->
+    <header class="relative z-40 flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-6 sm:py-3 pointer-events-none">
+        <!-- Left: Home Button, Change Game Button & Current Status Pill -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 pointer-events-auto">
+            <!-- Back to Subject Lobby Button -->
+            <button onclick="openLobby('subject')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm border-2 border-amber-300 bg-amber-400 hover:bg-amber-300 text-amber-950">
+                <i class="fa-solid fa-house text-sm sm:text-base"></i>
+                <span>返回大廳</span>
             </button>
 
-            <!-- Mode 2: 3D Number Train -->
-            <button id="mode-btn-train" onclick="switchMode('train')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-white/80 bg-white/90 text-slate-700 hover:bg-sky-50">
-                <span class="text-lg sm:text-xl">🚂</span>
-                <span>數字小火車</span>
+            <!-- Switch Game Mode within current Subject -->
+            <button id="btn-change-mode" onclick="openLobby('mode')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm border-2 border-sky-200 bg-white/95 hover:bg-sky-50 text-sky-800">
+                <i class="fa-solid fa-gamepad text-sm sm:text-base text-sky-500"></i>
+                <span>換遊戲</span>
             </button>
 
-            <!-- Mode 3: Free Exploration -->
-            <button id="mode-btn-explore" onclick="switchMode('explore')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-white/80 bg-white/90 text-slate-700 hover:bg-sky-50">
-                <span class="text-lg sm:text-xl">🎨</span>
-                <span>自由點讀</span>
-            </button>
-
-            <!-- Mode 4: NEW Mario-Style 3D Number Adventure -->
-            <button id="mode-btn-mario" onclick="switchMode('mario')" class="btn-toy-sm flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl font-bold text-sm sm:text-base border-2 border-white/80 bg-white/90 text-slate-700 hover:bg-sky-50">
-                <span class="text-lg sm:text-xl">🍄</span>
-                <span>數字大冒險</span>
-            </button>
+            <!-- Current Subject & Mode Status Badge -->
+            <div id="top-current-status" class="hidden md:flex items-center gap-2 bg-indigo-950/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-2xl border-2 border-indigo-300/80 text-xs sm:text-sm font-bold shadow-sm">
+                <span id="status-subj-badge" class="bg-amber-400 text-amber-950 px-2 py-0.5 rounded-lg font-black">🎨 顏色</span>
+                <span>・</span>
+                <span id="status-mode-badge">🔮 扭蛋尋寶</span>
+            </div>
         </div>
 
         <!-- Right: Star Progress, Sound Toggle, Toy Cabinet & Teacher Settings -->
@@ -138,15 +289,15 @@
         <!-- Main Visual Mission Bar (Replaced TTS speaker with Big Target Numeral Card) -->
         <div class="pointer-events-auto flex items-center gap-2.5 sm:gap-3.5 bg-white/95 backdrop-blur-md px-3.5 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-sky-300 shadow-2xl max-w-2xl w-full justify-between">
             <!-- Big Visual Target Numeral Badge (Clear non-verbal cue for toddlers) -->
-            <button onclick="triggerVisualHint(true)" id="target-number-card" class="btn-toy flex-shrink-0 min-w-[60px] h-14 sm:min-w-[72px] sm:h-16 px-2.5 rounded-2xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-900 flex flex-col items-center justify-center border-2 border-amber-500 animate-pulse-soft" title="目標數字提示卡">
+            <button onclick="triggerVisualHint(true)" id="target-number-card" class="btn-toy flex-shrink-0 min-w-[60px] h-14 sm:min-w-[72px] sm:h-16 px-2.5 rounded-2xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-900 flex flex-col items-center justify-center border-2 border-amber-500 animate-pulse-soft" title="目標數字提示卡" style="background: linear-gradient(rgb(252, 211, 77), rgb(251, 191, 36)); color: rgb(15, 23, 42);">
                 <span id="target-badge-num" class="text-2xl sm:text-3xl font-black leading-none" style="font-family: 'Fredoka', sans-serif;">3</span>
                 <span id="target-badge-dots" class="text-[10px] sm:text-xs font-black text-amber-900 tracking-tighter mt-0.5">●●●</span>
             </button>
 
             <!-- Instruction Text -->
             <div class="flex-1 text-center px-1">
-                <p id="prompt-text" class="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-wide leading-snug">請搵出數字「3」（三）扭蛋尋寶！</p>
-                <p id="sub-prompt-text" class="text-xs sm:text-sm font-bold text-sky-600 mt-0.5">可對照左方目標卡，輕觸畫面中的立體數字「3」</p>
+                <p id="prompt-text" class="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-wide leading-snug">請搵出「數字 3（三）」扭蛋尋寶！</p>
+                <p id="sub-prompt-text" class="text-xs sm:text-sm font-bold text-sky-600 mt-0.5">可對照左方目標提示卡，輕觸畫面中的立體「數字 3（三）」公仔</p>
             </div>
 
             <!-- Next Question / Range Toggle in Explore Mode -->
@@ -176,10 +327,28 @@
             </div>
 
             <div class="space-y-5">
-                <!-- Setting 1: Number Range -->
+                <!-- Setting 0: Cognitive Subject Selection -->
                 <div>
                     <label class="block text-sm font-black text-slate-700 mb-2">
-                        🔢 1. 認讀數字範圍（教學階梯）
+                        🎓 1. 幼兒認知學習主題（可隨時於頂部切換）
+                    </label>
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <button onclick="switchSubject('number'); syncSettingsUI();" id="set-subj-number" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                            🔢 數字認知<br><span class="text-xs font-normal opacity-80">1 - 10 與數量</span>
+                        </button>
+                        <button onclick="switchSubject('color'); syncSettingsUI();" id="set-subj-color" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                            🎨 顏色認知<br><span class="text-xs font-normal opacity-80">6 種基礎色彩</span>
+                        </button>
+                        <button onclick="switchSubject('shape'); syncSettingsUI();" id="set-subj-shape" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
+                            🔺 形狀認知<br><span class="text-xs font-normal opacity-80">6 種立體幾何</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Setting 1: Number Range -->
+                <div id="setting-number-range-box">
+                    <label class="block text-sm font-black text-slate-700 mb-2">
+                        🔢 2. 認讀數字範圍（當選擇「數字主題」時適用）
                     </label>
                     <div class="grid grid-cols-3 gap-2.5">
                         <button onclick="updateSetting('range', '1-5')" id="set-range-1-5" class="setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">
@@ -197,7 +366,7 @@
                 <!-- Setting 2: Option Count (Errorless to Standard) -->
                 <div>
                     <label class="block text-sm font-black text-slate-700 mb-2">
-                        🎯 2. 選項數量（難度與無錯誤學習調適）
+                        🎯 3. 選項數量（難度與無錯誤學習調適）
                     </label>
                     <div class="grid grid-cols-3 gap-2.5">
                         <button onclick="updateSetting('choices', 1)" id="set-choices-1" class="setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all">

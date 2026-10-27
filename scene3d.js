@@ -386,8 +386,59 @@
             trainGroup.add(mover);
         }
 
-        function updateTrainSignTexture(num) {
+        // Draw Vector Shape Helper on 2D Canvas (Circle, Square, Triangle, Star, Heart, Rectangle)
+        function drawShapeSymbolOnCanvas(ctx, shapeId, cx, cy, radius, fillHex, strokeHex = '#FFFFFF') {
+            ctx.save();
+            ctx.fillStyle = fillHex;
+            ctx.strokeStyle = strokeHex;
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+
+            if (shapeId === 'circle') {
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            } else if (shapeId === 'square') {
+                const s = radius * 1.65;
+                roundRectCanvas(ctx, cx - s / 2, cy - s / 2, s, s, 20);
+            } else if (shapeId === 'rectangle') {
+                const w = radius * 2.15;
+                const h = radius * 1.25;
+                roundRectCanvas(ctx, cx - w / 2, cy - h / 2, w, h, 18);
+            } else if (shapeId === 'triangle') {
+                const r = radius * 1.15;
+                ctx.moveTo(cx, cy - r);
+                ctx.lineTo(cx + r * 0.95, cy + r * 0.78);
+                ctx.lineTo(cx - r * 0.95, cy + r * 0.78);
+                ctx.closePath();
+            } else if (shapeId === 'star') {
+                const spikes = 5;
+                const outerR = radius * 1.12;
+                const innerR = radius * 0.48;
+                let rot = (Math.PI / 2) * 3;
+                const step = Math.PI / spikes;
+                ctx.moveTo(cx, cy - outerR);
+                for (let i = 0; i < spikes; i++) {
+                    ctx.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+                    rot += step;
+                    ctx.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+                    rot += step;
+                }
+                ctx.closePath();
+            } else if (shapeId === 'heart') {
+                const r = radius * 0.95;
+                ctx.moveTo(cx, cy + r * 0.85);
+                ctx.bezierCurveTo(cx - r * 1.35, cy + r * 0.1, cx - r * 1.2, cy - r * 0.95, cx, cy - r * 0.35);
+                ctx.bezierCurveTo(cx + r * 1.2, cy - r * 0.95, cx + r * 1.35, cy + r * 0.1, cx, cy + r * 0.85);
+                ctx.closePath();
+            }
+
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function updateTrainSignTexture(targetKey) {
             if (!trainAnimState.signMesh) return;
+            const meta = getCognitiveItemMeta(targetKey);
             const canvas = document.createElement('canvas');
             canvas.width = 256;
             canvas.height = 256;
@@ -396,72 +447,105 @@
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, 256, 256);
 
-            ctx.strokeStyle = BLOCK_COLORS[num] || '#1982C4';
+            ctx.strokeStyle = meta.hex || '#1982C4';
             ctx.lineWidth = 18;
             ctx.strokeRect(9, 9, 238, 238);
 
-            ctx.fillStyle = '#1E293B';
-            ctx.font = '900 155px "Fredoka", "Noto Sans TC", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(num), 128, 136);
+            if (meta.subject === 'color') {
+                // Draw big glossy color circle + Chinese name
+                ctx.fillStyle = meta.hex;
+                ctx.beginPath();
+                ctx.arc(128, 102, 58, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#1E293B';
+                ctx.stroke();
+
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 52px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 128, 200);
+            } else if (meta.subject === 'shape') {
+                drawShapeSymbolOnCanvas(ctx, meta.key, 128, 102, 56, meta.hex, '#1E293B');
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 46px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 128, 202);
+            } else {
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 155px "Fredoka", "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(meta.key), 128, 136);
+            }
 
             const tex = new THREE.CanvasTexture(canvas);
             trainAnimState.signMesh.material.map = tex;
             trainAnimState.signMesh.material.needsUpdate = true;
         }
 
-        // Mode 4 Centerpiece: 3D Mario-Style Platformer Stage & Cute Hero Character (數字大冒險)
+        // Mode 4 Centerpiece: 3D Mario-Style Platformer Stage & Cute Hero Character (認知大冒險)
         function build3DMarioStage() {
             marioStageGroup.clear();
-            marioStageGroup.visible = false;
 
-            // 1. Classic Layered Brick/Grass Platform Floor
-            const soilGeo = new THREE.BoxGeometry(13.5, 0.7, 2.4);
-            const soilMat = new THREE.MeshStandardMaterial({ color: 0xC86D3B, roughness: 0.7 });
-            const soilMesh = new THREE.Mesh(soilGeo, soilMat);
-            soilMesh.position.set(0, -0.05, 0.8);
-            soilMesh.receiveShadow = true;
-            marioStageGroup.add(soilMesh);
+            // 1. Long Grass & Brick Adventure Walkway Platform
+            const walkwayGroup = new THREE.Group();
+            walkwayGroup.position.set(0, 0.1, 0.8);
 
-            const grassTopGeo = new THREE.BoxGeometry(13.7, 0.24, 2.55);
-            const grassTopMat = new THREE.MeshStandardMaterial({ color: 0x52B788, roughness: 0.5 });
-            const grassTopMesh = new THREE.Mesh(grassTopGeo, grassTopMat);
-            grassTopMesh.position.set(0, 0.35, 0.8);
-            grassTopMesh.receiveShadow = true;
-            marioStageGroup.add(grassTopMesh);
-
-            // 2. Classic Green Warp Pipe on the Left
-            const pipeGroup = new THREE.Group();
-            pipeGroup.position.set(-5.2, 0.45, 0.8);
-            const pipeMat = new THREE.MeshStandardMaterial({ color: 0x2EC4B6, roughness: 0.3, metalness: 0.1 });
-            const pipeBody = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.2, 24), pipeMat);
-            pipeBody.position.y = 0.6;
-            pipeBody.castShadow = true;
-            const pipeRim = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.32, 24), pipeMat);
-            pipeRim.position.y = 1.25;
-            pipeRim.castShadow = true;
-            const pipeHole = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.52, 0.52, 0.05, 20),
-                new THREE.MeshBasicMaterial({ color: 0x0F172A })
+            const soilMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(13.2, 0.48, 2.2),
+                new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.75 })
             );
-            pipeHole.position.y = 1.41;
-            pipeGroup.add(pipeBody, pipeRim, pipeHole);
+            soilMesh.position.y = 0.05;
+            soilMesh.receiveShadow = true;
+            walkwayGroup.add(soilMesh);
+
+            const grassTop = new THREE.Mesh(
+                new THREE.BoxGeometry(13.4, 0.18, 2.35),
+                new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.65 })
+            );
+            grassTop.position.y = 0.32;
+            grassTop.receiveShadow = true;
+            walkwayGroup.add(grassTop);
+            marioStageGroup.add(walkwayGroup);
+
+            // 2. Left Classic Green Warp Pipe
+            const pipeGroup = new THREE.Group();
+            pipeGroup.position.set(-5.3, 0.45, 0.8);
+            const pipeMat = new THREE.MeshStandardMaterial({ color: 0x22C55E, roughness: 0.28, metalness: 0.1 });
+            const pipeBody = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.3, 24), pipeMat);
+            pipeBody.position.y = 0.65;
+            pipeBody.castShadow = true;
+            pipeGroup.add(pipeBody);
+
+            const pipeRim = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.32, 24), pipeMat);
+            pipeRim.position.y = 1.35;
+            pipeRim.castShadow = true;
+            pipeGroup.add(pipeRim);
+
+            const pipeHole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.52, 0.52, 0.06, 24),
+                new THREE.MeshBasicMaterial({ color: 0x052E16 })
+            );
+            pipeHole.position.y = 1.5;
+            pipeGroup.add(pipeHole);
             marioStageGroup.add(pipeGroup);
 
-            // 3. Goal Flagpole & Mini Castle on the Right
+            // 3. Right Goal Flagpole & Mini Castle Tower
             const goalGroup = new THREE.Group();
             goalGroup.position.set(5.1, 0.45, 0.8);
 
-            const flagBase = new THREE.Mesh(
-                new THREE.BoxGeometry(0.7, 0.5, 0.7),
-                new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.5 })
+            const baseBlock = new THREE.Mesh(
+                new THREE.BoxGeometry(0.75, 0.5, 0.75),
+                new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.4 })
             );
-            flagBase.position.y = 0.25;
-            goalGroup.add(flagBase);
+            baseBlock.position.y = 0.25;
+            goalGroup.add(baseBlock);
 
             const poleMesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.08, 0.08, 3.8, 12),
+                new THREE.CylinderGeometry(0.08, 0.08, 3.8, 16),
                 new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.3, metalness: 0.3 })
             );
             poleMesh.position.y = 2.15;
@@ -477,16 +561,11 @@
             // Sliding Victory Flag
             const flagHolder = new THREE.Group();
             flagHolder.position.set(-0.48, 3.35, 0);
-            const flagBanner = new THREE.Mesh(
+            const flagCloth = new THREE.Mesh(
                 new THREE.BoxGeometry(0.95, 0.62, 0.08),
                 new THREE.MeshStandardMaterial({ color: 0xEF4444, roughness: 0.4 })
             );
-            const flagStar = new THREE.Mesh(
-                new THREE.OctahedronGeometry(0.18, 0),
-                new THREE.MeshStandardMaterial({ color: 0xFDE047 })
-            );
-            flagStar.position.z = 0.06;
-            flagHolder.add(flagBanner, flagStar);
+            flagHolder.add(flagCloth);
             marioHero.flagMesh = flagHolder;
             goalGroup.add(flagHolder);
             marioStageGroup.add(goalGroup);
@@ -602,8 +681,9 @@
             marioStageGroup.add(hero);
         }
 
-        function updateMarioMissionSign(num) {
+        function updateMarioMissionSign(targetKey) {
             if (!marioHero.missionSignMesh) return;
+            const meta = getCognitiveItemMeta(targetKey);
             const canvas = document.createElement('canvas');
             canvas.width = 512;
             canvas.height = 192;
@@ -616,30 +696,49 @@
             ctx.lineWidth = 10;
             ctx.strokeRect(5, 5, 502, 182);
 
-            // Left text: Target icon + numeral
             ctx.fillStyle = '#B45309';
-            ctx.font = '900 42px "Noto Sans TC", sans-serif';
+            ctx.font = '900 40px "Noto Sans TC", sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText('目標磚塊：', 28, 72);
+            ctx.fillText('目標磚塊：', 26, 92);
 
-            ctx.fillStyle = BLOCK_COLORS[num] || '#EF4444';
-            ctx.font = '900 112px "Fredoka", "Noto Sans TC", sans-serif';
-            ctx.fillText(String(num), 245, 76);
-
-            ctx.fillStyle = '#475569';
-            ctx.font = '900 46px "Noto Sans TC", sans-serif';
-            ctx.fillText(`(${NUMBER_WORDS_HK[num]})`, 375, 76);
-
-            // Bottom row: Countable Stars for visual scaffolding
-            ctx.fillStyle = '#F59E0B';
-            const dotR = 12;
-            const gap = 36;
-            const startX = 256 - ((num - 1) * gap) / 2;
-            for (let i = 0; i < num; i++) {
+            if (meta.subject === 'color') {
+                ctx.fillStyle = meta.hex;
                 ctx.beginPath();
-                ctx.arc(startX + i * gap, 154, dotR, 0, Math.PI * 2);
+                ctx.arc(275, 92, 50, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#1E293B';
+                ctx.stroke();
+
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 58px "Noto Sans TC", sans-serif';
+                ctx.fillText(meta.title, 345, 94);
+            } else if (meta.subject === 'shape') {
+                drawShapeSymbolOnCanvas(ctx, meta.key, 275, 92, 48, meta.hex, '#1E293B');
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 52px "Noto Sans TC", sans-serif';
+                ctx.fillText(meta.title, 340, 94);
+            } else {
+                const num = meta.key;
+                ctx.fillStyle = meta.hex;
+                ctx.font = '900 108px "Fredoka", "Noto Sans TC", sans-serif';
+                ctx.fillText(String(num), 235, 78);
+
+                ctx.fillStyle = '#475569';
+                ctx.font = '900 44px "Noto Sans TC", sans-serif';
+                ctx.fillText(`(${NUMBER_WORDS_HK[num]})`, 365, 78);
+
+                // Countable dots at bottom
+                ctx.fillStyle = '#F59E0B';
+                const dotR = 11;
+                const gap = 34;
+                const startX = 256 - ((num - 1) * gap) / 2;
+                for (let i = 0; i < num; i++) {
+                    ctx.beginPath();
+                    ctx.arc(startX + i * gap, 154, dotR, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             const tex = new THREE.CanvasTexture(canvas);
@@ -647,8 +746,9 @@
             marioHero.missionSignMesh.material.needsUpdate = true;
         }
 
-        // Create a Floating 3D Mario Brick Block with Big Clear Numeral & Corner Rivets
-        function create3DMarioBrick(num, x, y, z) {
+        // Create a Floating 3D Mario Brick Block supporting Numbers, Colors, and Shapes
+        function create3DMarioBrick(itemKey, x, y, z) {
+            const meta = getCognitiveItemMeta(itemKey);
             const group = new THREE.Group();
             group.position.set(x, y, z);
 
@@ -657,8 +757,8 @@
             canvas.height = 512;
             const ctx = canvas.getContext('2d');
 
-            // Golden Question Block Border
-            ctx.fillStyle = '#F59E0B';
+            // Golden Question Block Border (or Color-tinted in Color mode)
+            ctx.fillStyle = meta.subject === 'color' ? meta.hex : '#F59E0B';
             ctx.fillRect(0, 0, 512, 512);
 
             // Inner Cream Card
@@ -674,34 +774,58 @@
                 ctx.fill();
             });
 
-            // High-contrast Numeral
-            ctx.fillStyle = '#1E293B';
-            ctx.font = '900 280px "Fredoka", "Noto Sans TC", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(num), 256, 250);
-
-            // Quantity dots at bottom
-            ctx.fillStyle = BLOCK_COLORS[num] || '#D97706';
-            const dotRadius = 13;
-            const spacing = 34;
-            const startX = 256 - ((num - 1) * spacing) / 2;
-            for (let i = 0; i < num; i++) {
+            if (meta.subject === 'color') {
+                // Big vibrant color swatch circle + Chinese label
+                ctx.fillStyle = meta.hex;
                 ctx.beginPath();
-                ctx.arc(startX + i * spacing, 434, dotRadius, 0, Math.PI * 2);
+                ctx.arc(256, 205, 118, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.lineWidth = 12;
+                ctx.strokeStyle = '#1E293B';
+                ctx.stroke();
+
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 92px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 256, 405);
+            } else if (meta.subject === 'shape') {
+                drawShapeSymbolOnCanvas(ctx, meta.key, 256, 205, 112, meta.hex, '#1E293B');
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 84px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 256, 408);
+            } else {
+                const num = meta.key;
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 280px "Fredoka", "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(num), 256, 250);
+
+                ctx.fillStyle = meta.hex;
+                const dotRadius = 13;
+                const spacing = 34;
+                const startX = 256 - ((num - 1) * spacing) / 2;
+                for (let i = 0; i < num; i++) {
+                    ctx.beginPath();
+                    ctx.arc(startX + i * spacing, 434, dotRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             const frontTex = new THREE.CanvasTexture(canvas);
             frontTex.anisotropy = 4;
 
-            const sideMat = new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.35, metalness: 0.1 });
+            const sideColor = meta.subject === 'color' ? meta.hex : 0xF59E0B;
+            const sideMat = new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.35, metalness: 0.1 });
             const frontMat = new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.3 });
             const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, sideMat];
 
             const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.55, 1.15), materials);
             bodyMesh.castShadow = true;
-            bodyMesh.userData = { isNumberBlock: true, number: num, parentWrapper: null };
+            bodyMesh.userData = { isNumberBlock: true, itemKey: meta.key, number: meta.key, parentWrapper: null };
             group.add(bodyMesh);
 
             // Golden Hint Halo behind the brick
@@ -717,7 +841,8 @@
             group.add(haloMesh);
 
             const wrapper = {
-                num,
+                num: meta.key,
+                itemKey: meta.key,
                 isMarioBrick: true,
                 group,
                 bodyMesh,
@@ -739,7 +864,7 @@
         }
 
         /********************************************************************
-         * 5. 3D CUTE NUMBER CHARACTER BLOCK BUILDER (1 - 10)
+         * 5. 3D CUTE COGNITIVE CHARACTER BLOCK BUILDER (數字・顏色・形狀)
          ********************************************************************/
         function roundRectCanvas(ctx, x, y, w, h, r) {
             ctx.beginPath();
@@ -755,14 +880,66 @@
             ctx.closePath();
         }
 
-        function create3DNumberCharacter(num, x, z, scale = 1.0) {
+        // Helper to create 3D Extruded Star or Heart Mesh for Shape Mode
+        function createCustom3DShapeMesh(shapeId, colorHex) {
+            const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.08 });
+            if (shapeId === 'circle') {
+                const geo = new THREE.CylinderGeometry(0.95, 0.95, 0.55, 36);
+                geo.rotateX(Math.PI / 2);
+                return new THREE.Mesh(geo, mat);
+            }
+            if (shapeId === 'square') {
+                return new THREE.Mesh(new THREE.BoxGeometry(1.65, 1.65, 0.65), mat);
+            }
+            if (shapeId === 'rectangle') {
+                return new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.25, 0.65), mat);
+            }
+            if (shapeId === 'triangle') {
+                const shape = new THREE.Shape();
+                shape.moveTo(0, 1.02);
+                shape.lineTo(0.98, -0.78);
+                shape.lineTo(-0.98, -0.78);
+                shape.closePath();
+                const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.5, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 4 });
+                geo.center();
+                return new THREE.Mesh(geo, mat);
+            }
+            if (shapeId === 'star') {
+                const shape = new THREE.Shape();
+                const spikes = 5, outerR = 1.02, innerR = 0.45;
+                let rot = Math.PI / 2;
+                const step = Math.PI / spikes;
+                shape.moveTo(0, outerR);
+                for (let i = 0; i < spikes; i++) {
+                    shape.lineTo(Math.cos(rot) * outerR, Math.sin(rot) * outerR);
+                    rot += step;
+                    shape.lineTo(Math.cos(rot) * innerR, Math.sin(rot) * innerR);
+                    rot += step;
+                }
+                shape.closePath();
+                const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.45, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.05, bevelSegments: 3 });
+                geo.center();
+                return new THREE.Mesh(geo, mat);
+            }
+            // Heart
+            const shape = new THREE.Shape();
+            shape.moveTo(0, -0.75);
+            shape.bezierCurveTo(1.15, -0.1, 1.05, 0.85, 0, 0.35);
+            shape.bezierCurveTo(-1.05, 0.85, -1.15, -0.1, 0, -0.75);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.45, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.05, bevelSegments: 4 });
+            geo.center();
+            return new THREE.Mesh(geo, mat);
+        }
+
+        function create3DNumberCharacter(itemKey, x, z, scale = 1.0) {
+            const meta = getCognitiveItemMeta(itemKey);
             const group = new THREE.Group();
             const baseY = 1.15;
             group.position.set(x, baseY, z);
 
-            const colorHex = BLOCK_COLORS[num] || '#FF924C';
+            const colorHex = meta.hex;
 
-            // High-resolution front face texture with numeral + countable dots
+            // High-resolution front face texture supporting Numbers, Colors, and Shapes
             const canvas = document.createElement('canvas');
             canvas.width = 512;
             canvas.height = 512;
@@ -775,29 +952,59 @@
             roundRectCanvas(ctx, 28, 28, 456, 456, 64);
             ctx.fill();
 
-            // Big Rounded Numeral
-            ctx.fillStyle = '#1E293B';
-            ctx.font = '900 285px "Fredoka", "Noto Sans TC", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(num), 256, 245);
-
-            // Subtle quantity dots at bottom of block for visual scaffolding
-            ctx.fillStyle = colorHex;
-            const dotRadius = 13;
-            const spacing = 34;
-            const startX = 256 - ((num - 1) * spacing) / 2;
-            for (let i = 0; i < num; i++) {
+            if (meta.subject === 'color') {
+                // Big glossy color splash + Chinese color name
+                ctx.fillStyle = colorHex;
                 ctx.beginPath();
-                ctx.arc(startX + i * spacing, 435, dotRadius, 0, Math.PI * 2);
+                ctx.arc(256, 200, 122, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = '#1E293B';
+                ctx.stroke();
+
+                // Cute white highlight inside color circle
+                ctx.fillStyle = 'rgba(255,255,255,0.45)';
+                ctx.beginPath();
+                ctx.arc(215, 158, 32, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 96px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 256, 405);
+            } else if (meta.subject === 'shape') {
+                drawShapeSymbolOnCanvas(ctx, meta.key, 256, 198, 114, colorHex, '#1E293B');
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 88px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(meta.title, 256, 405);
+            } else {
+                const num = meta.key;
+                ctx.fillStyle = '#1E293B';
+                ctx.font = '900 285px "Fredoka", "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(num), 256, 245);
+
+                // Subtle quantity dots at bottom of block for visual scaffolding
+                ctx.fillStyle = colorHex;
+                const dotRadius = 13;
+                const spacing = 34;
+                const startX = 256 - ((num - 1) * spacing) / 2;
+                for (let i = 0; i < num; i++) {
+                    ctx.beginPath();
+                    ctx.arc(startX + i * spacing, 435, dotRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             const frontTex = new THREE.CanvasTexture(canvas);
             frontTex.anisotropy = 4;
 
-            const sideMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.35 });
-            const frontMat = new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.3 });
+            const sideMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.32 });
+            const frontMat = new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.28 });
             const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, sideMat];
 
             // Main Toy Block Body
@@ -805,8 +1012,19 @@
             const bodyMesh = new THREE.Mesh(bodyGeo, materials);
             bodyMesh.castShadow = true;
             bodyMesh.receiveShadow = true;
-            bodyMesh.userData = { isNumberBlock: true, number: num, parentWrapper: null };
+            bodyMesh.userData = { isNumberBlock: true, itemKey: meta.key, number: meta.key, parentWrapper: null };
             group.add(bodyMesh);
+
+            // In Color Mode: Add a cute 3D Paint Cap / Color Crown on top of the block!
+            if (meta.subject === 'color') {
+                const crown = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.42, 20, 16),
+                    new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.2, metalness: 0.1 })
+                );
+                crown.scale.set(1.2, 0.55, 0.9);
+                crown.position.set(0, 1.08, -0.05);
+                group.add(crown);
+            }
 
             // Cute 3D Cartoon Eyes on Top Edge
             const eyeWhiteGeo = new THREE.SphereGeometry(0.19, 16, 16);
@@ -850,7 +1068,8 @@
             group.scale.setScalar(scale);
 
             const wrapper = {
-                num,
+                num: meta.key,
+                itemKey: meta.key,
                 isMarioBrick: false,
                 group,
                 bodyMesh,
@@ -872,7 +1091,7 @@
         }
 
         /********************************************************************
-         * 6. 3D QUANTITY COUNTING OBJECT SPAWNER (數與量結合 1..N)
+         * 6. 3D QUANTITY & COGNITIVE OBJECT SPAWNER (數與量 / 顏色實物 / 立體幾何)
          ********************************************************************/
         function clearCountingObjects() {
             activeCountingTimeouts.forEach(t => clearTimeout(t));
@@ -883,12 +1102,37 @@
             document.getElementById('counting-banner').classList.add('hidden');
         }
 
-        // Creates a cute 3D Red Apple OR Spinning 3D Gold Coin (in Mario Mode) for 1..N tactile counting
-        function createSingleCounting3DItem(index, total, x, z, isCoin = false) {
+        // Creates a 3D Apple, Gold Coin, Colored Gem/Ball, or 3D Geometric Shape for tactile reinforcement
+        function createSingleCounting3DItem(index, total, x, z, isCoin = false, itemKey = null) {
+            const meta = getCognitiveItemMeta(itemKey !== null ? itemKey : gameState.targetKey);
             const itemGroup = new THREE.Group();
-            itemGroup.position.set(x, isCoin ? 1.1 : 0.55, z);
+            itemGroup.position.set(x, isCoin ? 1.1 : 0.62, z);
 
-            if (isCoin) {
+            if (meta.subject === 'shape') {
+                // Spawn real 3D geometric shape (Circle cylinder, Cube, Triangle prism, Star, Heart, Rectangle)
+                const shapeMesh = createCustom3DShapeMesh(meta.key, meta.hex);
+                shapeMesh.scale.setScalar(0.45);
+                shapeMesh.castShadow = true;
+                itemGroup.add(shapeMesh);
+            } else if (meta.subject === 'color') {
+                // Spawn glossy 3D Colored Toy Balloon / Gem Sphere matching the target color
+                const colorMat = new THREE.MeshStandardMaterial({
+                    color: meta.hex,
+                    roughness: 0.18,
+                    metalness: 0.15
+                });
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 24), colorMat);
+                sphere.castShadow = true;
+                itemGroup.add(sphere);
+
+                const crownRing = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.16, 0.04, 12, 24),
+                    new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3 })
+                );
+                crownRing.rotation.x = Math.PI / 2;
+                crownRing.position.y = 0.4;
+                itemGroup.add(crownRing);
+            } else if (isCoin) {
                 // Shiny 3D Mario Gold Coin
                 const coinMat = new THREE.MeshStandardMaterial({
                     color: 0xFFD700,
@@ -920,43 +1164,46 @@
             itemGroup.scale.setScalar(0.01);
             countingObjectsGroup.add(itemGroup);
 
-            // Create matching floating 2D number badge above the 3D apple/coin
+            // Create matching floating 2D badge above the 3D object
             const labelEl = document.createElement('div');
-            labelEl.className = 'counting-pill absolute -translate-x-1/2 -translate-y-1/2 bg-amber-400 text-slate-900 font-black text-base sm:text-xl w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 border-white shadow-md flex items-center justify-center';
-            labelEl.textContent = String(index);
+            labelEl.className = 'counting-pill absolute -translate-x-1/2 -translate-y-1/2 bg-amber-400 text-slate-900 font-black text-sm sm:text-lg px-2.5 h-7 sm:h-9 rounded-full border-2 border-white shadow-md flex items-center justify-center whitespace-nowrap';
+            if (meta.subject === 'color') {
+                labelEl.textContent = `${meta.shortLabel} ${index}`;
+            } else if (meta.subject === 'shape') {
+                labelEl.textContent = `${meta.shortLabel} ${index}`;
+            } else {
+                labelEl.textContent = String(index);
+            }
             document.getElementById('counting-labels-container').appendChild(labelEl);
 
             spawnedCountingItems.push({
                 group: itemGroup,
                 labelEl,
-                baseY: isCoin ? 1.1 : 0.55,
+                baseY: isCoin ? 1.1 : 0.62,
                 targetScale: total > 6 ? 0.82 : 1.0,
                 currentScale: 0.01,
                 bouncePhase: 0
             });
         }
 
-        // Spawn 3D burst of stars when a child taps the right number
+        // Spawn 3D burst of stars when a child taps the right block
         function emitStarParticles(originPos) {
-            const starGeo = new THREE.OctahedronGeometry(0.22, 0);
             const colors = [0xFFCA3A, 0xFF595E, 0x8AC926, 0x00BBF9, 0xF15BB5];
             for (let i = 0; i < 18; i++) {
-                const mat = new THREE.MeshStandardMaterial({
-                    color: colors[i % colors.length],
-                    emissive: colors[i % colors.length],
-                    emissiveIntensity: 0.35
-                });
-                const p = new THREE.Mesh(starGeo, mat);
-                p.position.copy(originPos);
+                const mat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
+                const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), mat);
+                mesh.position.copy(originPos);
+                mesh.position.z += 0.6;
+                particlesGroup.add(mesh);
+
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 2.5 + Math.random() * 3.5;
                 activeParticles.push({
-                    mesh: p,
+                    mesh,
                     vx: Math.cos(angle) * speed,
-                    vy: 3.5 + Math.random() * 4.0,
-                    vz: Math.sin(angle) * speed,
-                    life: 1.1
+                    vy: 2.5 + Math.random() * 4.0,
+                    vz: (Math.random() - 0.5) * 3.0,
+                    life: 1.0
                 });
-                particlesGroup.add(p);
             }
         }

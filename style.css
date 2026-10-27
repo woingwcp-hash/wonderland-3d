@@ -54,6 +54,13 @@
         .star-earned {
             animation: star-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
+        @keyframes card-float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-card-float {
+            animation: card-float 3.2s infinite ease-in-out;
+        }
         /* Counting badge overlay */
         .counting-pill {
             font-family: 'Fredoka', 'Noto Sans TC', sans-serif;

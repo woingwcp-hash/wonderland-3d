@@ -3,19 +3,17 @@
 
 ---
 
-## 📂 專案檔案架構 (Modular Structure)
+## 📂 專案檔案架構 (Flat Root Structure - 方便直接拖曳上傳)
 
 ```text
-number-wonderland-3d/
+wonderland-3d/
 ├── index.html          # 主畫面 HTML 骨架與 UI 介面
-├── README.md           # 專案說明文件與開發擴充指南
-├── css/
-│   └── style.css       # 立體玩具按鈕、動畫與響應式視覺樣式
-└── js/
-    ├── config.js       # 數字詞庫、積木顏色、玩具獎勵目錄與全局狀態 (gameState)
-    ├── audio.js        # 純 Web Audio 合成音效（木琴音階、跳躍聲、金幣聲、過關號角）
-    ├── scene3d.js      # Three.js 3D 場景、扭蛋機、小火車、馬利奧舞台及 3D 數字模型生成
-    └── main.js         # 四大遊戲模式邏輯、觸控 Raycaster 判定、獎勵系統與 60FPS 動畫迴圈
+├── style.css           # 立體玩具按鈕、動畫與響應式視覺樣式
+├── config.js           # 數字詞庫、積木顏色、玩具獎勵目錄與全局狀態 (gameState)
+├── audio.js            # 純 Web Audio 合成音效（木琴音階、跳躍聲、金幣聲、過關號角）
+├── scene3d.js          # Three.js 3D 場景、扭蛋機、小火車、馬利奧舞台及 3D 數字模型生成
+├── main.js             # 四大遊戲模式邏輯、觸控 Raycaster 判定、獎勵系統與 60FPS 動畫迴圈
+└── README.md           # 專案說明文件與開發擴充指南
 ```
 
 ---
@@ -28,14 +26,5 @@ number-wonderland-3d/
 
 ---
 
-## 🚀 如何新增下一個小遊戲模式（擴充指南）
-1. **在 `index.html` 頂部導航欄**新增一個模式按鈕，例如 `onclick="switchMode('newMode')"`。
-2. **在 `js/scene3d.js`** 建立該模式的專屬 `THREE.Group()` 3D 場景物件並加入 `scene`。
-3. **在 `js/main.js` 的 `switchMode()` 與 `startNewRound()`** 加入新模式的初始化邏輯，即可共用現有的「星星獎勵」、「數與量 1..N 點數」與「教學調適設定」！
-
----
-
-## 🌐 部署至 GitHub Pages
-1. 將以上檔案上傳至你的 GitHub Repository。
-2. 前往 **Settings -> Pages**，在 **Branch** 選擇 `main` (root) 並按 **Save**。
-3. 數十秒後即可透過專屬網址在任何 iPad 或課室電子白板上開啟遊玩！
+## 🌐 部署至 Vercel 或 GitHub Pages
+直接將以上 7 個檔案上傳至 GitHub Repository 根目錄，Vercel 或 GitHub Pages 即會自動部署並正常顯示！
