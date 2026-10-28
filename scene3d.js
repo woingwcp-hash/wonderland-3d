@@ -720,804 +720,402 @@
             marioStageGroup.add(hero);
         }
 
-        // Mode 5 Centerpiece: 3D True Maze Alcoves & Speed Boost Adventure Island
+        // ==================== Mode 5: 1-2-3-4-5 迷宮救兵大巡遊 (3D Grid Labyrinth & BFS Pathfinding) ====================
+        const MAZE_TILE_SIZE = 1.65;
+        const MAZE_COLS = 9;
+        const MAZE_ROWS = 9;
+
+        // 3 款精心設計嘅 9x9 真・迷宮地圖 (1 = 迷宮樹籬牆, 0 = 可通行走廊, (col:4, row:0) = 北面城堡大門)
+        const MAZE_LEVEL_DESIGNS = [
+            {
+                name: '🌳 翡翠森林迷宮',
+                wallColor: 0x16A34A,
+                topColor: 0x86EFAC,
+                floorA: 0x4ADE80,
+                floorB: 0x34D399,
+                grid: [
+                    [1, 1, 1, 1, 0, 1, 1, 1, 1], // Row 0: (4,0) 北面城堡大門
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1], // Row 1
+                    [1, 0, 1, 1, 1, 0, 1, 0, 1], // Row 2
+                    [1, 0, 0, 0, 1, 0, 0, 0, 1], // Row 3
+                    [1, 1, 0, 1, 1, 1, 0, 1, 1], // Row 4
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1], // Row 5
+                    [1, 0, 1, 1, 0, 1, 1, 0, 1], // Row 6
+                    [1, 0, 0, 1, 0, 1, 0, 0, 1], // Row 7: (4,7) 馬利奧起點
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1]  // Row 8: 南面邊界牆
+                ],
+                spots: [
+                    { col: 2, row: 7 }, // 左下秘密房
+                    { col: 6, row: 7 }, // 右下秘密房
+                    { col: 3, row: 3 }, // 中央迷宮房
+                    { col: 1, row: 1 }, // 左上轉角房
+                    { col: 7, row: 1 }  // 右上轉角房
+                ]
+            },
+            {
+                name: '🏜️ 黃金沙洲迷宮',
+                wallColor: 0xD97706,
+                topColor: 0xFDE047,
+                floorA: 0xFACC15,
+                floorB: 0xFBBF24,
+                grid: [
+                    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+                    [1, 0, 0, 1, 0, 1, 0, 0, 1],
+                    [1, 1, 0, 1, 0, 1, 0, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                    [1, 1, 1, 0, 1, 0, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                spots: [
+                    { col: 1, row: 7 },
+                    { col: 7, row: 7 },
+                    { col: 3, row: 5 },
+                    { col: 1, row: 1 },
+                    { col: 7, row: 1 }
+                ]
+            },
+            {
+                name: '👑 皇家花園迷宮',
+                wallColor: 0x7E22CE,
+                topColor: 0xE9D5FF,
+                floorA: 0xC084FC,
+                floorB: 0xA855F7,
+                grid: [
+                    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 0, 1, 0, 1, 0, 1],
+                    [1, 0, 1, 0, 0, 0, 1, 0, 1],
+                    [1, 0, 1, 1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 1, 0, 1, 0, 0, 1],
+                    [1, 1, 0, 1, 0, 1, 0, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                spots: [
+                    { col: 1, row: 7 },
+                    { col: 7, row: 7 },
+                    { col: 2, row: 5 },
+                    { col: 6, row: 5 },
+                    { col: 4, row: 3 }
+                ]
+            }
+        ];
+
+        function mazeGridToWorld(col, row) {
+            return {
+                x: (col - 4) * MAZE_TILE_SIZE,
+                z: (row - 4) * MAZE_TILE_SIZE
+            };
+        }
+
+        function mazeWorldToGrid(x, z) {
+            return {
+                col: Math.max(0, Math.min(MAZE_COLS - 1, Math.round(x / MAZE_TILE_SIZE + 4))),
+                row: Math.max(0, Math.min(MAZE_ROWS - 1, Math.round(z / MAZE_TILE_SIZE + 4)))
+            };
+        }
+
+        function isMazeCellWalkable(col, row) {
+            const lvl = MAZE_LEVEL_DESIGNS[(treasureHero.mazeLevelIdx || 0) % MAZE_LEVEL_DESIGNS.length];
+            if (row < 0 || row >= MAZE_ROWS || col < 0 || col >= MAZE_COLS) return false;
+            // 北面城堡大門 (col: 4, row: 0) 喺救齊 5 個數字後先會打開！
+            if (row === 0 && col === 4) {
+                return Boolean(treasureHero.allRescued);
+            }
+            return lvl.grid[row][col] === 0;
+        }
+
+        // BFS 智能迷宮尋路演算法（計算由起點格仔去終點格仔嘅最短轉彎路線）
+        function findMazePathBFS(startCol, startRow, goalCol, goalRow) {
+            if (startCol === goalCol && startRow === goalRow) return [];
+            const queue = [[startCol, startRow]];
+            const visited = new Set([`${startCol},${startRow}`]);
+            const parentMap = {};
+            const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+            while (queue.length > 0) {
+                const [cx, cy] = queue.shift();
+                if (cx === goalCol && cy === goalRow) {
+                    const path = [];
+                    let currKey = `${goalCol},${goalRow}`;
+                    while (currKey && currKey !== `${startCol},${startRow}`) {
+                        const [px, py] = currKey.split(',').map(Number);
+                        path.unshift(mazeGridToWorld(px, py));
+                        currKey = parentMap[currKey];
+                    }
+                    return path;
+                }
+                for (let i = 0; i < dirs.length; i++) {
+                    const nx = cx + dirs[i][0];
+                    const ny = cy + dirs[i][1];
+                    const key = `${nx},${ny}`;
+                    if (!visited.has(key) && (isMazeCellWalkable(nx, ny) || (nx === goalCol && ny === goalRow))) {
+                        visited.add(key);
+                        parentMap[key] = `${cx},${cy}`;
+                        queue.push([nx, ny]);
+                    }
+                }
+            }
+            return [];
+        }
+
         function build3DTreasureIsland() {
             treasureIslandGroup.clear();
             treasureIslandGroup.visible = false;
 
-            treasureHero.storyChapter = 1;
-            treasureHero.keepHeroPosition = false;
-            treasureHero.activeChestPos = null;
-            treasureHero.cameraFocusGate = null;
-            treasureHero.castleFinale = false;
-            treasureHero.speedBoostTimer = 0;
-            treasureHero.miniCoins = [];
-            treasureHero.speedPads = [];
-            treasureHero.mazeDividers = [];
-            treasureHero.gates = {};
-            treasureHero.bridgePlanks = [];
-            treasureHero.jumpY = 0;
-            treasureHero.jumpVel = 0;
+            treasureHero.mazeLevelIdx = 0;
+            treasureHero.sequence = [1, 2, 3, 4, 5];
+            treasureHero.nextSeqIndex = 0;
+            treasureHero.paradeFollowers = [];
+            treasureHero.trail = [];
+            treasureHero.pathQueue = [];
+            treasureHero.allRescued = false;
+            treasureHero.castleVictoryTriggered = false;
+            treasureHero.mazeLayoutGroup = new THREE.Group();
+            treasureHero.pathDots = [];
+            treasureHero.castleGate = null;
 
-            // 1. 廣闊碧海環繞底座
+            // 1. 碧海環繞底座與黃金沙灘島基
             const waterMesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(34, 34, 0.25, 48),
+                new THREE.CylinderGeometry(30, 30, 0.25, 48),
                 new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.22 })
             );
-            waterMesh.position.set(0, -0.05, -1.5);
+            waterMesh.position.set(0, -0.06, -0.8);
             treasureIslandGroup.add(waterMesh);
 
-            const pathMat = new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.65 });
-
-            // Helper: 建立低矮圓潤嘅迷宮分隔矮牆（營造轉彎尋寶感，又唔遮擋視線）
-            function addMazeDivider(x, z, w, d, colorHex, topColorHex) {
-                const g = new THREE.Group();
-                const wall = new THREE.Mesh(
-                    new THREE.BoxGeometry(w, 0.68, d),
-                    new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.55 })
-                );
-                wall.position.y = 0.34;
-                wall.castShadow = true;
-                wall.receiveShadow = true;
-                g.add(wall);
-
-                const cap = new THREE.Mesh(
-                    new THREE.BoxGeometry(w + 0.1, 0.16, d + 0.1),
-                    new THREE.MeshStandardMaterial({ color: topColorHex, roughness: 0.4 })
-                );
-                cap.position.y = 0.72;
-                g.add(cap);
-
-                g.position.set(x, 0.3, z);
-                treasureIslandGroup.add(g);
-                treasureHero.mazeDividers.push({ x, z, halfW: w / 2, halfD: d / 2 });
-            }
-
-            // Helper: 建立「⚡ 閃電星星加速板」
-            function addSpeedPad(x, z) {
-                const padGroup = new THREE.Group();
-                const outer = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.78, 0.85, 0.12, 24),
-                    new THREE.MeshStandardMaterial({ color: 0x06B6D4, roughness: 0.25, emissive: 0x0891B2, emissiveIntensity: 0.3 })
-                );
-                outer.position.y = 0.06;
-                padGroup.add(outer);
-
-                const starCore = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.48, 0.48, 0.15, 6),
-                    new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.2, emissive: 0xFACC15, emissiveIntensity: 0.4 })
-                );
-                starCore.position.y = 0.08;
-                padGroup.add(starCore);
-
-                padGroup.position.set(x, 0.32, z);
-                padGroup.userData = { x, z, starCore };
-                treasureIslandGroup.add(padGroup);
-                treasureHero.speedPads.push(padGroup);
-            }
-
-            // ==================== 第 1 區：🌳 精靈森林迷宮 (南區 Z: 2.0 ~ 8.2) ====================
-            const z1Sand = new THREE.Mesh(
-                new THREE.BoxGeometry(18.6, 0.28, 6.6),
+            const sandBase = new THREE.Mesh(
+                new THREE.BoxGeometry(17.2, 0.3, 17.8),
                 new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
             );
-            z1Sand.position.set(0, 0.08, 5.1);
-            treasureIslandGroup.add(z1Sand);
+            sandBase.position.set(0, 0.08, -0.4);
+            sandBase.receiveShadow = true;
+            treasureIslandGroup.add(sandBase);
 
-            const z1Grass = new THREE.Mesh(
-                new THREE.BoxGeometry(17.8, 0.34, 6.0),
-                new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 })
-            );
-            z1Grass.position.set(0, 0.15, 5.1);
-            z1Grass.receiveShadow = true;
-            treasureIslandGroup.add(z1Grass);
+            // 2. 動態迷宮牆與棋盤格地板容器
+            treasureIslandGroup.add(treasureHero.mazeLayoutGroup);
 
-            // 中央暢通主幹道 + 迷宮分支小徑
-            const z1CenterRoad = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.04, 5.8), pathMat);
-            z1CenterRoad.position.set(0, 0.33, 5.0);
-            treasureIslandGroup.add(z1CenterRoad);
-
-            const z1BranchSouth = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.04, 1.6), pathMat);
-            z1BranchSouth.position.set(0, 0.33, 6.1);
-            treasureIslandGroup.add(z1BranchSouth);
-
-            const z1BranchNorth = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.04, 1.6), pathMat);
-            z1BranchNorth.position.set(0, 0.33, 3.4);
-            treasureIslandGroup.add(z1BranchNorth);
-
-            // 森林迷宮矮樹籬（將左右兩側分成「前灣」與「後灣」，形成真正迷宮感！）
-            addMazeDivider(-4.2, 4.75, 4.2, 0.55, 0x16A34A, 0x86EFAC);
-            addMazeDivider(4.2, 4.75, 4.2, 0.55, 0x16A34A, 0x86EFAC);
-
-            // 森林加速板
-            addSpeedPad(-2.2, 6.1);
-            addSpeedPad(2.2, 3.4);
-
-            // 外圍果樹裝飾
-            [
-                { x: -7.8, z: 7.0, c: 0x16A34A },
-                { x: 7.8,  z: 7.0, c: 0x16A34A },
-                { x: -7.8, z: 3.1, c: 0x22C55E },
-                { x: 7.8,  z: 3.1, c: 0x22C55E }
-            ].forEach(t => {
-                const tree = new THREE.Group();
-                const trunk = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.22, 0.3, 1.1, 12),
-                    new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.8 })
-                );
-                trunk.position.y = 0.55;
-                tree.add(trunk);
-                const crown = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.95, 16, 16),
-                    new THREE.MeshStandardMaterial({ color: t.c, roughness: 0.5 })
-                );
-                crown.position.y = 1.35;
-                tree.add(crown);
-                tree.position.set(t.x, 0.3, t.z);
-                treasureIslandGroup.add(tree);
-            });
-
-            // ==================== 第 1 道關卡：🌸 森林雙開魔法大門 (Z = 2.0) ====================
-            [-5.3, 5.3].forEach(hx => {
-                const hedgeGroup = new THREE.Group();
-                const hedge = new THREE.Mesh(
-                    new THREE.BoxGeometry(6.8, 0.72, 0.65),
-                    new THREE.MeshStandardMaterial({ color: 0x15803D, roughness: 0.6 })
-                );
-                hedge.position.y = 0.36;
-                hedge.castShadow = true;
-                hedgeGroup.add(hedge);
-
-                [-2.2, -0.8, 0.8, 2.2].forEach((fx, fi) => {
-                    const flower = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.2, 12, 12),
-                        new THREE.MeshStandardMaterial({ color: fi % 2 === 0 ? 0xF472B6 : 0xFACC15 })
-                    );
-                    flower.position.set(fx, 0.78, 0);
-                    hedgeGroup.add(flower);
-                });
-                hedgeGroup.position.set(hx, 0.3, 2.0);
-                treasureIslandGroup.add(hedgeGroup);
-            });
-
-            function createSwingingGate(zPos, pillarColor, doorColor) {
-                const gateGroup = new THREE.Group();
-                gateGroup.position.set(0, 0.3, zPos);
-
-                const pillarMat = new THREE.MeshStandardMaterial({ color: pillarColor, roughness: 0.4 });
-                [-1.85, 1.85].forEach(px => {
-                    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 2.2, 16), pillarMat);
-                    pillar.position.set(px, 1.1, 0);
-                    pillar.castShadow = true;
-                    gateGroup.add(pillar);
-
-                    const cap = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.42, 16, 16),
-                        new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.25 })
-                    );
-                    cap.position.set(px, 2.3, 0);
-                    gateGroup.add(cap);
-                });
-
-                const arch = new THREE.Mesh(
-                    new THREE.TorusGeometry(1.85, 0.2, 12, 28, Math.PI),
-                    new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.3 })
-                );
-                arch.position.set(0, 2.1, 0);
-                gateGroup.add(arch);
-
-                const doorMat = new THREE.MeshStandardMaterial({ color: doorColor, roughness: 0.35 });
-                const trimMat = new THREE.MeshStandardMaterial({ color: 0xFEF08A, roughness: 0.3 });
-
-                const leftPivot = new THREE.Group();
-                leftPivot.position.set(-1.65, 0, 0);
-                const leftDoor = new THREE.Mesh(new THREE.BoxGeometry(1.58, 1.55, 0.22), doorMat);
-                leftDoor.position.set(0.79, 0.82, 0);
-                leftDoor.castShadow = true;
-                const leftTrim = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.2, 0.26), trimMat);
-                leftTrim.position.set(0.79, 1.2, 0);
-                leftPivot.add(leftDoor, leftTrim);
-                gateGroup.add(leftPivot);
-
-                const rightPivot = new THREE.Group();
-                rightPivot.position.set(1.65, 0, 0);
-                const rightDoor = new THREE.Mesh(new THREE.BoxGeometry(1.58, 1.55, 0.22), doorMat);
-                rightDoor.position.set(-0.79, 0.82, 0);
-                rightDoor.castShadow = true;
-                const rightTrim = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.2, 0.26), trimMat);
-                rightTrim.position.set(-0.79, 1.2, 0);
-                rightPivot.add(rightDoor, rightTrim);
-                gateGroup.add(rightPivot);
-
-                const lockGroup = new THREE.Group();
-                lockGroup.position.set(0, 0.95, 0.22);
-                const lockBody = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.65, 0.65, 0.25),
-                    new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.4 })
-                );
-                const lockRing = new THREE.Mesh(
-                    new THREE.TorusGeometry(0.22, 0.07, 10, 20, Math.PI),
-                    new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.3, metalness: 0.5 })
-                );
-                lockRing.position.y = 0.32;
-                lockGroup.add(lockBody, lockRing);
-                gateGroup.add(lockGroup);
-
-                treasureIslandGroup.add(gateGroup);
-                return { group: gateGroup, leftPivot, rightPivot, lockGroup, zPos };
-            }
-
-            treasureHero.gates[1] = createSwingingGate(2.0, 0x16A34A, 0xEC4899);
-
-            // ==================== 第 2 區：🏜️ 黃金遺跡迷宮 (中區 Z: -3.3 ~ 2.0) ====================
-            const z2Sand = new THREE.Mesh(
-                new THREE.BoxGeometry(17.8, 0.34, 5.3),
-                new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.75 })
-            );
-            z2Sand.position.set(0, 0.15, -0.65);
-            z2Sand.receiveShadow = true;
-            treasureIslandGroup.add(z2Sand);
-
-            const z2MainPath = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.04, 5.2), pathMat);
-            z2MainPath.position.set(0, 0.33, -0.65);
-            treasureIslandGroup.add(z2MainPath);
-
-            const z2Branch1 = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.04, 1.6), pathMat);
-            z2Branch1.position.set(0, 0.33, 0.65);
-            treasureIslandGroup.add(z2Branch1);
-
-            const z2Branch2 = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.04, 1.6), pathMat);
-            z2Branch2.position.set(0, 0.33, -1.9);
-            treasureIslandGroup.add(z2Branch2);
-
-            // 黃金區錯落迷宮沙牆（分隔出東北、西北、西南三個尋寶秘境，中間大路完全暢通！）
-            addMazeDivider(-4.2, -0.6, 4.0, 0.55, 0xD97706, 0xFEF08A);
-            addMazeDivider(4.2, -0.6, 4.0, 0.55, 0xD97706, 0xFEF08A);
-
-            addSpeedPad(0, 0.65);
-
-            [-7.6, 7.6].forEach(px => {
-                const pyr = new THREE.Mesh(
-                    new THREE.ConeGeometry(1.3, 1.8, 4),
-                    new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.45 })
-                );
-                pyr.position.set(px, 1.2, -1.8);
-                pyr.rotation.y = Math.PI / 4;
-                treasureIslandGroup.add(pyr);
-            });
-
-            // ==================== 第 2 道關卡：🌉 皇家大門與升起式彩虹浮橋 (Z: -3.3 ~ -5.1) ====================
-            treasureHero.gates[2] = createSwingingGate(-3.3, 0x0284C7, 0x06B6D4);
-
-            const PlanckColors = [0xFF595E, 0xFFCA3A, 0x8AC926, 0x00BBF9, 0xA855F7];
-            for (let i = 0; i < 5; i++) {
-                const plank = new THREE.Mesh(
-                    new THREE.BoxGeometry(3.2, 0.22, 0.34),
-                    new THREE.MeshStandardMaterial({ color: PlanckColors[i], roughness: 0.35 })
-                );
-                const pz = -3.65 - i * 0.36;
-                plank.position.set(0, -0.45, pz);
-                plank.receiveShadow = true;
-                treasureIslandGroup.add(plank);
-                treasureHero.bridgePlanks.push({ mesh: plank, index: i });
-            }
-
-            // ==================== 第 3 區：🏰 奇幻皇冠城堡花園 (北區 Z: -10.5 ~ -5.1) ====================
-            const z3Court = new THREE.Mesh(
-                new THREE.BoxGeometry(17.8, 0.34, 5.4),
-                new THREE.MeshStandardMaterial({ color: 0xDDD6FE, roughness: 0.65 })
-            );
-            z3Court.position.set(0, 0.15, -7.8);
-            z3Court.receiveShadow = true;
-            treasureIslandGroup.add(z3Court);
-
-            const redCarpet = new THREE.Mesh(
-                new THREE.BoxGeometry(2.6, 0.05, 5.0),
-                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
-            );
-            redCarpet.position.set(0, 0.33, -7.6);
-            treasureIslandGroup.add(redCarpet);
-
-            const z3CrossCarpet1 = new THREE.Mesh(
-                new THREE.BoxGeometry(12.8, 0.05, 1.5),
-                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
-            );
-            z3CrossCarpet1.position.set(0, 0.33, -6.1);
-            treasureIslandGroup.add(z3CrossCarpet1);
-
-            const z3CrossCarpet2 = new THREE.Mesh(
-                new THREE.BoxGeometry(12.8, 0.05, 1.5),
-                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
-            );
-            z3CrossCarpet2.position.set(0, 0.33, -8.3);
-            treasureIslandGroup.add(z3CrossCarpet2);
-
-            // 城堡花園水晶迷宮牆
-            addMazeDivider(-4.2, -7.2, 3.8, 0.5, 0x9333EA, 0xF3E8FF);
-            addMazeDivider(4.2, -7.2, 3.8, 0.5, 0x9333EA, 0xF3E8FF);
-
-            addSpeedPad(0, -6.1);
-
-            // 北面終點宏偉 3D 皇冠大城堡
+            // 3. 北面終點【🏰 奇幻皇冠城堡】與雙開大門 (位於 col:4, row:0 即 X=0, Z=-6.6)
+            const gateZ = -4 * MAZE_TILE_SIZE; // -6.6
             const castleGroup = new THREE.Group();
+            castleGroup.position.set(0, 0.3, gateZ - 2.1);
+
             const mainKeep = new THREE.Mesh(
-                new THREE.BoxGeometry(4.4, 2.8, 1.8),
+                new THREE.BoxGeometry(4.6, 2.8, 1.8),
                 new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.4 })
             );
             mainKeep.position.y = 1.4;
             mainKeep.castShadow = true;
             castleGroup.add(mainKeep);
 
-            [-2.5, 2.5].forEach(tx => {
+            [-2.6, 2.6].forEach(tx => {
                 const tower = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.85, 0.95, 3.2, 20),
+                    new THREE.CylinderGeometry(0.85, 0.95, 3.3, 20),
                     new THREE.MeshStandardMaterial({ color: 0xF1F5F9, roughness: 0.4 })
                 );
-                tower.position.set(tx, 1.6, 0.1);
+                tower.position.set(tx, 1.65, 0.1);
                 tower.castShadow = true;
                 castleGroup.add(tower);
 
                 const roof = new THREE.Mesh(
-                    new THREE.ConeGeometry(1.1, 1.35, 20),
+                    new THREE.ConeGeometry(1.12, 1.4, 20),
                     new THREE.MeshStandardMaterial({ color: 0xEC4899, roughness: 0.3 })
                 );
-                roof.position.set(tx, 3.85, 0.1);
+                roof.position.set(tx, 3.95, 0.1);
                 castleGroup.add(roof);
             });
 
             const crownBase = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.65, 0.55, 0.45, 16),
+                new THREE.CylinderGeometry(0.68, 0.58, 0.48, 16),
                 new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.4 })
             );
             crownBase.position.set(0, 3.05, 0.2);
             castleGroup.add(crownBase);
-
-            castleGroup.position.set(0, 0.3, -10.1);
             treasureIslandGroup.add(castleGroup);
 
-            // ==================== 🔑 3D 飛翔魔法金鎖匙模型 ====================
-            const keyGroup = new THREE.Group();
-            const keyGoldMat = new THREE.MeshStandardMaterial({
-                color: 0xFFD700,
-                roughness: 0.15,
-                metalness: 0.65,
-                emissive: 0xF59E0B,
-                emissiveIntensity: 0.35
+            // 城堡雙開魔法大門 (位於 X=0, Z=-6.6)
+            const gateGroup = new THREE.Group();
+            gateGroup.position.set(0, 0.3, gateZ);
+
+            const pillarMat = new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.35 });
+            [-0.92, 0.92].forEach(px => {
+                const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 2.1, 16), pillarMat);
+                pillar.position.set(px, 1.05, 0);
+                gateGroup.add(pillar);
             });
-            const keyBow = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.12, 12, 24), keyGoldMat);
-            keyBow.position.y = 0.5;
-            const keyStem = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.0, 12), keyGoldMat);
-            keyStem.position.y = -0.15;
-            const keyTooth = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.24, 0.12), keyGoldMat);
-            keyTooth.position.set(0.18, -0.42, 0);
-            keyGroup.add(keyBow, keyStem, keyTooth);
-            keyGroup.visible = false;
-            treasureIslandGroup.add(keyGroup);
 
-            treasureHero.flyingKey = {
-                mesh: keyGroup,
-                active: false,
-                progress: 0,
-                startPos: new THREE.Vector3(),
-                endPos: new THREE.Vector3(),
-                targetGateId: 1
-            };
+            const arch = new THREE.Mesh(
+                new THREE.TorusGeometry(0.92, 0.18, 12, 24, Math.PI),
+                new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.25 })
+            );
+            arch.position.set(0, 2.0, 0);
+            gateGroup.add(arch);
 
-            // 點擊草地導航光圈
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0xEC4899, roughness: 0.35 });
+            const leftPivot = new THREE.Group();
+            leftPivot.position.set(-0.82, 0, 0);
+            const leftDoor = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.18), doorMat);
+            leftDoor.position.set(0.4, 0.78, 0);
+            leftPivot.add(leftDoor);
+            gateGroup.add(leftPivot);
+
+            const rightPivot = new THREE.Group();
+            rightPivot.position.set(0.82, 0, 0);
+            const rightDoor = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.18), doorMat);
+            rightDoor.position.set(-0.4, 0.78, 0);
+            rightPivot.add(rightDoor);
+            gateGroup.add(rightPivot);
+
+            // 大門中央黃金鎖頭
+            const lockMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.48, 0.48, 0.24),
+                new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.5 })
+            );
+            lockMesh.position.set(0, 0.85, 0.16);
+            gateGroup.add(lockMesh);
+
+            treasureHero.castleGate = { group: gateGroup, leftPivot, rightPivot, lockMesh };
+            treasureIslandGroup.add(gateGroup);
+
+            // 4. 迷宮路線發光腳印引導點 (最多 16 粒發光圓點)
+            for (let i = 0; i < 16; i++) {
+                const dot = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.2, 0.06, 16),
+                    new THREE.MeshBasicMaterial({ color: 0xFEF08A, transparent: true, opacity: 0.85 })
+                );
+                dot.position.set(0, 0.34, 0);
+                dot.visible = false;
+                treasureIslandGroup.add(dot);
+                treasureHero.pathDots.push(dot);
+            }
+
+            // 5. 點擊地板導航光圈
             const clickRing = new THREE.Mesh(
-                new THREE.RingGeometry(0.4, 0.68, 24),
-                new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+                new THREE.RingGeometry(0.38, 0.62, 24),
+                new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
             );
             clickRing.rotation.x = -Math.PI / 2;
-            clickRing.position.set(0, 0.36, 0);
+            clickRing.position.set(0, 0.35, 0);
             clickRing.visible = false;
             treasureHero.clickMarker = clickRing;
             treasureIslandGroup.add(clickRing);
 
-            // 腳下黃金尋寶指南針 + 方向箭咀
+            // 6. 小英雄腳下黃金尋寶指南針 + 方向箭咀
             const compassGroup = new THREE.Group();
             const ringMesh = new THREE.Mesh(
-                new THREE.RingGeometry(0.58, 0.78, 32),
+                new THREE.RingGeometry(0.52, 0.7, 32),
                 new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
             );
             ringMesh.rotation.x = -Math.PI / 2;
             compassGroup.add(ringMesh);
 
             const arrowMesh = new THREE.Mesh(
-                new THREE.ConeGeometry(0.28, 0.55, 3),
+                new THREE.ConeGeometry(0.25, 0.5, 3),
                 new THREE.MeshBasicMaterial({ color: 0xEA580C })
             );
             arrowMesh.rotation.x = Math.PI / 2;
-            arrowMesh.position.set(0, 0.06, 1.05);
+            arrowMesh.position.set(0, 0.06, 0.95);
             compassGroup.add(arrowMesh);
 
-            compassGroup.position.set(0, 0.35, 6.8);
+            compassGroup.position.set(0, 0.34, 5.25);
             treasureHero.compassRing = compassGroup;
-            treasureHero.compassArrow = arrowMesh;
             treasureIslandGroup.add(compassGroup);
 
-            // 複製 3D 馬利奧小英雄
+            // 7. 複製 3D 馬利奧小英雄
             const explorer = marioHero.group.clone();
-            explorer.position.set(0, 0.32, 6.8);
+            explorer.scale.setScalar(0.88);
+            explorer.position.set(0, 0.3, 5.25);
             treasureHero.group = explorer;
             treasureIslandGroup.add(explorer);
+
+            rebuild3DMazeWalls(0);
         }
 
-        // 在迷宮走廊與剛打開嘅大門通道生成「Do-Re-Mi 引路金幣」
-        function spawnTreasureMiniCoins() {
-            if (!treasureIslandGroup) return;
-            if (treasureHero.miniCoins && treasureHero.miniCoins.length > 0) {
-                treasureHero.miniCoins.forEach(c => treasureIslandGroup.remove(c));
-            }
-            treasureHero.miniCoins = [];
+        // 根據關卡索引動態建立 9x9 立體迷宮牆與棋盤格走廊
+        function rebuild3DMazeWalls(levelIdx) {
+            if (!treasureHero.mazeLayoutGroup) return;
+            treasureHero.mazeLayoutGroup.clear();
 
-            const ch = treasureHero.storyChapter || 1;
-            let coinCoords = [];
-            if (ch === 1) {
-                coinCoords = [[0, 5.2], [-3.2, 6.1], [3.2, 6.1], [-3.2, 3.4], [3.2, 3.4]];
-            } else if (ch === 2) {
-                coinCoords = [[0, 2.7], [0, 1.9], [0, 1.1], [-3.2, 0.65], [3.2, -1.9]];
-            } else {
-                coinCoords = [[0, -2.5], [0, -3.5], [0, -4.4], [0, -5.3], [-3.2, -6.1], [3.2, -8.3]];
-            }
+            const lvl = MAZE_LEVEL_DESIGNS[levelIdx % MAZE_LEVEL_DESIGNS.length];
+            const wallGeo = new THREE.BoxGeometry(MAZE_TILE_SIZE * 0.94, 0.82, MAZE_TILE_SIZE * 0.94);
+            const wallMat = new THREE.MeshStandardMaterial({ color: lvl.wallColor, roughness: 0.55 });
+            const capGeo = new THREE.BoxGeometry(MAZE_TILE_SIZE * 0.98, 0.16, MAZE_TILE_SIZE * 0.98);
+            const capMat = new THREE.MeshStandardMaterial({ color: lvl.topColor, roughness: 0.4 });
+            const tileGeo = new THREE.BoxGeometry(MAZE_TILE_SIZE, 0.12, MAZE_TILE_SIZE);
+            const floorMatA = new THREE.MeshStandardMaterial({ color: lvl.floorA, roughness: 0.7 });
+            const floorMatB = new THREE.MeshStandardMaterial({ color: lvl.floorB, roughness: 0.7 });
 
-            coinCoords.forEach(([cx, cz], idx) => {
-                const coin = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.34, 0.34, 0.1, 20),
-                    new THREE.MeshStandardMaterial({
-                        color: 0xFFD700,
-                        roughness: 0.2,
-                        metalness: 0.65,
-                        emissive: 0xF59E0B,
-                        emissiveIntensity: 0.25
-                    })
-                );
-                coin.rotation.x = Math.PI / 2;
-                coin.position.set(cx, 0.72, cz);
-                coin.userData = { collected: false, baseY: 0.72, noteIndex: (idx % 8) + 1 };
-                treasureIslandGroup.add(coin);
-                treasureHero.miniCoins.push(coin);
-            });
-        }
+            for (let r = 0; r < MAZE_ROWS; r++) {
+                for (let c = 0; c < MAZE_COLS; c++) {
+                    const pos = mazeGridToWorld(c, r);
+                    const isEven = (r + c) % 2 === 0;
+                    const floorTile = new THREE.Mesh(tileGeo, isEven ? floorMatA : floorMatB);
+                    floorTile.position.set(pos.x, 0.24, pos.z);
+                    floorTile.receiveShadow = true;
+                    treasureHero.mazeLayoutGroup.add(floorTile);
 
-        // 建立帶有高對比數字牌與氣球的 3D 魔法寶箱
-        function create3DTreasureChest(num, x, z) {
-            const meta = getCognitiveItemMeta(num, 'number');
-            const group = new THREE.Group();
-            const baseY = 0.32;
-            group.position.set(x, baseY, z);
+                    if (lvl.grid[r][c] === 1) {
+                        const wallGroup = new THREE.Group();
+                        const wMesh = new THREE.Mesh(wallGeo, wallMat);
+                        wMesh.position.y = 0.41;
+                        wMesh.castShadow = true;
+                        wMesh.receiveShadow = true;
+                        wallGroup.add(wMesh);
 
-            const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.55 });
-            const goldMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.25, metalness: 0.35 });
+                        const cMesh = new THREE.Mesh(capGeo, capMat);
+                        cMesh.position.y = 0.86;
+                        wallGroup.add(cMesh);
 
-            const baseBox = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.82, 1.15), woodMat);
-            baseBox.position.y = 0.41;
-            baseBox.castShadow = true;
-            baseBox.receiveShadow = true;
-            baseBox.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
-            group.add(baseBox);
+                        // 喺部份迷宮牆頂加粒可愛小果實／水晶點綴
+                        if ((r * 3 + c) % 4 === 0) {
+                            const berry = new THREE.Mesh(
+                                new THREE.SphereGeometry(0.18, 10, 10),
+                                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.3 })
+                            );
+                            berry.position.set(0, 1.0, 0);
+                            wallGroup.add(berry);
+                        }
 
-            [-0.55, 0.55].forEach(sx => {
-                const strap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.84, 1.19), goldMat);
-                strap.position.set(sx, 0.41, 0);
-                group.add(strap);
-            });
-
-            const lockPlate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.1), goldMat);
-            lockPlate.position.set(0, 0.72, 0.58);
-            group.add(lockPlate);
-
-            const innerTreasure = new THREE.Mesh(
-                new THREE.BoxGeometry(1.35, 0.15, 0.95),
-                new THREE.MeshBasicMaterial({ color: 0xFDE047 })
-            );
-            innerTreasure.position.y = 0.78;
-            group.add(innerTreasure);
-
-            const lidPivot = new THREE.Group();
-            lidPivot.position.set(0, 0.82, -0.55);
-
-            const lidBox = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 1.15), woodMat);
-            lidBox.position.set(0, 0.21, 0.55);
-            lidBox.castShadow = true;
-            lidBox.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
-            lidPivot.add(lidBox);
-
-            [-0.55, 0.55].forEach(sx => {
-                const lidStrap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.45, 1.19), goldMat);
-                lidStrap.position.set(sx, 0.21, 0.55);
-                lidPivot.add(lidStrap);
-            });
-            group.add(lidPivot);
-
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = meta.hex;
-            roundRectCanvas(ctx, 8, 8, 240, 240, 44);
-            ctx.fill();
-
-            ctx.fillStyle = '#FFFFFF';
-            roundRectCanvas(ctx, 24, 24, 208, 208, 32);
-            ctx.fill();
-
-            ctx.fillStyle = '#0F172A';
-            ctx.font = '900 138px "Fredoka", "Noto Sans TC", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(num), 128, 118);
-
-            ctx.fillStyle = meta.hex;
-            const dotR = 7;
-            const gap = 18;
-            const startX = 128 - ((num - 1) * gap) / 2;
-            for (let i = 0; i < num; i++) {
-                ctx.beginPath();
-                ctx.arc(startX + i * gap, 204, dotR, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            const signTex = new THREE.CanvasTexture(canvas);
-            const signCard = new THREE.Mesh(
-                new THREE.BoxGeometry(1.42, 1.42, 0.16),
-                [
-                    new THREE.MeshStandardMaterial({ color: meta.hex }),
-                    new THREE.MeshStandardMaterial({ color: meta.hex }),
-                    new THREE.MeshStandardMaterial({ color: meta.hex }),
-                    new THREE.MeshStandardMaterial({ color: meta.hex }),
-                    new THREE.MeshBasicMaterial({ map: signTex }),
-                    new THREE.MeshStandardMaterial({ color: meta.hex })
-                ]
-            );
-            signCard.position.set(0, 1.98, 0);
-            signCard.rotation.x = -0.32;
-            signCard.castShadow = true;
-            signCard.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
-            group.add(signCard);
-
-            const balloonGroup = new THREE.Group();
-            const rope = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.025, 0.025, 1.3, 8),
-                new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-            );
-            rope.position.y = 3.05;
-            balloonGroup.add(rope);
-
-            const balloonBall = new THREE.Mesh(
-                new THREE.SphereGeometry(0.65, 20, 20),
-                new THREE.MeshStandardMaterial({ color: meta.hex, roughness: 0.25 })
-            );
-            balloonBall.position.y = 3.95;
-            balloonBall.userData = { isNumberBlock: true, itemKey: num, number: num, parentWrapper: null };
-            balloonGroup.add(balloonBall);
-            group.add(balloonGroup);
-
-            const haloGeo = new THREE.RingGeometry(1.1, 1.42, 32);
-            const haloMat = new THREE.MeshBasicMaterial({
-                color: 0xFFEA00,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.0
-            });
-            const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-            haloMesh.rotation.x = -Math.PI / 2;
-            haloMesh.position.set(0, 0.05, 0);
-            group.add(haloMesh);
-
-            const wrapper = {
-                num,
-                itemKey: num,
-                isMarioBrick: false,
-                isTreasureChest: true,
-                group,
-                bodyMesh: signCard,
-                balloonGroup,
-                extraHitMeshes: [baseBox, lidBox, signCard, balloonBall],
-                lidPivot,
-                lidOpen: false,
-                haloMesh,
-                baseX: x,
-                baseY,
-                baseZ: z,
-                baseScale: 1.0,
-                state: 'idle',
-                animTime: Math.random() * Math.PI * 2,
-                wrongTimer: 0,
-                celebrateTimer: 0,
-                bumpOffset: 0
-            };
-
-            baseBox.userData.parentWrapper = wrapper;
-            lidBox.userData.parentWrapper = wrapper;
-            signCard.userData.parentWrapper = wrapper;
-            balloonBall.userData.parentWrapper = wrapper;
-            numberBlocksGroup.add(group);
-            return wrapper;
-        }
-        function updateMarioMissionSign(targetKey) {
-            if (!marioHero.missionSignMesh) return;
-            const meta = getCognitiveItemMeta(targetKey);
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 192;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = '#FFFBEB';
-            ctx.fillRect(0, 0, 512, 192);
-
-            ctx.strokeStyle = '#F59E0B';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(5, 5, 502, 182);
-
-            ctx.fillStyle = '#B45309';
-            ctx.font = '900 40px "Noto Sans TC", sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('目標磚塊：', 26, 92);
-
-            if (meta.subject === 'color') {
-                ctx.fillStyle = meta.hex;
-                ctx.beginPath();
-                ctx.arc(275, 92, 50, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.lineWidth = 6;
-                ctx.strokeStyle = '#1E293B';
-                ctx.stroke();
-
-                ctx.fillStyle = '#1E293B';
-                ctx.font = '900 58px "Noto Sans TC", sans-serif';
-                ctx.fillText(meta.title, 345, 94);
-            } else if (meta.subject === 'shape') {
-                drawShapeSymbolOnCanvas(ctx, meta.key, 275, 92, 48, meta.hex, '#1E293B');
-                ctx.fillStyle = '#1E293B';
-                ctx.font = '900 52px "Noto Sans TC", sans-serif';
-                ctx.fillText(meta.title, 340, 94);
-            } else {
-                const num = meta.key;
-                ctx.fillStyle = meta.hex;
-                ctx.font = '900 108px "Fredoka", "Noto Sans TC", sans-serif';
-                ctx.fillText(String(num), 235, 78);
-
-                ctx.fillStyle = '#475569';
-                ctx.font = '900 44px "Noto Sans TC", sans-serif';
-                ctx.fillText(`(${NUMBER_WORDS_HK[num]})`, 365, 78);
-
-                // Countable dots at bottom
-                ctx.fillStyle = '#F59E0B';
-                const dotR = 11;
-                const gap = 34;
-                const startX = 256 - ((num - 1) * gap) / 2;
-                for (let i = 0; i < num; i++) {
-                    ctx.beginPath();
-                    ctx.arc(startX + i * gap, 154, dotR, 0, Math.PI * 2);
-                    ctx.fill();
+                        wallGroup.position.set(pos.x, 0.3, pos.z);
+                        treasureHero.mazeLayoutGroup.add(wallGroup);
+                    }
                 }
             }
 
-            const tex = new THREE.CanvasTexture(canvas);
-            marioHero.missionSignMesh.material.map = tex;
-            marioHero.missionSignMesh.material.needsUpdate = true;
+            // 北面城堡前紅地毯通道 (col:4, row:0)
+            const gatePos = mazeGridToWorld(4, 0);
+            const carpet = new THREE.Mesh(
+                new THREE.BoxGeometry(MAZE_TILE_SIZE * 0.9, 0.14, MAZE_TILE_SIZE * 1.6),
+                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
+            );
+            carpet.position.set(gatePos.x, 0.25, gatePos.z - 0.3);
+            treasureHero.mazeLayoutGroup.add(carpet);
         }
 
-        // Create a Floating 3D Mario Brick Block supporting Numbers, Colors, and Shapes
-        function create3DMarioBrick(itemKey, x, y, z) {
-            const meta = getCognitiveItemMeta(itemKey);
-            const group = new THREE.Group();
-            group.position.set(x, y, z);
+        // 建立迷宮入面等待救援嘅 3D 數字公仔（帶可愛眼睛、小鞋仔與頭頂清晰數字皇冠牌）
+        function create3DMazeNumberFriend(num, col, row) {
+            const pos = mazeGridToWorld(col, row);
+            const wrapper = create3DNumberCharacter(num, pos.x, pos.z, 0.68);
+            wrapper.baseY = 0.95;
+            wrapper.group.position.y = 0.95;
+            wrapper.isTreasureChest = true; // 兼容原有觸控與光環邏輯
+            wrapper.rescued = false;
+            wrapper.gridCol = col;
+            wrapper.gridRow = row;
 
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
-            const ctx = canvas.getContext('2d');
-
-            // Golden Question Block Border (or Color-tinted in Color mode)
-            ctx.fillStyle = meta.subject === 'color' ? meta.hex : '#F59E0B';
-            ctx.fillRect(0, 0, 512, 512);
-
-            // Inner Cream Card
-            ctx.fillStyle = '#FFFBEB';
-            roundRectCanvas(ctx, 28, 28, 456, 456, 42);
-            ctx.fill();
-
-            // 4 Classic Corner Rivets
-            ctx.fillStyle = '#B45309';
-            [[56, 56], [456, 56], [56, 456], [456, 456]].forEach(([rx, ry]) => {
-                ctx.beginPath();
-                ctx.arc(rx, ry, 14, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            if (meta.subject === 'color') {
-                // Big vibrant color swatch circle + Chinese label
-                ctx.fillStyle = meta.hex;
-                ctx.beginPath();
-                ctx.arc(256, 205, 118, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.lineWidth = 12;
-                ctx.strokeStyle = '#1E293B';
-                ctx.stroke();
-
-                ctx.fillStyle = '#1E293B';
-                ctx.font = '900 92px "Noto Sans TC", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(meta.title, 256, 405);
-            } else if (meta.subject === 'shape') {
-                drawShapeSymbolOnCanvas(ctx, meta.key, 256, 205, 112, meta.hex, '#1E293B');
-                ctx.fillStyle = '#1E293B';
-                ctx.font = '900 84px "Noto Sans TC", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(meta.title, 256, 408);
-            } else {
-                const num = meta.key;
-                ctx.fillStyle = '#1E293B';
-                ctx.font = '900 280px "Fredoka", "Noto Sans TC", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(String(num), 256, 250);
-
-                ctx.fillStyle = meta.hex;
-                const dotRadius = 13;
-                const spacing = 34;
-                const startX = 256 - ((num - 1) * spacing) / 2;
-                for (let i = 0; i < num; i++) {
-                    ctx.beginPath();
-                    ctx.arc(startX + i * spacing, 434, dotRadius, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+            // 將地面提示光環改為水平放喺公仔腳下，令當前目標數字閃閃發光！
+            if (wrapper.haloMesh) {
+                wrapper.haloMesh.rotation.x = Math.PI / 2;
+                wrapper.haloMesh.position.set(0, -0.82, 0);
             }
 
-            const frontTex = new THREE.CanvasTexture(canvas);
-            frontTex.anisotropy = 4;
+            // 微微向後仰 (-0.25 rad)，令俯視鏡頭清清楚楚睇到公仔正面嘅大數字與眼睛！
+            wrapper.bodyMesh.rotation.x = -0.22;
 
-            const sideColor = meta.subject === 'color' ? meta.hex : 0xF59E0B;
-            const sideMat = new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.35, metalness: 0.1 });
-            const frontMat = new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.3 });
-            const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, sideMat];
-
-            const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.55, 1.15), materials);
-            bodyMesh.castShadow = true;
-            bodyMesh.userData = { isNumberBlock: true, itemKey: meta.key, number: meta.key, parentWrapper: null };
-            group.add(bodyMesh);
-
-            // Golden Hint Halo behind the brick
-            const haloGeo = new THREE.RingGeometry(1.05, 1.32, 32);
-            const haloMat = new THREE.MeshBasicMaterial({
-                color: 0xFFEA00,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.0
-            });
-            const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-            haloMesh.position.set(0, 0, -0.62);
-            group.add(haloMesh);
-
-            const wrapper = {
-                num: meta.key,
-                itemKey: meta.key,
-                isMarioBrick: true,
-                group,
-                bodyMesh,
-                haloMesh,
-                baseX: x,
-                baseY: y,
-                baseZ: z,
-                baseScale: 1.0,
-                state: 'idle',
-                animTime: Math.random() * Math.PI * 2,
-                wrongTimer: 0,
-                celebrateTimer: 0,
-                bumpOffset: 0
-            };
-
-            bodyMesh.userData.parentWrapper = wrapper;
-            numberBlocksGroup.add(group);
             return wrapper;
         }
-
         /********************************************************************
          * 5. 3D CUTE COGNITIVE CHARACTER BLOCK BUILDER (數字・顏色・形狀)
          ********************************************************************/
