@@ -1,6 +1,6 @@
 /********************************************************************
  * [FILE: main.js]
- * 7. CORE GAMEPLAY LOGIC, LOBBY NAVIGATION & 1-2-3-4-5 MAZE PARADE
+ * 7. CORE GAMEPLAY LOGIC, LOBBY, 9x9 MAZE PARADE & 3-POD ADDITION ARENA
  ********************************************************************/
 const SUBJECT_DISPLAY_META = {
     number: { icon: '🔢', title: '數字樂園', short: '🔢 數字' },
@@ -17,12 +17,11 @@ const MODE_DISPLAY_META = {
     addition: '🛸 小兵合體大作戰'
 };
 
-// 自動喺大廳第二層加入第 6 張遊戲卡「🛸 小兵合體大作戰（10以內加法）」
+// 自動喺大廳第二層加入第 6 張遊戲卡「🛸 小兵合體大作戰（加法）」
 function ensureAdditionLobbyCard() {
     const treasureCard = document.getElementById('lobby-card-treasure');
     if (!treasureCard || document.getElementById('lobby-card-addition')) return;
 
-    // 將原本跨兩欄嘅第5張卡改為1欄，同第6張加法卡並排！
     treasureCard.classList.remove('sm:col-span-2');
 
     const addCard = document.createElement('button');
@@ -36,10 +35,10 @@ function ensureAdditionLobbyCard() {
         <div class="flex-1">
             <div class="flex flex-wrap items-center justify-between gap-1">
                 <span class="text-lg sm:text-2xl font-black text-slate-800">小兵合體大作戰</span>
-                <span class="text-xs font-black bg-gradient-to-r from-purple-600 to-pink-500 text-white px-2.5 py-1 rounded-full shadow-sm">➕ 10以內加法</span>
+                <span class="text-xs font-black bg-gradient-to-r from-purple-600 to-pink-500 text-white px-2.5 py-1 rounded-full shadow-sm">➕ 算式合體大砲</span>
             </div>
             <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">
-                控制馬利奧落場捉柱方形數字小兵衝撞合體，變身巨型超人小兵開炮射飛碟！
+                三台並列清晰算式（A + B = C）！控制馬利奧落場捉柱方形數字小兵填滿算式開炮射飛碟！
             </p>
         </div>
     `;
@@ -58,6 +57,8 @@ function openLobby(step = 'subject') {
 
     const tierBar = document.getElementById('maze-tier-bar');
     if (tierBar) tierBar.style.display = 'none';
+    const eqHud = document.getElementById('addition-equation-hud');
+    if (eqHud) eqHud.style.display = 'none';
     const addFireBtn = document.getElementById('addition-fire-btn');
     if (addFireBtn) addFireBtn.classList.add('hidden');
 
@@ -163,7 +164,9 @@ function switchMode(newMode) {
     playPopSound(520);
     gameState.mode = newMode;
     gameState.isBusy = false;
-    ensure3DAdditionArenaBuilt();
+    if (typeof ensure3DAdditionArenaBuilt === 'function') {
+        ensure3DAdditionArenaBuilt();
+    }
 
     updateTopStatusBadge();
 
@@ -172,7 +175,9 @@ function switchMode(newMode) {
     trainGroup.visible = (newMode === 'train');
     marioStageGroup.visible = (newMode === 'mario');
     treasureIslandGroup.visible = (newMode === 'treasure');
-    additionArenaGroup.visible = (newMode === 'addition');
+    if (typeof additionArenaGroup !== 'undefined') {
+        additionArenaGroup.visible = (newMode === 'addition');
+    }
     environmentGroup.visible = !isCustomStage && !gameState.settings.lowDistraction;
     const mainFloor = scene ? scene.getObjectByName('mainFloor') : null;
     if (mainFloor) mainFloor.visible = !isCustomStage;
@@ -203,6 +208,9 @@ function switchMode(newMode) {
             treasureDpad.classList.remove('flex');
         }
     }
+
+    const eqHud = document.getElementById('addition-equation-hud');
+    if (eqHud) eqHud.style.display = (newMode === 'addition' && !gameState.inLobby) ? 'flex' : 'none';
 
     document.getElementById('btn-visual-hint').style.display = (newMode === 'explore') ? 'none' : 'flex';
     updateCameraForAspect();
@@ -276,6 +284,7 @@ function startNewRound() {
 
     if (gameState.mode === 'addition') {
         setupAdditionRound();
+        scheduleAutoVisualPrompt();
         return;
     }
 
@@ -373,12 +382,10 @@ const MAZE_COUNTING_TIERS = [
     { id: 'skip',     label: '⚡ 5.單雙跳數', desc: '挑戰雙數 2,4,6,8,10 或單數 1,3,5,7,9' }
 ];
 
-// 自動將方向盤移去右下角，並喺頂部建立「5大數數層次切換欄」
 function ensureMazeCompactHUD() {
     const dpad = document.getElementById('treasure-dpad-bar');
     if (dpad && !dpad.dataset.compactMoved) {
         dpad.dataset.compactMoved = 'true';
-        // 移出底部中間堆疊區，改為固定喺畫面右下角，唔再遮擋迷宮起點！
         document.body.appendChild(dpad);
         dpad.className = 'fixed right-3 sm:right-6 bottom-24 sm:bottom-28 z-30 pointer-events-auto items-center justify-center gap-1.5 sm:gap-2 bg-slate-900/75 backdrop-blur-md p-2 sm:p-3 rounded-3xl border-2 border-amber-400 shadow-xl hidden';
         const infoBox = dpad.querySelector('div.border-r');
@@ -392,7 +399,11 @@ function ensureMazeCompactHUD() {
         tierBar.className = 'fixed top-14 sm:top-16 inset-x-0 z-30 flex flex-wrap items-center justify-center gap-1.5 px-2 pointer-events-none';
         document.body.appendChild(tierBar);
     }
-    renderMazeTierBarUI();
+    if (gameState.mode === 'addition') {
+        renderAdditionTierBarUI();
+    } else {
+        renderMazeTierBarUI();
+    }
 }
 
 function renderMazeTierBarUI() {
@@ -422,7 +433,6 @@ function renderMazeTierBarUI() {
 function selectMazeCountingTier(tierId) {
     playPopSound(580);
     treasureHero.countingTier = tierId;
-    // 「失蹤填空」預設開啟「❓ 自己諗」模式，等小朋友觀察隊伍空位推理！
     treasureHero.blindMode = (tierId === 'missing');
     renderMazeTierBarUI();
     startNewRound();
@@ -462,7 +472,6 @@ function updateParadeProgressBanner() {
     if (!banner || !dotsContainer) return;
 
     banner.classList.remove('hidden');
-    // 隱藏「一齊數數看」嗰行細字，令進度條更纖巧唔阻畫面！
     if (dotsContainer.previousElementSibling) {
         dotsContainer.previousElementSibling.style.display = (gameState.mode === 'treasure') ? 'none' : 'block';
     }
@@ -549,7 +558,6 @@ function setupTreasureRound() {
         seq = [startN, startN + 1, startN + 2, startN + 3, startN + 4];
     } else if (tier === 'missing') {
         seq = useHighRange ? [6, 7, 8, 9, 10] : [1, 2, 3, 4, 5];
-        // 隊伍入面已經有第 1, 3, 5 個數字跟住馬利奧，小朋友要去迷宮搵失蹤嘅第 2 同第 4 個數字插隊！
         preRescuedNums = [seq[0], seq[2], seq[4]];
         const allNums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         distractors = allNums.filter(n => !seq.includes(n)).sort(() => Math.random() - 0.5).slice(0, 3);
@@ -569,7 +577,6 @@ function setupTreasureRound() {
     treasureHero.castleVictoryTriggered = false;
     treasureHero.hintRevealedThisStep = false;
 
-    // 擺放馬利奧於起點並初始化跟尾軌跡
     const startPos = mazeGridToWorld(4, 7);
     treasureHero.currentX = startPos.x;
     treasureHero.currentZ = startPos.z;
@@ -581,7 +588,6 @@ function setupTreasureRound() {
         treasureHero.trail.push({ x: startPos.x, z: startPos.z + (i % 3) * 0.02, angle: Math.PI });
     }
 
-    // 如果係「🕵️ 失蹤填空」，開局直接生成已歸隊嘅 3 個數字排喺馬利奧身後！
     preRescuedNums.forEach(num => {
         const friend = create3DMazeNumberFriend(num, 4, 7);
         friend.rescued = true;
@@ -593,7 +599,6 @@ function setupTreasureRound() {
         treasureHero.paradeFollowers.push(friend);
     });
 
-    // 將需要喺迷宮尋找嘅數字（連同干擾項）放入迷宮 5 個秘密位置
     const toSpawnInMaze = [...seq.filter(n => !treasureHero.rescuedSet.has(n)), ...distractors];
     const shuffledSpots = [...lvl.spots].sort(() => Math.random() - 0.5);
     toSpawnInMaze.slice(0, shuffledSpots.length).forEach((num, idx) => {
@@ -688,7 +693,7 @@ function nudgeTreasureHero(dx, dz) {
         if (gameState.isBusy || additionState.phase !== 'catch') return;
         playPopSound(440);
         additionState.targetX = Math.max(-5.8, Math.min(5.8, additionState.heroX + dx * 1.5));
-        additionState.targetZ = Math.max(-0.5, Math.min(5.6, additionState.heroZ + dz * 1.5));
+        additionState.targetZ = Math.max(0.8, Math.min(5.6, additionState.heroZ + dz * 1.5));
         return;
     }
     if (gameState.mode !== 'treasure' || gameState.isBusy) return;
@@ -710,7 +715,38 @@ const ADDITION_TIERS = [
     { id: 'free2',   label: '🔥 5.自由湊數 (?+?=C)' }
 ];
 
-// 在頂部層次欄正下方顯示超清晰嘅「大算式黑板 HUD」，100% 唔會俾大砲或飛碟遮住！
+// 後備安全定義：確保即使 scene3d.js 缺少輔助函式亦 100% 正常運作
+if (typeof createQuestionSlotMinion !== 'function') {
+    window.createQuestionSlotMinion = function (x, z, borderColorHex = '#F59E0B') {
+        const group = new THREE.Group();
+        group.position.set(x, 1.35, z);
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFBEB';
+        roundRectCanvas(ctx, 10, 10, 236, 236, 40);
+        ctx.fill();
+        ctx.lineWidth = 14;
+        ctx.setLineDash([22, 14]);
+        ctx.strokeStyle = borderColorHex;
+        roundRectCanvas(ctx, 18, 18, 220, 220, 32);
+        ctx.stroke();
+        ctx.fillStyle = borderColorHex;
+        ctx.font = '900 150px "Fredoka", "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('?', 128, 134);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.92 });
+        const sideMat = new THREE.MeshStandardMaterial({ color: 0xFEF08A, transparent: true, opacity: 0.55 });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.55, 0.65), [sideMat, sideMat, sideMat, sideMat, mat, sideMat]);
+        group.add(mesh);
+        numberBlocksGroup.add(group);
+        return group;
+    };
+}
+
 function updateAdditionEquationHUD(leftVal, rightVal, sumVal) {
     let board = document.getElementById('addition-equation-hud');
     if (!board) {
@@ -787,7 +823,7 @@ function refreshAdditionStagePods() {
         }
     });
 
-    // 1. 左台 (-3.7, -1.8)
+    // 1. 左邊粉紅台 (-3.7, -1.8)
     if (additionState.caughtA !== null) {
         const mA = create3DNumberCharacter(additionState.caughtA, -3.7, -1.8, 0.72);
         mA.isPodMinion = true;
@@ -796,7 +832,7 @@ function refreshAdditionStagePods() {
         additionState.slotA = createQuestionSlotMinion(-3.7, -1.8, '#F43F5E');
     }
 
-    // 2. 中台 (0.0, -1.8)
+    // 2. 中間天藍台 (0.0, -1.8)
     if (additionState.caughtB !== null) {
         const mB = create3DNumberCharacter(additionState.caughtB, 0.0, -1.8, 0.72);
         mB.isPodMinion = true;
@@ -805,11 +841,13 @@ function refreshAdditionStagePods() {
         additionState.slotB = createQuestionSlotMinion(0.0, -1.8, '#0EA5E9');
     }
 
-    // 3. 右台答案位 (+3.7, -1.8)
+    // 3. 右邊金色答案台 (+3.7, -1.8)
     if (additionState.caughtSum !== null) {
         const mC = create3DNumberCharacter(additionState.caughtSum, 3.7, -1.8, 0.86);
         mC.isPodMinion = true;
-        // 為答案位小兵戴上金色皇冠！
+        if (additionState.caughtSum >= 10) {
+            mC.group.scale.set(0.95, 0.86, 0.86);
+        }
         const crown = new THREE.Mesh(
             new THREE.ConeGeometry(0.42, 0.52, 6),
             new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.6 })
@@ -821,7 +859,9 @@ function refreshAdditionStagePods() {
         additionState.slotC = createQuestionSlotMinion(3.7, -1.8, '#F59E0B');
     }
 
-    spawnAdditionEnergyDots(additionState.caughtA || 0, additionState.caughtB || 0);
+    if (typeof spawnAdditionEnergyDots === 'function') {
+        spawnAdditionEnergyDots(additionState.caughtA || 0, additionState.caughtB || 0);
+    }
     updateAdditionEquationHUD(
         additionState.caughtA !== null ? String(additionState.caughtA) : '?',
         additionState.caughtB !== null ? String(additionState.caughtB) : '?',
@@ -829,7 +869,6 @@ function refreshAdditionStagePods() {
     );
 }
 
-// 同步更新左下角提示卡（未答出之前顯示「？」，唔會劇透答案！）
 function syncAdditionBottomCard() {
     const cardEl = document.getElementById('target-number-card');
     const numEl = document.getElementById('target-badge-num');
@@ -848,7 +887,8 @@ function syncAdditionBottomCard() {
 }
 
 function setupAdditionRound() {
-    ensure3DAdditionArenaBuilt();
+    if (typeof ensureExtendedNumbersConfig === 'function') ensureExtendedNumbersConfig();
+    if (typeof ensure3DAdditionArenaBuilt === 'function') ensure3DAdditionArenaBuilt();
     ensureMazeCompactHUD();
     ensureAdditionFireButton().classList.add('hidden');
     renderAdditionTierBarUI();
@@ -865,8 +905,7 @@ function setupAdditionRound() {
         a = 1 + Math.floor(Math.random() * (sum - 1));
         b = sum - a;
     } else if (tier === 'sum12') {
-        // 支援 10 至 16 雙位數加法（高機率出現 6+6=12、5+5=10、7+5=12 等經典組合！）
-        const pairs = [[6, 6], [5, 6], [6, 5], [7, 5], [5, 7], [6, 7], [7, 7], [8, 4], [8, 6]];
+        const pairs = [[6, 6], [5, 6], [6, 5], [7, 5], [5, 7], [6, 7], [7, 7], [8, 4], [8, 6], [9, 3]];
         const pick = pairs[Math.floor(Math.random() * pairs.length)];
         a = pick[0];
         b = pick[1];
@@ -885,21 +924,20 @@ function setupAdditionRound() {
     additionState.numB = b;
     additionState.targetSum = sum;
 
-    // 決定邊幾個台已經企定小兵，邊個台係「？」空位等小朋友去捉小兵填上去！
     if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
         additionState.caughtA = a;
         additionState.caughtB = b;
-        additionState.caughtSum = null; // 右邊答案台空出「？」，等小朋友捉總數小兵企上去！
+        additionState.caughtSum = null;
         gameState.targetKey = sum;
     } else if (tier === 'missing') {
         additionState.caughtA = a;
-        additionState.caughtB = null;   // 中間台空出「？」
-        additionState.caughtSum = sum;  // 右邊答案台已經企定總數小兵！
+        additionState.caughtB = null;
+        additionState.caughtSum = sum;
         gameState.targetKey = b;
     } else if (tier === 'free2') {
-        additionState.caughtA = null;   // 左台空出「？」
-        additionState.caughtB = null;   // 中台空出「？」
-        additionState.caughtSum = sum;  // 右邊答案台已經企定總數小兵！
+        additionState.caughtA = null;
+        additionState.caughtB = null;
+        additionState.caughtSum = sum;
         gameState.targetKey = sum;
     }
 
@@ -926,22 +964,22 @@ function setupAdditionRound() {
     refreshAdditionStagePods();
     syncAdditionBottomCard();
 
-    // 生成前排散步嘅候選柱方形小兵（嚴格限制喺前排 Z = 1.3 ~ 4.8，絕不撞入後排算式台！）
+    // 生成前排散步嘅候選柱方形小兵（嚴格限制喺前排 Z = 1.4 ~ 4.8，絕不撞入後排算式台！）
     let roamList = [];
     if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
         const candidates = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].filter(n => n !== sum && Math.abs(n - sum) <= 4);
         candidates.sort(() => Math.random() - 0.5);
         roamList = [sum, candidates[0], candidates[1], candidates[2]].sort(() => Math.random() - 0.5);
         setPromptUI(
-            `🛸 算式【 ${a} + ${b} = ? 】：請捉住「數字 ${sum}」嘅答案小兵企上右邊金色台！`,
-            `睇下後排左台係 ${a}、中間台係 ${b}，加埋總共係幾多？快啲去捉正確小兵填滿右邊答案位啦！`
+            `🛸 算式【 ${a} + ${b} = ? 】：請捉住正確答案小兵企上右邊金色「？」台！`,
+            `左台係 ${a}、中間台係 ${b}，加埋總共係幾多？控制馬利奧去捉正確數字小兵啦！`
         );
     } else if (tier === 'missing') {
         const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => n !== b).sort(() => Math.random() - 0.5);
         roamList = [b, pool[0], pool[1], pool[2]].sort(() => Math.random() - 0.5);
         setPromptUI(
             `🕵️ 補數挑戰【 ${a} + ? = ${sum} 】：左台係 ${a}，右台總數係 ${sum}，中間台缺咗邊個？`,
-            `請控制馬利奧捉住正確嘅柱方形小兵，填上中間嘅「？」台位啦！`
+            `請控制馬利奧捉住正確嘅柱方形小兵，填上中間天藍台嘅「？」位啦！`
         );
     } else if (tier === 'free2') {
         const p1 = Math.max(1, Math.floor(sum / 2));
@@ -967,7 +1005,6 @@ function setupAdditionRound() {
         const pt = startCoords[idx % startCoords.length];
         const minion = create3DNumberCharacter(num, pt.x, pt.z, 0.72);
         minion.isArenaMinion = true;
-        // 如果係雙位數（如 12），微微拉闊少少等兩個數字更清晰
         if (num >= 10) minion.group.scale.set(0.82, 0.72, 0.72);
         const ang = (idx / roamList.length) * Math.PI * 2 + 0.5;
         minion.vx = Math.cos(ang) * 1.5;
@@ -1038,7 +1075,6 @@ function handleAdditionMinionCaught(minion) {
         }
     }
 
-    // Tier 1, 2, 3 (sum5 / sum10 / sum12: 捉答案 sum 企上右邊第3個台) 或 Tier 4 (missing: 捉補數 b 企上中間第2個台)
     const expectedNum = (tier === 'missing') ? additionState.numB : sum;
     if (num === expectedNum) {
         playCoinSound();
@@ -1065,7 +1101,6 @@ function handleAdditionMinionCaught(minion) {
     }
 }
 
-// 當三座台 [ A ] + [ B ] = [ C ] 全部企齊小兵時，三隻小兵一齊歡呼發光，準備由右邊答案台開炮！
 function startMinionFusionSequence() {
     additionState.phase = 'fusing';
     additionState.fuseTimer = 0;
@@ -1074,7 +1109,6 @@ function startMinionFusionSequence() {
     additionState.targetX = null;
     additionState.targetZ = null;
 
-    // 收起前排多餘嘅散步小兵，等小朋友清清楚楚望住後排完整嘅 [ A ] + [ B ] = [ C ] 三隻小兵！
     interactiveBlocks.forEach(b => {
         if (b.isArenaMinion) b.group.visible = false;
     });
@@ -1173,28 +1207,37 @@ function onWindowKeyDown(e) {
             e.preventDefault();
             marioJumpAction();
         }
-    } else if (gameState.mode === 'treasure') {
+    } else if (gameState.mode === 'treasure' || gameState.mode === 'addition') {
+        if (gameState.mode === 'addition' && additionState.phase === 'readyToFire' && (e.key === ' ' || e.key === 'Enter')) {
+            e.preventDefault();
+            fireAdditionCannon();
+            return;
+        }
+        const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : treasureHero.moveDirZ;
+        const curX = gameState.mode === 'addition' ? additionState.moveDirX : treasureHero.moveDirX;
         if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-            setTreasureMoveDir(-1, treasureHero.moveDirZ);
+            setTreasureMoveDir(-1, curZ);
         } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-            setTreasureMoveDir(1, treasureHero.moveDirZ);
+            setTreasureMoveDir(1, curZ);
         } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
             e.preventDefault();
-            setTreasureMoveDir(treasureHero.moveDirX, -1);
+            setTreasureMoveDir(curX, -1);
         } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
             e.preventDefault();
-            setTreasureMoveDir(treasureHero.moveDirX, 1);
+            setTreasureMoveDir(curX, 1);
         }
     }
 }
 
 function onWindowKeyUp(e) {
-    if (gameState.mode !== 'treasure') return;
+    if (gameState.mode !== 'treasure' && gameState.mode !== 'addition') return;
+    const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : treasureHero.moveDirZ;
+    const curX = gameState.mode === 'addition' ? additionState.moveDirX : treasureHero.moveDirX;
     if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) {
-        setTreasureMoveDir(0, treasureHero.moveDirZ);
+        setTreasureMoveDir(0, curZ);
     }
     if (['ArrowUp', 'w', 'W', 'ArrowDown', 's', 'S'].includes(e.key)) {
-        setTreasureMoveDir(treasureHero.moveDirX, 0);
+        setTreasureMoveDir(curX, 0);
     }
 }
 
@@ -1214,10 +1257,10 @@ function triggerVisualHint(manualClick = false) {
         refreshMazeGuideDots();
         syncMazeTargetCardDisplay();
     }
-    const rightBlock = interactiveBlocks.find(b => !b.rescued && b.itemKey === gameState.targetKey);
+    const rightBlock = interactiveBlocks.find(b => !b.rescued && !b.isPodMinion && b.group.visible && b.itemKey === gameState.targetKey);
     if (rightBlock) {
         rightBlock.state = 'hint';
-        rightBlock.haloMesh.material.opacity = 0.88;
+        if (rightBlock.haloMesh) rightBlock.haloMesh.material.opacity = 0.88;
         if (manualClick) {
             playPopSound(660);
         }
@@ -1296,7 +1339,27 @@ function onCanvasPointerDown(event) {
             return;
         }
     }
-    if (gameState.mode === 'addition' && additionState.phase === 'catch') { const p = new THREE.Plane(new THREE.Vector3(0,1,0), -0.35); const pt = new THREE.Vector3(); if (raycaster.ray.intersectPlane(p, pt)) { additionState.targetX = THREE.MathUtils.clamp(pt.x, -5.8, 5.8); additionState.targetZ = THREE.MathUtils.clamp(pt.z, -0.5, 5.6); } }
+
+    if (gameState.mode === 'addition' && !gameState.isBusy) {
+        if (additionState.phase === 'readyToFire') {
+            fireAdditionCannon();
+            return;
+        }
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+        const hitPt = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, hitPt)) {
+            playPopSound(460);
+            additionState.moveDirX = 0;
+            additionState.moveDirZ = 0;
+            additionState.targetX = THREE.MathUtils.clamp(hitPt.x, -5.8, 5.8);
+            additionState.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.8, 5.6);
+            if (additionState.clickMarker) {
+                additionState.clickMarker.position.set(additionState.targetX, 0.38, additionState.targetZ);
+                additionState.clickMarker.visible = true;
+            }
+        }
+        return;
+    }
 
     if (gameState.mode === 'treasure' && !gameState.isBusy) {
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.3);
@@ -1345,7 +1408,7 @@ function handleBlockTapped(block) {
         return;
     }
 
-    // Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊 (支援 5 大層次與插隊邏輯)】
+    // Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊】
     if (gameState.mode === 'treasure') {
         if (block.rescued) return;
 
@@ -1360,7 +1423,6 @@ function handleBlockTapped(block) {
             if (!treasureHero.rescuedSet) treasureHero.rescuedSet = new Set();
             treasureHero.rescuedSet.add(tappedKey);
 
-            // 將新救出嘅數字加入隊伍，並按數列順序自動排位（喺「失蹤填空」模式會自動插隊入中間！）
             treasureHero.paradeFollowers.push(block);
             treasureHero.paradeFollowers.sort((a, b) => seq.indexOf(a.itemKey) - seq.indexOf(b.itemKey));
 
@@ -1387,7 +1449,6 @@ function handleBlockTapped(block) {
                     `睇下身後嘅數字小隊同埋進度條，繼續喺迷宮搵出下一位朋友啦！`
                 );
             } else {
-                // 全隊集結完畢！清除迷宮入面多餘嘅干擾數字，並打開皇冠城堡大門！
                 treasureHero.allRescued = true;
                 interactiveBlocks.forEach(b => {
                     if (!b.rescued) b.group.visible = false;
@@ -1720,7 +1781,7 @@ function updateSetting(key, value) {
     gameState.settings[key] = value;
 
     if (key === 'lowDistraction') {
-        environmentGroup.visible = !value && (gameState.mode !== 'treasure');
+        environmentGroup.visible = !value && (gameState.mode !== 'treasure' && gameState.mode !== 'addition');
         scene.background = new THREE.Color(value ? '#F8FAFC' : '#CBEBFB');
         const floor = scene.getObjectByName('mainFloor');
         if (floor) {
@@ -1772,18 +1833,15 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 0.1);
     const elapsed = clock.getElapsedTime();
 
-    // 1. Drift Clouds Gently
     cloudsList.forEach(c => {
         c.position.x = c.userData.baseX + Math.sin(elapsed * c.userData.speed) * 1.4;
     });
 
-    // 2. Spin Gachapon Dial when active
     if (gachaSpinTimer > 0 && gachaDialMesh) {
         gachaSpinTimer -= dt;
         gachaDialMesh.rotation.z += dt * 10;
     }
 
-    // 3. Move 3D Cartoon Train smoothly
     if (trainGroup.visible) {
         const mover = trainGroup.getObjectByName('trainMover');
         if (mover) {
@@ -1797,11 +1855,9 @@ function animate() {
         }
     }
 
-    // 4. Animate 3D Number Character Blocks & Mario Floating Bricks
     interactiveBlocks.forEach(block => {
         block.animTime += dt;
 
-        // 如果係迷宮入面已經救出嚟排緊隊跟尾嘅數字公仔，交由下面巡遊隊伍邏輯控制位置
         if (block.isMazeFriend && block.rescued) {
             return;
         }
@@ -1960,7 +2016,6 @@ function animate() {
             tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'treasure') ? 'flex' : 'none';
         }
 
-        // 將 lookZ 往南偏移 (+1.15)，令成個 3D 迷宮喺螢幕上往上移高，完全避開底部提示卡！
         const camTargetX = treasureHero.currentX * 0.32;
         const camTargetY = treasureHero.castleVictoryTriggered ? 9.2 : 14.8;
         const camTargetZ = treasureHero.castleVictoryTriggered ? -1.2 : (treasureHero.currentZ * 0.35 + 9.4);
@@ -2007,26 +2062,32 @@ function animate() {
         }
     }
 
-   // 隱藏非加法模式時嘅頂部大算式板
+    // 隱藏非加法模式時嘅頂部大算式板
     const eqHudEl = document.getElementById('addition-equation-hud');
     if (eqHudEl && (gameState.mode !== 'addition' || gameState.inLobby)) {
         eqHudEl.style.display = 'none';
     }
 
     // 4D. Animate 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (三台並列 A + B = C 版)】
-    if (additionArenaGroup.visible && additionState.heroMesh) {
+    if (typeof additionArenaGroup !== 'undefined' && additionArenaGroup.visible && additionState.heroMesh) {
         const tierBarEl = document.getElementById('maze-tier-bar');
         if (tierBarEl) {
             tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'addition') ? 'flex' : tierBarEl.style.display;
         }
 
-        // 1. 輕微搖擺「+」、「=」符號與高空飛碟魔王
         if (additionState.plusSignMesh) {
             additionState.plusSignMesh.rotation.z = Math.sin(elapsed * 3) * 0.08;
         }
         if (additionState.equalSignMesh) {
             additionState.equalSignMesh.position.y = 1.35 + Math.sin(elapsed * 3) * 0.05;
         }
+        ['slotA', 'slotB', 'slotC'].forEach(k => {
+            if (additionState[k]) {
+                const s = 1.0 + Math.sin(elapsed * 5) * 0.05;
+                additionState[k].scale.setScalar(s);
+            }
+        });
+
         if (additionState.ufoGroup) {
             if (additionState.ufoHitTimer > 0) {
                 additionState.ufoHitTimer -= dt;
@@ -2039,15 +2100,15 @@ function animate() {
             }
         }
 
-        // 2. 前排散步小兵自由行路（嚴格限制喺前排 Z = 1.3 ~ 4.8，100% 唔會行去後排遮住三座算式台！）
+        // 前排散步小兵自由行路（嚴格限制喺前排 Z = 1.4 ~ 4.8，絕不撞入後排算式台！）
         interactiveBlocks.forEach(b => {
             if (b.isArenaMinion && b.group.visible && additionState.phase === 'catch') {
                 b.baseX += (b.vx || 1.2) * dt;
                 b.baseZ += (b.vz || 1.1) * dt;
                 if (b.baseX < -5.4 || b.baseX > 5.4) b.vx = -(b.vx || 1.2);
-                if (b.baseZ < 1.3 || b.baseZ > 4.8) b.vz = -(b.vz || 1.1);
+                if (b.baseZ < 1.4 || b.baseZ > 4.8) b.vz = -(b.vz || 1.1);
                 b.baseX = Math.max(-5.5, Math.min(5.5, b.baseX));
-                b.baseZ = Math.max(1.3, Math.min(4.8, b.baseZ));
+                b.baseZ = Math.max(1.4, Math.min(4.8, b.baseZ));
                 b.group.position.x = b.baseX;
                 b.group.position.z = b.baseZ;
                 b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 7 + b.animTime)) * 0.22;
@@ -2055,7 +2116,6 @@ function animate() {
             }
         });
 
-        // 3. 馬利奧喺前排競技場 360 度奔跑捉小兵
         let vx = 0, vz = 0;
         const speed = 6.8;
         if (additionState.phase === 'catch' && !gameState.isBusy) {
@@ -2072,6 +2132,7 @@ function animate() {
                 } else {
                     additionState.targetX = null;
                     additionState.targetZ = null;
+                    if (additionState.clickMarker) additionState.clickMarker.visible = false;
                 }
             }
         }
@@ -2103,7 +2164,6 @@ function animate() {
             }
         }
 
-        // 4. 階段二：三座台 [ A ] + [ B ] = [ C ] 齊人！左台與中台小兵留喺原位歡呼，右台答案小兵變大準備發射！
         if (additionState.phase === 'fusing') {
             additionState.fuseTimer += dt * 2.0;
             const p = Math.min(1, additionState.fuseTimer);
@@ -2125,7 +2185,6 @@ function animate() {
             }
         }
 
-        // 5. 階段三：撳掣開炮！右邊答案台 (X = 3.7) 嘅皇冠小兵飛上天撞爆飛碟大魔王！
         if (additionState.phase === 'firing' && additionState.rightPodMinion && additionState.ufoGroup) {
             additionState.fireProgress = Math.min(1, additionState.fireProgress + dt * 2.2);
             const fp = additionState.fireProgress;
@@ -2164,6 +2223,7 @@ function animate() {
         camera.position.z = THREE.MathUtils.lerp(camera.position.z, 12.4, dt * 4);
         camera.lookAt(additionState.heroX * 0.15, 1.3, -1.2);
     }
+
     // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
     if (marioStageGroup.visible && marioHero.group) {
         const dx = marioHero.targetX - marioHero.currentX;
@@ -2221,7 +2281,6 @@ function animate() {
         }
     }
 
-    // 5. Animate Spawned 3D Counting Apples/Coins & Sync 2D Number Badges
     spawnedCountingItems.forEach(item => {
         item.currentScale = THREE.MathUtils.lerp(item.currentScale, item.targetScale, dt * 10);
         item.bouncePhase += dt * 4;
@@ -2238,7 +2297,6 @@ function animate() {
         item.labelEl.style.top = `${sy}px`;
     });
 
-    // 6. Update Star Burst Particles
     for (let i = activeParticles.length - 1; i >= 0; i--) {
         const p = activeParticles[i];
         p.life -= dt;
