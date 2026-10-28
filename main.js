@@ -701,13 +701,45 @@ function nudgeTreasureHero(dx, dz) {
     }
 }
 
-// ==================== Mode 6: 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (10以內加法)】 ====================
+// ==================== Mode 6: 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (三台並列 A + B = C 完整算式版)】 ====================
 const ADDITION_TIERS = [
-    { id: 'sum5',    label: '🌱 1.五以內合體 (A+B=?)' },
-    { id: 'sum10',   label: '🧩 2.十以內合體 (A+B=?)' },
-    { id: 'missing', label: '🕵️ 3.補數挑戰 (A+?=C)' },
-    { id: 'free2',   label: '🔥 4.自由捉兩隻 (?+?=C)' }
+    { id: 'sum5',    label: '🌱 1.五以內 (A+B=?)' },
+    { id: 'sum10',   label: '🧩 2.十以內 (A+B=?)' },
+    { id: 'sum12',   label: '🚀 3.雙位數合體 (如6+6=12)' },
+    { id: 'missing', label: '🕵️ 4.補數 (A+?=C)' },
+    { id: 'free2',   label: '🔥 5.自由湊數 (?+?=C)' }
 ];
+
+// 在頂部層次欄正下方顯示超清晰嘅「大算式黑板 HUD」，100% 唔會俾大砲或飛碟遮住！
+function updateAdditionEquationHUD(leftVal, rightVal, sumVal) {
+    let board = document.getElementById('addition-equation-hud');
+    if (!board) {
+        board = document.createElement('div');
+        board.id = 'addition-equation-hud';
+        board.className = 'fixed top-28 sm:top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-all duration-300';
+        document.body.appendChild(board);
+    }
+    if (gameState.mode !== 'addition' || gameState.inLobby) {
+        board.style.display = 'none';
+        return;
+    }
+    board.style.display = 'flex';
+
+    const boxStyle = (val, bgCls) => {
+        const isQ = (val === '?');
+        return `<span class="inline-flex items-center justify-center min-w-[44px] sm:min-w-[58px] h-11 sm:h-14 px-3 rounded-2xl font-black text-2xl sm:text-4xl border-4 shadow-md ${isQ ? 'bg-amber-300 text-slate-950 border-orange-500 animate-bounce' : bgCls}">${val}</span>`;
+    };
+
+    board.innerHTML = `
+        <div class="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2 rounded-3xl border-4 border-purple-400 shadow-2xl flex items-center gap-2 sm:gap-3.5">
+            ${boxStyle(leftVal, 'bg-rose-500 text-white border-rose-200')}
+            <span class="text-2xl sm:text-4xl font-black text-amber-500">+</span>
+            ${boxStyle(rightVal, 'bg-sky-500 text-white border-sky-200')}
+            <span class="text-2xl sm:text-4xl font-black text-slate-600">=</span>
+            ${boxStyle(sumVal, 'bg-emerald-500 text-white border-emerald-200')}
+        </div>
+    `;
+}
 
 function renderAdditionTierBarUI() {
     const tierBar = document.getElementById('maze-tier-bar');
@@ -739,10 +771,80 @@ function ensureAdditionFireButton() {
         btn.id = 'addition-fire-btn';
         btn.onclick = () => fireAdditionCannon();
         btn.className = 'fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 hover:from-red-400 hover:to-amber-300 text-white font-black px-7 py-3.5 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-3 text-xl sm:text-2xl animate-bounce hidden';
-        btn.innerHTML = `<span>🔥</span><span>點火發射合體大砲！</span><span>🚀</span>`;
+        btn.innerHTML = `<span>🔥</span><span>點火發射答案小兵！</span><span>🚀</span>`;
         document.body.appendChild(btn);
     }
     return btn;
+}
+
+// 刷新後排三座算式台 [ 左台 A (-3.7) ] + [ 中台 B (0.0) ] = [ 右台 C (+3.7) ] 上面嘅小兵與「？」框
+function refreshAdditionStagePods() {
+    ['leftPodMinion', 'midPodMinion', 'rightPodMinion', 'slotA', 'slotB', 'slotC'].forEach(k => {
+        if (additionState[k]) {
+            if (additionState[k].group) numberBlocksGroup.remove(additionState[k].group);
+            else numberBlocksGroup.remove(additionState[k]);
+            additionState[k] = null;
+        }
+    });
+
+    // 1. 左台 (-3.7, -1.8)
+    if (additionState.caughtA !== null) {
+        const mA = create3DNumberCharacter(additionState.caughtA, -3.7, -1.8, 0.72);
+        mA.isPodMinion = true;
+        additionState.leftPodMinion = mA;
+    } else {
+        additionState.slotA = createQuestionSlotMinion(-3.7, -1.8, '#F43F5E');
+    }
+
+    // 2. 中台 (0.0, -1.8)
+    if (additionState.caughtB !== null) {
+        const mB = create3DNumberCharacter(additionState.caughtB, 0.0, -1.8, 0.72);
+        mB.isPodMinion = true;
+        additionState.midPodMinion = mB;
+    } else {
+        additionState.slotB = createQuestionSlotMinion(0.0, -1.8, '#0EA5E9');
+    }
+
+    // 3. 右台答案位 (+3.7, -1.8)
+    if (additionState.caughtSum !== null) {
+        const mC = create3DNumberCharacter(additionState.caughtSum, 3.7, -1.8, 0.86);
+        mC.isPodMinion = true;
+        // 為答案位小兵戴上金色皇冠！
+        const crown = new THREE.Mesh(
+            new THREE.ConeGeometry(0.42, 0.52, 6),
+            new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.6 })
+        );
+        crown.position.set(0, 1.32, 0);
+        mC.group.add(crown);
+        additionState.rightPodMinion = mC;
+    } else {
+        additionState.slotC = createQuestionSlotMinion(3.7, -1.8, '#F59E0B');
+    }
+
+    spawnAdditionEnergyDots(additionState.caughtA || 0, additionState.caughtB || 0);
+    updateAdditionEquationHUD(
+        additionState.caughtA !== null ? String(additionState.caughtA) : '?',
+        additionState.caughtB !== null ? String(additionState.caughtB) : '?',
+        additionState.caughtSum !== null ? String(additionState.caughtSum) : '?'
+    );
+}
+
+// 同步更新左下角提示卡（未答出之前顯示「？」，唔會劇透答案！）
+function syncAdditionBottomCard() {
+    const cardEl = document.getElementById('target-number-card');
+    const numEl = document.getElementById('target-badge-num');
+    const dotsEl = document.getElementById('target-badge-dots');
+    if (!cardEl || !numEl || !dotsEl) return;
+
+    const aStr = additionState.caughtA !== null ? additionState.caughtA : '?';
+    const bStr = additionState.caughtB !== null ? additionState.caughtB : '?';
+    const cStr = additionState.caughtSum !== null ? additionState.caughtSum : '?';
+
+    cardEl.style.background = 'linear-gradient(to bottom, #A855F7, #7E22CE)';
+    cardEl.style.color = '#FFFFFF';
+    numEl.textContent = (additionState.phase === 'catch') ? '➕' : String(additionState.targetSum);
+    dotsEl.textContent = `${aStr}+${bStr}=${cStr}`;
+    dotsEl.className = 'text-[11px] sm:text-xs font-black text-amber-200 tracking-tighter mt-0.5';
 }
 
 function setupAdditionRound() {
@@ -762,6 +864,13 @@ function setupAdditionRound() {
         sum = 6 + Math.floor(Math.random() * 5); // 6..10
         a = 1 + Math.floor(Math.random() * (sum - 1));
         b = sum - a;
+    } else if (tier === 'sum12') {
+        // 支援 10 至 16 雙位數加法（高機率出現 6+6=12、5+5=10、7+5=12 等經典組合！）
+        const pairs = [[6, 6], [5, 6], [6, 5], [7, 5], [5, 7], [6, 7], [7, 7], [8, 4], [8, 6]];
+        const pick = pairs[Math.floor(Math.random() * pairs.length)];
+        a = pick[0];
+        b = pick[1];
+        sum = a + b;
     } else if (tier === 'missing') {
         sum = 4 + Math.floor(Math.random() * 7); // 4..10
         a = 1 + Math.floor(Math.random() * (sum - 1));
@@ -775,108 +884,98 @@ function setupAdditionRound() {
     additionState.numA = a;
     additionState.numB = b;
     additionState.targetSum = sum;
-    additionState.caughtA = (tier === 'free2') ? null : a;
-    additionState.caughtB = (tier === 'sum5' || tier === 'sum10') ? b : null;
+
+    // 決定邊幾個台已經企定小兵，邊個台係「？」空位等小朋友去捉小兵填上去！
+    if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
+        additionState.caughtA = a;
+        additionState.caughtB = b;
+        additionState.caughtSum = null; // 右邊答案台空出「？」，等小朋友捉總數小兵企上去！
+        gameState.targetKey = sum;
+    } else if (tier === 'missing') {
+        additionState.caughtA = a;
+        additionState.caughtB = null;   // 中間台空出「？」
+        additionState.caughtSum = sum;  // 右邊答案台已經企定總數小兵！
+        gameState.targetKey = b;
+    } else if (tier === 'free2') {
+        additionState.caughtA = null;   // 左台空出「？」
+        additionState.caughtB = null;   // 中台空出「？」
+        additionState.caughtSum = sum;  // 右邊答案台已經企定總數小兵！
+        gameState.targetKey = sum;
+    }
+
     additionState.phase = 'catch';
     additionState.fuseTimer = 0;
     additionState.fireProgress = 0;
     additionState.ufoHitTimer = 0;
-    additionState.leftPodMinion = null;
-    additionState.rightPodMinion = null;
-    additionState.giantMinion = null;
 
-    // 重置馬利奧於競技場南面起點
     additionState.heroX = 0;
-    additionState.heroZ = 3.6;
+    additionState.heroZ = 4.2;
     additionState.targetX = null;
     additionState.targetZ = null;
     additionState.moveDirX = 0;
     additionState.moveDirZ = 0;
     additionState.facingAngle = Math.PI;
     if (additionState.heroMesh) {
-        additionState.heroMesh.position.set(0, 0.36, 3.6);
+        additionState.heroMesh.position.set(0, 0.36, 4.2);
         additionState.heroMesh.rotation.y = Math.PI;
     }
     if (additionState.compassRing) {
-        additionState.compassRing.position.set(0, 0.38, 3.6);
+        additionState.compassRing.position.set(0, 0.38, 4.2);
     }
 
-    // 擺放左、右合體台上嘅柱方形小兵
-    if (additionState.caughtA !== null) {
-        const leftM = create3DNumberCharacter(additionState.caughtA, -2.5, -2.0, 0.72);
-        leftM.isPodMinion = true;
-        additionState.leftPodMinion = leftM;
-        interactiveBlocks.push(leftM);
-    }
-    if (additionState.caughtB !== null) {
-        const rightM = create3DNumberCharacter(additionState.caughtB, 2.5, -2.0, 0.72);
-        rightM.isPodMinion = true;
-        additionState.rightPodMinion = rightM;
-        interactiveBlocks.push(rightM);
-    }
+    refreshAdditionStagePods();
+    syncAdditionBottomCard();
 
-    // 生成需要馬利奧落場去捉嘅「散步柱方形小兵」
+    // 生成前排散步嘅候選柱方形小兵（嚴格限制喺前排 Z = 1.3 ~ 4.8，絕不撞入後排算式台！）
     let roamList = [];
-    if (tier === 'sum5' || tier === 'sum10') {
-        gameState.targetKey = sum;
-        const pool = [2, 3, 4, 5, 6, 7, 8, 9, 10].filter(n => n !== sum).sort(() => Math.random() - 0.5);
-        roamList = [sum, pool[0], pool[1], pool[2]].sort(() => Math.random() - 0.5);
-        updateAdditionUfoSign(String(a), String(b), '?');
-        spawnAdditionEnergyDots(a, b);
-        updateTargetBadgeUI(sum, false);
+    if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
+        const candidates = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].filter(n => n !== sum && Math.abs(n - sum) <= 4);
+        candidates.sort(() => Math.random() - 0.5);
+        roamList = [sum, candidates[0], candidates[1], candidates[2]].sort(() => Math.random() - 0.5);
         setPromptUI(
-            `🛸 飛碟算式【 ${a} + ${b} = ? 】：快啲去捉正確總數嘅小兵合體！`,
-            `左台 ${a} 號加右台 ${b} 號合共係幾多？控制馬利奧捉住正確數字小兵啦！`
+            `🛸 算式【 ${a} + ${b} = ? 】：請捉住「數字 ${sum}」嘅答案小兵企上右邊金色台！`,
+            `睇下後排左台係 ${a}、中間台係 ${b}，加埋總共係幾多？快啲去捉正確小兵填滿右邊答案位啦！`
         );
     } else if (tier === 'missing') {
-        gameState.targetKey = b;
         const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => n !== b).sort(() => Math.random() - 0.5);
         roamList = [b, pool[0], pool[1], pool[2]].sort(() => Math.random() - 0.5);
-        updateAdditionUfoSign(String(a), '?', String(sum));
-        spawnAdditionEnergyDots(a, 0);
-        updateTargetBadgeUI(sum, false);
         setPromptUI(
-            `🕵️ 補數合體【 ${a} + ? = ${sum} 】：左台已有 ${a} 號，仲差幾多先夠 ${sum}？`,
-            `請控制馬利奧喺場內捉住正確嘅柱方形小兵，跳上右邊合體台！`
+            `🕵️ 補數挑戰【 ${a} + ? = ${sum} 】：左台係 ${a}，右台總數係 ${sum}，中間台缺咗邊個？`,
+            `請控制馬利奧捉住正確嘅柱方形小兵，填上中間嘅「？」台位啦！`
         );
     } else if (tier === 'free2') {
-        gameState.targetKey = sum;
-        // 保證場內一定有至少兩對可以湊成 sum 嘅小兵！
         const p1 = Math.max(1, Math.floor(sum / 2));
         const p2 = sum - p1;
         const p3 = 1;
         const p4 = sum - 1;
         const extra = Math.max(1, (sum + 2) % 9);
         roamList = [p1, p2, p3, p4, extra].sort(() => Math.random() - 0.5);
-        updateAdditionUfoSign('?', '?', String(sum));
-        spawnAdditionEnergyDots(0, 0);
-        updateTargetBadgeUI(sum, false);
         setPromptUI(
-            `🔥 自由雙兵合體【 ? + ? = ${sum} 】：請捉任意 2 隻加埋等於 ${sum} 嘅小兵！`,
-            `先捉第 1 隻小兵上左台，再捉第 2 隻小兵上右台合體變身巨型 ${sum} 號超人！`
+            `🔥 自由湊數【 ? + ? = ${sum} 】：右台目標係 ${sum}，請捉 2 隻加埋等於 ${sum} 嘅小兵！`,
+            `先捉第 1 隻小兵企上左邊粉紅台，再捉第 2 隻小兵企上中間天藍台！`
         );
     }
 
-    // 將散步小兵放入競技場並賦予隨機走動速度
     const startCoords = [
-        { x: -3.8, z: 1.2 },
-        { x: 3.8,  z: 1.2 },
-        { x: -2.2, z: 3.6 },
-        { x: 2.2,  z: 3.6 },
-        { x: 0,    z: 1.5 }
+        { x: -4.2, z: 1.6 },
+        { x: 4.2,  z: 1.6 },
+        { x: -2.4, z: 3.6 },
+        { x: 2.4,  z: 3.6 },
+        { x: 0,    z: 2.2 }
     ];
     roamList.forEach((num, idx) => {
         const pt = startCoords[idx % startCoords.length];
         const minion = create3DNumberCharacter(num, pt.x, pt.z, 0.72);
         minion.isArenaMinion = true;
-        const ang = (idx / roamList.length) * Math.PI * 2 + 0.4;
-        minion.vx = Math.cos(ang) * 1.65;
-        minion.vz = Math.sin(ang) * 1.65;
+        // 如果係雙位數（如 12），微微拉闊少少等兩個數字更清晰
+        if (num >= 10) minion.group.scale.set(0.82, 0.72, 0.72);
+        const ang = (idx / roamList.length) * Math.PI * 2 + 0.5;
+        minion.vx = Math.cos(ang) * 1.5;
+        minion.vz = Math.sin(ang) * 1.2;
         interactiveBlocks.push(minion);
     });
 }
 
-// 當馬利奧喺競技場捉到某隻散步小兵時觸發
 function handleAdditionMinionCaught(minion) {
     if (gameState.isBusy || additionState.phase !== 'catch' || !minion.isArenaMinion) return;
     const num = minion.itemKey;
@@ -889,51 +988,40 @@ function handleAdditionMinionCaught(minion) {
                 playGentleNudge();
                 minion.state = 'wrong';
                 minion.wrongTimer = 0.6;
-                setPromptUI(`呢隻係 ${num} 號，已經大過或等於 ${sum} 喇！請揀細啲嘅數字小兵先！`, `我哋要捉 2 隻小兵加埋等於 ${sum}`);
+                setPromptUI(`呢隻係 ${num} 號，已經大過或等於目標 ${sum} 喇！請揀細啲嘅數字小兵先！`, `我哋要捉 2 隻小兵加埋等於 ${sum}`);
                 return;
             }
-            // 成功捉到第 1 隻小兵！跳上左邊合體台！
             playCoinSound();
             additionState.caughtA = num;
             minion.isArenaMinion = false;
-            minion.isPodMinion = true;
-            minion.baseX = -2.5;
-            minion.baseZ = -2.0;
-            minion.group.position.set(-2.5, 1.15, -2.0);
-            minion.group.rotation.y = 0;
-            additionState.leftPodMinion = minion;
+            minion.group.visible = false;
+            refreshAdditionStagePods();
+            syncAdditionBottomCard();
 
             const needed = sum - num;
             gameState.targetKey = needed;
-            updateAdditionUfoSign(String(num), '?', String(sum));
-            spawnAdditionEnergyDots(num, 0);
             setPromptUI(
-                `👍 捉到「數字 ${num}」上左台喇！【 ${num} + ? = ${sum} 】仲差幾多？`,
-                `快啲喺場內搵出「數字 ${needed}」小兵同佢合體啦！（若場上無 ${needed}，會自動補上！）`
+                `👍 左台企好「${num}」號喇！【 ${num} + ? = ${sum} 】中間台仲差幾多？`,
+                `快啲去捉「數字 ${needed}」小兵企上中間天藍台，完成整條算式啦！`
             );
 
-            // 確保場上一定有一隻 needed 號小兵俾小朋友捉
-            const hasNeeded = interactiveBlocks.some(b => b.isArenaMinion && b.itemKey === needed);
+            const hasNeeded = interactiveBlocks.some(b => b.isArenaMinion && b.group.visible && b.itemKey === needed);
             if (!hasNeeded) {
-                const newM = create3DNumberCharacter(needed, 0, 1.8, 0.72);
+                const newM = create3DNumberCharacter(needed, 0, 2.2, 0.72);
                 newM.isArenaMinion = true;
                 newM.vx = 1.4;
-                newM.vz = -1.2;
+                newM.vz = 1.1;
                 interactiveBlocks.push(newM);
             }
             return;
         } else {
-            // 捉第 2 隻小兵：檢查 caughtA + num 係咪等於 sum
             if (additionState.caughtA + num === sum) {
                 playCoinSound();
                 additionState.caughtB = num;
                 minion.isArenaMinion = false;
-                minion.isPodMinion = true;
-                minion.baseX = 2.5;
-                minion.baseZ = -2.0;
-                minion.group.position.set(2.5, 1.15, -2.0);
-                minion.group.rotation.y = 0;
-                additionState.rightPodMinion = minion;
+                minion.group.visible = false;
+                refreshAdditionStagePods();
+                syncAdditionBottomCard();
                 startMinionFusionSequence();
             } else {
                 playGentleNudge();
@@ -942,30 +1030,27 @@ function handleAdditionMinionCaught(minion) {
                 additionState.targetX = null;
                 additionState.targetZ = null;
                 setPromptUI(
-                    `${additionState.caughtA} 加 ${num} 係 ${additionState.caughtA + num}，唔係 ${sum} 喎！`,
-                    `算式提示：${additionState.caughtA} + ${sum - additionState.caughtA} = ${sum}，試下搵「數字 ${sum - additionState.caughtA}」小兵啦！`
+                    `${additionState.caughtA} + ${num} 係 ${additionState.caughtA + num}，唔等於右台嘅 ${sum} 喎！`,
+                    `算式提示：${additionState.caughtA} + ${sum - additionState.caughtA} = ${sum}，請去捉「數字 ${sum - additionState.caughtA}」小兵啦！`
                 );
             }
             return;
         }
     }
 
-    // Tier 1, 2 (搵總和 sum) 或 Tier 3 (搵補數 b)
+    // Tier 1, 2, 3 (sum5 / sum10 / sum12: 捉答案 sum 企上右邊第3個台) 或 Tier 4 (missing: 捉補數 b 企上中間第2個台)
     const expectedNum = (tier === 'missing') ? additionState.numB : sum;
     if (num === expectedNum) {
         playCoinSound();
         minion.isArenaMinion = false;
-        minion.isPodMinion = true;
+        minion.group.visible = false;
         if (tier === 'missing') {
             additionState.caughtB = num;
-            minion.baseX = 2.5;
-            minion.baseZ = -2.0;
-            minion.group.position.set(2.5, 1.15, -2.0);
-            minion.group.rotation.y = 0;
-            additionState.rightPodMinion = minion;
         } else {
-            minion.group.visible = false;
+            additionState.caughtSum = num;
         }
+        refreshAdditionStagePods();
+        syncAdditionBottomCard();
         startMinionFusionSequence();
     } else {
         playGentleNudge();
@@ -974,13 +1059,13 @@ function handleAdditionMinionCaught(minion) {
         additionState.targetX = null;
         additionState.targetZ = null;
         setPromptUI(
-            `呢隻係「數字 ${num}」小兵，再數清楚啲！【 ${additionState.caughtA} + ${additionState.caughtB || '?'} 】`,
-            `你可以數下合體台上面嘅能量球，或者撳右上角「💡提示」！`
+            `呢隻係「數字 ${num}」小兵，未啱喎！請睇下頂部算式板再數一次！`,
+            `你可以數下左台同中台小兵頭頂嘅彩色能量球，或者撳右上角「💡提示」！`
         );
     }
 }
 
-// 啟動兩隻柱方形小兵「咻——嘭！」高速衝撞合體變身巨型超人小兵動畫！
+// 當三座台 [ A ] + [ B ] = [ C ] 全部企齊小兵時，三隻小兵一齊歡呼發光，準備由右邊答案台開炮！
 function startMinionFusionSequence() {
     additionState.phase = 'fusing';
     additionState.fuseTimer = 0;
@@ -989,7 +1074,7 @@ function startMinionFusionSequence() {
     additionState.targetX = null;
     additionState.targetZ = null;
 
-    // 隱藏場上其他散步小兵，聚焦合體演出
+    // 收起前排多餘嘅散步小兵，等小朋友清清楚楚望住後排完整嘅 [ A ] + [ B ] = [ C ] 三隻小兵！
     interactiveBlocks.forEach(b => {
         if (b.isArenaMinion) b.group.visible = false;
     });
@@ -997,24 +1082,22 @@ function startMinionFusionSequence() {
     const a = additionState.caughtA;
     const b = additionState.caughtB;
     const sum = additionState.targetSum;
-    updateAdditionUfoSign(String(a), String(b), String(sum));
-    spawnAdditionEnergyDots(a, b);
     playChestOpenSound();
+    emitStarParticles(new THREE.Vector3(3.7, 1.8, -1.8));
 
     setPromptUI(
-        `⚡ 合體成功！【 ${a} + ${b} = ${sum} 】兩隻小兵衝撞合體變成「巨型 ${sum} 號超人小兵」！`,
-        `快啲撳中間嘅「🔥 點火發射合體大砲！」按鈕（或按空白鍵）射爆飛碟啦！`
+        `🎉 算式完成！【 ${a} + ${b} = ${sum} 】三隻小兵齊齊整整企晒喺度喇！`,
+        `快啲撳中間嘅「🔥 點火發射答案小兵！」按鈕，將右台嘅「${sum} 號皇冠小兵」射向飛碟啦！`
     );
 }
 
-// 玩家撳「🔥 點火發射合體大砲！」按鈕時發射巨型小兵！
 function fireAdditionCannon() {
     if (gameState.mode !== 'addition' || additionState.phase !== 'readyToFire') return;
     additionState.phase = 'firing';
     additionState.fireProgress = 0;
     ensureAdditionFireButton().classList.add('hidden');
     playMarioJumpSound();
-    emitStarParticles(new THREE.Vector3(0, 1.8, -3.5));
+    emitStarParticles(new THREE.Vector3(3.7, 1.8, -2.5));
 }
 
 function setupExploreMode() {
@@ -1924,36 +2007,47 @@ function animate() {
         }
     }
 
-    // 4D. Animate 【🛸 3D 競技場：馬利奧捉小兵合體大作戰】
+   // 隱藏非加法模式時嘅頂部大算式板
+    const eqHudEl = document.getElementById('addition-equation-hud');
+    if (eqHudEl && (gameState.mode !== 'addition' || gameState.inLobby)) {
+        eqHudEl.style.display = 'none';
+    }
+
+    // 4D. Animate 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (三台並列 A + B = C 版)】
     if (additionArenaGroup.visible && additionState.heroMesh) {
         const tierBarEl = document.getElementById('maze-tier-bar');
         if (tierBarEl) {
             tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'addition') ? 'flex' : tierBarEl.style.display;
         }
 
-        // 1. 旋轉中央立體「+」號與搖擺空中飛碟魔王
+        // 1. 輕微搖擺「+」、「=」符號與高空飛碟魔王
         if (additionState.plusSignMesh) {
-            additionState.plusSignMesh.rotation.y += dt * 2.2;
+            additionState.plusSignMesh.rotation.z = Math.sin(elapsed * 3) * 0.08;
+        }
+        if (additionState.equalSignMesh) {
+            additionState.equalSignMesh.position.y = 1.35 + Math.sin(elapsed * 3) * 0.05;
         }
         if (additionState.ufoGroup) {
             if (additionState.ufoHitTimer > 0) {
                 additionState.ufoHitTimer -= dt;
                 additionState.ufoGroup.rotation.y += dt * 18;
-                additionState.ufoGroup.position.y = 3.8 + Math.sin(elapsed * 30) * 0.35;
+                additionState.ufoGroup.position.y = 4.5 + Math.sin(elapsed * 30) * 0.35;
             } else {
-                additionState.ufoGroup.position.x = Math.sin(elapsed * 1.4) * 2.2;
-                additionState.ufoGroup.position.y = 3.8 + Math.sin(elapsed * 3.0) * 0.2;
-                additionState.ufoGroup.rotation.z = Math.sin(elapsed * 1.4) * 0.08;
+                additionState.ufoGroup.position.x = Math.sin(elapsed * 1.2) * 2.4;
+                additionState.ufoGroup.position.y = 4.5 + Math.sin(elapsed * 2.8) * 0.18;
+                additionState.ufoGroup.rotation.z = Math.sin(elapsed * 1.2) * 0.06;
             }
         }
 
-        // 2. 競技場散步柱方形小兵自由行路與彈跳
+        // 2. 前排散步小兵自由行路（嚴格限制喺前排 Z = 1.3 ~ 4.8，100% 唔會行去後排遮住三座算式台！）
         interactiveBlocks.forEach(b => {
             if (b.isArenaMinion && b.group.visible && additionState.phase === 'catch') {
                 b.baseX += (b.vx || 1.2) * dt;
-                b.baseZ += (b.vz || 1.2) * dt;
-                if (b.baseX < -5.2 || b.baseX > 5.2) b.vx = -(b.vx || 1.2);
-                if (b.baseZ < 0.2 || b.baseZ > 5.2) b.vz = -(b.vz || 1.2);
+                b.baseZ += (b.vz || 1.1) * dt;
+                if (b.baseX < -5.4 || b.baseX > 5.4) b.vx = -(b.vx || 1.2);
+                if (b.baseZ < 1.3 || b.baseZ > 4.8) b.vz = -(b.vz || 1.1);
+                b.baseX = Math.max(-5.5, Math.min(5.5, b.baseX));
+                b.baseZ = Math.max(1.3, Math.min(4.8, b.baseZ));
                 b.group.position.x = b.baseX;
                 b.group.position.z = b.baseZ;
                 b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 7 + b.animTime)) * 0.22;
@@ -1961,7 +2055,7 @@ function animate() {
             }
         });
 
-        // 3. 控制馬利奧喺競技場 360 度奔跑捉小兵
+        // 3. 馬利奧喺前排競技場 360 度奔跑捉小兵
         let vx = 0, vz = 0;
         const speed = 6.8;
         if (additionState.phase === 'catch' && !gameState.isBusy) {
@@ -1985,7 +2079,7 @@ function animate() {
         const isWalking = Math.hypot(vx, vz) > 0.05;
         if (isWalking) {
             additionState.heroX = Math.max(-6.2, Math.min(6.2, additionState.heroX + vx * dt));
-            additionState.heroZ = Math.max(-0.6, Math.min(5.8, additionState.heroZ + vz * dt));
+            additionState.heroZ = Math.max(0.6, Math.min(5.8, additionState.heroZ + vz * dt));
             additionState.walkCycle += dt * 16;
             additionState.facingAngle = Math.atan2(vx, vz);
         }
@@ -1997,7 +2091,6 @@ function animate() {
             additionState.compassRing.position.set(additionState.heroX, 0.38, additionState.heroZ);
         }
 
-        // 檢查馬利奧係咪捉到場內嘅柱方形小兵
         if (additionState.phase === 'catch' && !gameState.isBusy) {
             for (let i = 0; i < interactiveBlocks.length; i++) {
                 const m = interactiveBlocks[i];
@@ -2010,54 +2103,41 @@ function animate() {
             }
         }
 
-        // 4. 階段二：兩隻柱方形小兵高速衝向中央合體，變身 2 倍大皇冠巨型小兵！
+        // 4. 階段二：三座台 [ A ] + [ B ] = [ C ] 齊人！左台與中台小兵留喺原位歡呼，右台答案小兵變大準備發射！
         if (additionState.phase === 'fusing') {
-            additionState.fuseTimer += dt * 1.8;
+            additionState.fuseTimer += dt * 2.0;
             const p = Math.min(1, additionState.fuseTimer);
             if (additionState.leftPodMinion) {
-                additionState.leftPodMinion.group.position.x = THREE.MathUtils.lerp(-2.5, 0, p);
-                additionState.leftPodMinion.group.position.y = 1.15 + Math.sin(p * Math.PI) * 1.2;
+                additionState.leftPodMinion.group.position.y = 1.15 + Math.abs(Math.sin(p * Math.PI * 2)) * 0.45;
+            }
+            if (additionState.midPodMinion) {
+                additionState.midPodMinion.group.position.y = 1.15 + Math.abs(Math.sin(p * Math.PI * 2)) * 0.45;
             }
             if (additionState.rightPodMinion) {
-                additionState.rightPodMinion.group.position.x = THREE.MathUtils.lerp(2.5, 0, p);
-                additionState.rightPodMinion.group.position.y = 1.15 + Math.sin(p * Math.PI) * 1.2;
+                const s = THREE.MathUtils.lerp(0.86, 1.12, p);
+                additionState.rightPodMinion.group.scale.setScalar(s);
+                additionState.rightPodMinion.group.position.y = 1.25 + Math.sin(p * Math.PI) * 0.6;
             }
             if (p >= 1) {
-                if (additionState.leftPodMinion) additionState.leftPodMinion.group.visible = false;
-                if (additionState.rightPodMinion) additionState.rightPodMinion.group.visible = false;
-
-                // 生成戴住黃金皇冠嘅 2 倍大巨型超人小兵企喺大砲口！
-                const giant = create3DNumberCharacter(additionState.targetSum, 0, -3.2, 1.38);
-                giant.baseY = 1.85;
-                giant.group.position.set(0, 1.85, -3.2);
-                const crown = new THREE.Mesh(
-                    new THREE.ConeGeometry(0.45, 0.55, 6),
-                    new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.6 })
-                );
-                crown.position.set(0, 1.35, 0);
-                giant.group.add(crown);
-                additionState.giantMinion = giant;
-                interactiveBlocks.push(giant);
-
-                emitStarParticles(new THREE.Vector3(0, 2.0, -2.5));
                 playSuccessChime();
                 additionState.phase = 'readyToFire';
                 ensureAdditionFireButton().classList.remove('hidden');
             }
         }
 
-        // 5. 階段三：撳掣開炮！巨型小兵好似火箭咁飛上天撞爆飛碟大魔王！
-        if (additionState.phase === 'firing' && additionState.giantMinion && additionState.ufoGroup) {
+        // 5. 階段三：撳掣開炮！右邊答案台 (X = 3.7) 嘅皇冠小兵飛上天撞爆飛碟大魔王！
+        if (additionState.phase === 'firing' && additionState.rightPodMinion && additionState.ufoGroup) {
             additionState.fireProgress = Math.min(1, additionState.fireProgress + dt * 2.2);
             const fp = additionState.fireProgress;
             const ufoPos = additionState.ufoGroup.position;
-            additionState.giantMinion.group.position.x = THREE.MathUtils.lerp(0, ufoPos.x, fp);
-            additionState.giantMinion.group.position.y = THREE.MathUtils.lerp(1.85, ufoPos.y, fp) + Math.sin(fp * Math.PI) * 1.8;
-            additionState.giantMinion.group.position.z = THREE.MathUtils.lerp(-3.2, ufoPos.z, fp);
-            additionState.giantMinion.group.rotation.x += dt * 15;
+            const ansMinion = additionState.rightPodMinion.group;
+            ansMinion.position.x = THREE.MathUtils.lerp(3.7, ufoPos.x, fp);
+            ansMinion.position.y = THREE.MathUtils.lerp(1.35, ufoPos.y, fp) + Math.sin(fp * Math.PI) * 1.8;
+            ansMinion.position.z = THREE.MathUtils.lerp(-1.8, ufoPos.z, fp);
+            ansMinion.rotation.x += dt * 14;
 
             if (fp >= 1) {
-                additionState.giantMinion.group.visible = false;
+                ansMinion.visible = false;
                 additionState.phase = 'celebrate';
                 additionState.ufoHitTimer = 1.8;
                 gameState.isBusy = true;
@@ -2069,18 +2149,20 @@ function animate() {
                 const b = additionState.caughtB;
                 const sum = additionState.targetSum;
                 setPromptUI(
-                    `💥 轟隆！正中目標！【 ${a} + ${b} = ${sum} 】巨型 ${sum} 號小兵成功擊退飛碟！`,
-                    `一齊數下飛碟跌落嚟嘅 ${sum} 粒黃金獎牌啦！`
+                    `💥 轟隆！正中目標！【 ${a} + ${b} = ${sum} 】${sum} 號皇冠小兵成功擊退飛碟！`,
+                    `準備進入下一題加法合體挑戰... 🎉`
                 );
-                runQuantityCountingSequence(sum, true, true);
+                const nextTimer = setTimeout(() => {
+                    if (!isToyModalOpen()) startNewRound();
+                }, 2200);
+                activeCountingTimeouts.push(nextTimer);
             }
         }
 
-        // 競技場專屬鏡頭角度
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, additionState.heroX * 0.25, dt * 4);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 8.8, dt * 4);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, 11.8, dt * 4);
-        camera.lookAt(additionState.heroX * 0.2, 1.2, -1.8);
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, additionState.heroX * 0.22, dt * 4);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 9.2, dt * 4);
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, 12.4, dt * 4);
+        camera.lookAt(additionState.heroX * 0.15, 1.3, -1.2);
     }
     // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
     if (marioStageGroup.visible && marioHero.group) {
