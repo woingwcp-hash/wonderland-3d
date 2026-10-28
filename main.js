@@ -132,6 +132,7 @@ function switchMode(newMode) {
     trainGroup.visible = (newMode === 'train');
     marioStageGroup.visible = (newMode === 'mario');
     treasureIslandGroup.visible = (newMode === 'treasure');
+    const tb = document.getElementById('maze-tier-bar'); if (tb) tb.style.display = (newMode === 'treasure' && !gameState.inLobby) ? 'flex' : 'none';
     environmentGroup.visible = (newMode !== 'treasure') && !gameState.settings.lowDistraction;
     const mainFloor = scene ? scene.getObjectByName('mainFloor') : null;
     if (mainFloor) mainFloor.visible = (newMode !== 'treasure');
@@ -314,7 +315,97 @@ function setupMarioRound(choices, target, meta) {
     );
 }
 
-// ==================== Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊】 ====================
+// ==================== Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊 (5大教學層次 + 清爽HUD)】 ====================
+const MAZE_COUNTING_TIERS = [
+    { id: 'forward',  label: '🌱 1.基礎順數', desc: '由 1 順數到 5' },
+    { id: 'count_on', label: '🧩 2.中途接數', desc: '由中間數字接龍順數' },
+    { id: 'missing',  label: '🕵️ 3.失蹤填空', desc: '搵出隊伍中間失蹤嘅數字插隊' },
+    { id: 'backward', label: '🚀 4.火箭倒數', desc: '由大至細倒數 5➔4➔3➔2➔1' },
+    { id: 'skip',     label: '⚡ 5.單雙跳數', desc: '挑戰雙數 2,4,6,8,10 或單數 1,3,5,7,9' }
+];
+
+// 自動將方向盤移去右下角，並喺頂部建立「5大數數層次切換欄」
+function ensureMazeCompactHUD() {
+    const dpad = document.getElementById('treasure-dpad-bar');
+    if (dpad && !dpad.dataset.compactMoved) {
+        dpad.dataset.compactMoved = 'true';
+        // 移出底部中間堆疊區，改為固定喺畫面右下角，唔再遮擋迷宮起點！
+        document.body.appendChild(dpad);
+        dpad.className = 'fixed right-3 sm:right-6 bottom-24 sm:bottom-28 z-30 pointer-events-auto items-center justify-center gap-1.5 sm:gap-2 bg-slate-900/75 backdrop-blur-md p-2 sm:p-3 rounded-3xl border-2 border-amber-400 shadow-xl hidden';
+        const infoBox = dpad.querySelector('div.border-r');
+        if (infoBox) infoBox.className = 'hidden';
+    }
+
+    let tierBar = document.getElementById('maze-tier-bar');
+    if (!tierBar) {
+        tierBar = document.createElement('div');
+        tierBar.id = 'maze-tier-bar';
+        tierBar.className = 'fixed top-14 sm:top-16 inset-x-0 z-30 flex flex-wrap items-center justify-center gap-1.5 px-2 pointer-events-none';
+        document.body.appendChild(tierBar);
+    }
+    renderMazeTierBarUI();
+}
+
+function renderMazeTierBarUI() {
+    const tierBar = document.getElementById('maze-tier-bar');
+    if (!tierBar) return;
+    const curTier = treasureHero.countingTier || 'forward';
+    const isBlind = Boolean(treasureHero.blindMode);
+
+    let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/90 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border-2 border-sky-300 shadow-lg">`;
+    MAZE_COUNTING_TIERS.forEach(t => {
+        const active = (curTier === t.id);
+        const btnCls = active
+            ? 'bg-amber-400 text-amber-950 border-amber-500 shadow-sm scale-105'
+            : 'bg-slate-100 hover:bg-sky-50 text-slate-600 border-slate-200';
+        html += `<button onclick="selectMazeCountingTier('${t.id}')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm border ${btnCls}">${t.label}</button>`;
+    });
+
+    const blindCls = isBlind
+        ? 'bg-purple-600 text-white border-purple-400'
+        : 'bg-emerald-500 text-white border-emerald-300';
+    html += `<button onclick="toggleMazeBlindMode()" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm border ml-1 ${blindCls}" title="切換顯示或隱藏下一個目標數字提示">
+        ${isBlind ? '❓ 挑戰：自己諗' : '👁️ 提示：開'}
+    </button></div>`;
+    tierBar.innerHTML = html;
+}
+
+function selectMazeCountingTier(tierId) {
+    playPopSound(580);
+    treasureHero.countingTier = tierId;
+    // 「失蹤填空」預設開啟「❓ 自己諗」模式，等小朋友觀察隊伍空位推理！
+    treasureHero.blindMode = (tierId === 'missing');
+    renderMazeTierBarUI();
+    startNewRound();
+}
+
+function toggleMazeBlindMode() {
+    playPopSound(520);
+    treasureHero.blindMode = !treasureHero.blindMode;
+    renderMazeTierBarUI();
+    updateParadeProgressBanner();
+    refreshMazeGuideDots();
+    syncMazeTargetCardDisplay();
+}
+
+function syncMazeTargetCardDisplay() {
+    if (gameState.mode !== 'treasure') return;
+    if (treasureHero.blindMode && !treasureHero.hintRevealedThisStep && !treasureHero.allRescued) {
+        const cardEl = document.getElementById('target-number-card');
+        const numEl = document.getElementById('target-badge-num');
+        const dotsEl = document.getElementById('target-badge-dots');
+        if (cardEl && numEl && dotsEl) {
+            cardEl.style.background = 'linear-gradient(to bottom, #A855F7, #7E22CE)';
+            cardEl.style.color = '#FFFFFF';
+            numEl.textContent = '？';
+            dotsEl.textContent = '撳💡提示';
+            dotsEl.className = 'text-[10px] sm:text-xs font-black text-purple-100 mt-0.5';
+        }
+    } else {
+        updateTargetBadgeUI(gameState.targetKey, false);
+    }
+}
+
 function updateParadeProgressBanner() {
     const banner = document.getElementById('counting-banner');
     const dotsContainer = document.getElementById('counting-dots');
@@ -322,23 +413,31 @@ function updateParadeProgressBanner() {
     if (!banner || !dotsContainer) return;
 
     banner.classList.remove('hidden');
+    // 隱藏「一齊數數看」嗰行細字，令進度條更纖巧唔阻畫面！
+    if (dotsContainer.previousElementSibling) {
+        dotsContainer.previousElementSibling.style.display = (gameState.mode === 'treasure') ? 'none' : 'block';
+    }
     emojiEl.textContent = '🐣';
+    emojiEl.className = 'text-xl sm:text-2xl';
     dotsContainer.innerHTML = '';
 
     const seq = treasureHero.sequence || [1, 2, 3, 4, 5];
-    seq.forEach((num, idx) => {
-        const isRescued = idx < treasureHero.nextSeqIndex;
-        const isCurrent = idx === treasureHero.nextSeqIndex && !treasureHero.allRescued;
+    const rescuedSet = treasureHero.rescuedSet || new Set();
+    const hideNumber = treasureHero.blindMode && !treasureHero.hintRevealedThisStep;
+
+    seq.forEach(num => {
+        const isRescued = rescuedSet.has(num);
+        const isCurrent = (!treasureHero.allRescued && num === gameState.targetKey);
         const pill = document.createElement('span');
         if (isRescued) {
-            pill.className = 'inline-flex items-center justify-center bg-emerald-500 text-white px-2.5 py-0.5 rounded-xl text-sm sm:text-lg font-black shadow-sm star-earned';
-            pill.textContent = `✓ ${num}`;
+            pill.className = 'inline-flex items-center justify-center bg-emerald-500 text-white px-2 py-0.5 rounded-lg text-xs sm:text-base font-black shadow-sm star-earned';
+            pill.textContent = `✓${num}`;
         } else if (isCurrent) {
-            pill.className = 'inline-flex items-center justify-center bg-amber-400 text-slate-950 px-3 py-0.5 rounded-xl text-base sm:text-xl font-black border-2 border-orange-500 animate-bounce shadow';
-            pill.textContent = `🎯 ${num}`;
+            pill.className = 'inline-flex items-center justify-center bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-lg text-sm sm:text-lg font-black border-2 border-orange-500 animate-bounce shadow';
+            pill.textContent = hideNumber ? '🎯？' : `🎯${num}`;
         } else {
-            pill.className = 'inline-flex items-center justify-center bg-slate-100 text-slate-400 px-2 py-0.5 rounded-xl text-sm sm:text-base font-bold';
-            pill.textContent = String(num);
+            pill.className = 'inline-flex items-center justify-center bg-slate-100 text-slate-400 px-2 py-0.5 rounded-lg text-xs sm:text-sm font-bold';
+            pill.textContent = (treasureHero.countingTier === 'missing' || hideNumber) ? '？' : String(num);
         }
         dotsContainer.appendChild(pill);
     });
@@ -348,6 +447,7 @@ function refreshMazeGuideDots() {
     if (!treasureHero.pathDots) return;
     treasureHero.pathDots.forEach(d => { d.visible = false; });
 
+    const showAssist = !treasureHero.blindMode || treasureHero.hintRevealedThisStep || treasureHero.allRescued;
     const heroCell = mazeWorldToGrid(treasureHero.currentX, treasureHero.currentZ);
     let goalCol = 4;
     let goalRow = 0;
@@ -360,11 +460,14 @@ function refreshMazeGuideDots() {
 
         interactiveBlocks.forEach(b => {
             if (!b.rescued) {
-                b.state = (b.itemKey === gameState.targetKey) ? 'hint' : 'idle';
-                if (b.haloMesh) b.haloMesh.material.opacity = (b.itemKey === gameState.targetKey) ? 0.9 : 0.0;
+                const shouldGlow = showAssist && (b.itemKey === gameState.targetKey);
+                b.state = shouldGlow ? 'hint' : 'idle';
+                if (b.haloMesh) b.haloMesh.material.opacity = shouldGlow ? 0.9 : 0.0;
             }
         });
     }
+
+    if (!showAssist) return;
 
     const path = findMazePathBFS(heroCell.col, heroCell.row, goalCol, goalRow);
     path.slice(0, treasureHero.pathDots.length).forEach((pt, idx) => {
@@ -375,39 +478,49 @@ function refreshMazeGuideDots() {
 }
 
 function setupTreasureRound() {
+    ensureMazeCompactHUD();
+    if (!treasureHero.countingTier) treasureHero.countingTier = 'forward';
     if (typeof treasureHero.mazeLevelIdx !== 'number') treasureHero.mazeLevelIdx = 0;
+
     const lvlIdx = treasureHero.mazeLevelIdx % MAZE_LEVEL_DESIGNS.length;
     const lvl = MAZE_LEVEL_DESIGNS[lvlIdx];
-
     rebuild3DMazeWalls(lvlIdx);
 
+    const tier = treasureHero.countingTier;
+    const useHighRange = (gameState.settings.range === '6-10') || (gameState.settings.range === '1-10' && lvlIdx % 2 === 1);
+
     let seq = [1, 2, 3, 4, 5];
-    if (gameState.settings.range === '6-10') {
-        seq = [6, 7, 8, 9, 10];
-    } else if (gameState.settings.range === '1-10') {
-        seq = (lvlIdx % 2 === 0) ? [1, 2, 3, 4, 5] : [6, 7, 8, 9, 10];
+    let preRescuedNums = [];
+    let distractors = [];
+
+    if (tier === 'forward') {
+        seq = useHighRange ? [6, 7, 8, 9, 10] : [1, 2, 3, 4, 5];
+    } else if (tier === 'count_on') {
+        const startN = [2, 3, 4, 5, 6][Math.floor(Math.random() * 5)];
+        seq = [startN, startN + 1, startN + 2, startN + 3, startN + 4];
+    } else if (tier === 'missing') {
+        seq = useHighRange ? [6, 7, 8, 9, 10] : [1, 2, 3, 4, 5];
+        // 隊伍入面已經有第 1, 3, 5 個數字跟住馬利奧，小朋友要去迷宮搵失蹤嘅第 2 同第 4 個數字插隊！
+        preRescuedNums = [seq[0], seq[2], seq[4]];
+        const allNums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        distractors = allNums.filter(n => !seq.includes(n)).sort(() => Math.random() - 0.5).slice(0, 3);
+    } else if (tier === 'backward') {
+        seq = useHighRange ? [10, 9, 8, 7, 6] : [5, 4, 3, 2, 1];
+    } else if (tier === 'skip') {
+        const isEven = (lvlIdx % 2 === 0);
+        seq = isEven ? [2, 4, 6, 8, 10] : [1, 3, 5, 7, 9];
     }
 
     treasureHero.sequence = seq;
-    treasureHero.nextSeqIndex = 0;
+    treasureHero.rescuedSet = new Set(preRescuedNums);
     treasureHero.paradeFollowers = [];
     treasureHero.trail = [];
     treasureHero.pathQueue = [];
     treasureHero.allRescued = false;
     treasureHero.castleVictoryTriggered = false;
+    treasureHero.hintRevealedThisStep = false;
 
-    const firstTarget = seq[0];
-    gameState.targetKey = firstTarget;
-    gameState.targetNumber = firstTarget;
-    updateTargetBadgeUI(firstTarget, false);
-
-    const shuffledSpots = [...lvl.spots].sort(() => Math.random() - 0.5);
-    seq.forEach((num, idx) => {
-        const spot = shuffledSpots[idx % shuffledSpots.length];
-        const friend = create3DMazeNumberFriend(num, spot.col, spot.row);
-        interactiveBlocks.push(friend);
-    });
-
+    // 擺放馬利奧於起點並初始化跟尾軌跡
     const startPos = mazeGridToWorld(4, 7);
     treasureHero.currentX = startPos.x;
     treasureHero.currentZ = startPos.z;
@@ -415,9 +528,34 @@ function setupTreasureRound() {
     treasureHero.moveDirZ = 0;
     treasureHero.facingAngle = Math.PI;
 
-    for (let i = 0; i < 65; i++) {
-        treasureHero.trail.push({ x: startPos.x, z: startPos.z + i * 0.02, angle: Math.PI });
+    for (let i = 0; i < 75; i++) {
+        treasureHero.trail.push({ x: startPos.x, z: startPos.z + (i % 3) * 0.02, angle: Math.PI });
     }
+
+    // 如果係「🕵️ 失蹤填空」，開局直接生成已歸隊嘅 3 個數字排喺馬利奧身後！
+    preRescuedNums.forEach(num => {
+        const friend = create3DMazeNumberFriend(num, 4, 7);
+        friend.rescued = true;
+        friend.state = 'idle';
+        if (friend.haloMesh) friend.haloMesh.material.opacity = 0;
+        friend.group.scale.setScalar(0.56);
+        friend.bodyMesh.rotation.x = 0;
+        interactiveBlocks.push(friend);
+        treasureHero.paradeFollowers.push(friend);
+    });
+
+    // 將需要喺迷宮尋找嘅數字（連同干擾項）放入迷宮 5 個秘密位置
+    const toSpawnInMaze = [...seq.filter(n => !treasureHero.rescuedSet.has(n)), ...distractors];
+    const shuffledSpots = [...lvl.spots].sort(() => Math.random() - 0.5);
+    toSpawnInMaze.slice(0, shuffledSpots.length).forEach((num, idx) => {
+        const spot = shuffledSpots[idx];
+        const friend = create3DMazeNumberFriend(num, spot.col, spot.row);
+        interactiveBlocks.push(friend);
+    });
+
+    const firstTarget = seq.find(n => !treasureHero.rescuedSet.has(n));
+    gameState.targetKey = firstTarget;
+    gameState.targetNumber = firstTarget;
 
     if (treasureHero.group) {
         treasureHero.group.position.set(startPos.x, 0.3, startPos.z);
@@ -430,14 +568,41 @@ function setupTreasureRound() {
         treasureHero.clickMarker.visible = false;
     }
 
+    renderMazeTierBarUI();
     updateParadeProgressBanner();
     refreshMazeGuideDots();
+    syncMazeTargetCardDisplay();
 
     const firstMeta = getCognitiveItemMeta(firstTarget);
-    setPromptUI(
-        `${lvl.name}：請先去救第 1 個朋友「${firstMeta.title}」！`,
-        `順序搵出 ${seq.join(' ➔ ')} 排隊跟尾！可按方向掣，或直接撳迷宮入面嘅數字自動轉彎行過去！`
-    );
+    const shownTitle = (treasureHero.blindMode && !treasureHero.hintRevealedThisStep) ? '神秘數字（？）' : firstMeta.title;
+
+    if (tier === 'missing') {
+        setPromptUI(
+            `🕵️ 失蹤填空：隊伍有 ${preRescuedNums.join('、')}，中間缺咗邊個？請搵出嚟插隊！`,
+            `觀察進度條 [ ✓${seq[0]} ➔ 🎯？ ➔ ✓${seq[2]} ]，喺迷宮搵出正確數字補返入隊伍啦！`
+        );
+    } else if (tier === 'backward') {
+        setPromptUI(
+            `🚀 火箭倒數挑戰（${seq[0]} 倒數去 ${seq[4]}）：請先救「${shownTitle}」！`,
+            `由大至細倒數：${seq.join(' ➔ ')}，帶佢哋去皇冠城堡發射煙花！`
+        );
+    } else if (tier === 'skip') {
+        const oddEvenLabel = (seq[0] % 2 === 0) ? '雙數小隊 (2,4,6,8,10)' : '單數小隊 (1,3,5,7,9)';
+        setPromptUI(
+            `⚡ 跳數挑戰【${oddEvenLabel}】：請先去救「${shownTitle}」！`,
+            `兩個一數：${seq.join(' ➔ ')}，試下直接撳迷宮入面嘅數字自動轉彎行過去！`
+        );
+    } else if (tier === 'count_on') {
+        setPromptUI(
+            `🧩 中途接數（由 ${seq[0]} 開始順數）：請先去救「${shownTitle}」！`,
+            `接龍任務：${seq.join(' ➔ ')}，可按右下角方向掣或直接撳數字公仔！`
+        );
+    } else {
+        setPromptUI(
+            `${lvl.name}：請先去救「${shownTitle}」組隊巡遊！`,
+            `順序搵出 ${seq.join(' ➔ ')} 排隊跟尾！（頂部可隨時切換 5 種數數難度層次）`
+        );
+    }
 }
 
 function setTreasureMoveDir(dx, dz) {
@@ -573,6 +738,12 @@ function scheduleAutoVisualPrompt() {
 
 function triggerVisualHint(manualClick = false) {
     if (gameState.mode === 'explore' || gameState.isBusy) return;
+    if (gameState.mode === 'treasure') {
+        treasureHero.hintRevealedThisStep = true;
+        updateParadeProgressBanner();
+        refreshMazeGuideDots();
+        syncMazeTargetCardDisplay();
+    }
     const rightBlock = interactiveBlocks.find(b => !b.rescued && b.itemKey === gameState.targetKey);
     if (rightBlock) {
         rightBlock.state = 'hint';
@@ -692,7 +863,7 @@ function handleBlockTapped(block) {
         return;
     }
 
-    // Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊】
+    // Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊 (支援 5 大層次與插隊邏輯)】
     if (gameState.mode === 'treasure') {
         if (block.rescued) return;
 
@@ -702,35 +873,51 @@ function handleBlockTapped(block) {
             if (block.haloMesh) block.haloMesh.material.opacity = 0;
             block.group.scale.setScalar(0.56);
             block.bodyMesh.rotation.x = 0;
-            treasureHero.paradeFollowers.push(block);
-            treasureHero.nextSeqIndex += 1;
 
-            playCountingNote(treasureHero.nextSeqIndex);
+            const seq = treasureHero.sequence || [1, 2, 3, 4, 5];
+            if (!treasureHero.rescuedSet) treasureHero.rescuedSet = new Set();
+            treasureHero.rescuedSet.add(tappedKey);
+
+            // 將新救出嘅數字加入隊伍，並按數列順序自動排位（喺「失蹤填空」模式會自動插隊入中間！）
+            treasureHero.paradeFollowers.push(block);
+            treasureHero.paradeFollowers.sort((a, b) => seq.indexOf(a.itemKey) - seq.indexOf(b.itemKey));
+
+            treasureHero.hintRevealedThisStep = false;
+            const noteIdx = (treasureHero.countingTier === 'backward')
+                ? (seq.length - seq.indexOf(tappedKey))
+                : (seq.indexOf(tappedKey) + 1);
+            playCountingNote(Math.max(1, noteIdx));
             playCoinSound();
             emitStarParticles(block.group.position);
-            updateParadeProgressBanner();
 
-            const seq = treasureHero.sequence;
-            if (treasureHero.nextSeqIndex < seq.length) {
-                const nextTarget = seq[treasureHero.nextSeqIndex];
+            const nextTarget = seq.find(n => !treasureHero.rescuedSet.has(n));
+            if (nextTarget !== undefined) {
                 gameState.targetKey = nextTarget;
                 gameState.targetNumber = nextTarget;
-                updateTargetBadgeUI(nextTarget, false);
+                updateParadeProgressBanner();
                 refreshMazeGuideDots();
+                syncMazeTargetCardDisplay();
 
                 const nextMeta = getCognitiveItemMeta(nextTarget);
-                const joinedList = seq.slice(0, treasureHero.nextSeqIndex).join(' ➔ ');
+                const nextTitle = treasureHero.blindMode ? '下一個失蹤數字（？）' : nextMeta.title;
                 setPromptUI(
-                    `🎉 成功救出「${tappedMeta.title}」排隊跟尾！下一位請救「${nextMeta.title}」！`,
-                    `巡遊隊伍：[ 🍄馬利奧 ➔ ${joinedList} ]，跟住地上發光腳印去搵「${nextMeta.title}」啦！`
+                    `🎉 好叻呀！「${tappedMeta.title}」成功歸隊！接住請搵「${nextTitle}」！`,
+                    `睇下身後嘅數字小隊同埋進度條，繼續喺迷宮搵出下一位朋友啦！`
                 );
             } else {
+                // 全隊集結完畢！清除迷宮入面多餘嘅干擾數字，並打開皇冠城堡大門！
                 treasureHero.allRescued = true;
+                interactiveBlocks.forEach(b => {
+                    if (!b.rescued) b.group.visible = false;
+                });
                 playChestOpenSound();
+                updateParadeProgressBanner();
                 refreshMazeGuideDots();
+                updateTargetBadgeUI(tappedKey, false);
+
                 setPromptUI(
-                    `🏰 救齊 ${seq.join(' ➔ ')} 喇！北面「皇冠城堡大門」已經打開！`,
-                    `快啲帶住身後嘅數字巡遊隊伍，行入最北面嘅城堡大門放煙花過關啦！`
+                    `🏰 全隊集結完畢（${seq.join(' ➔ ')}）！北面「皇冠城堡大門」已經打開！`,
+                    `快啲帶住身後整齊嘅數字巡遊隊伍，衝入最北面嘅城堡大門放煙花啦！`
                 );
                 const heroCell = mazeWorldToGrid(treasureHero.currentX, treasureHero.currentZ);
                 treasureHero.pathQueue = findMazePathBFS(heroCell.col, heroCell.row, 4, 0);
@@ -744,11 +931,13 @@ function handleBlockTapped(block) {
             treasureHero.moveDirZ = 0;
 
             const targetMeta = getCognitiveItemMeta(gameState.targetKey);
+            const hintName = (treasureHero.blindMode && !treasureHero.hintRevealedThisStep)
+                ? '正確嘅下一個數字（可撳右上角💡提示）'
+                : `「${targetMeta.title}」`;
             setPromptUI(
-                `呢個係「${tappedMeta.title}」，佢排喺後面㗎！我哋先去救「${targetMeta.title}」先啦！`,
-                `順序小提示：請跟住地上金色發光腳印去搵「${targetMeta.title}」`
+                `呢個係「${tappedMeta.title}」，未輪到佢住喎！我哋先去救${hintName}啦！`,
+                `小提示：請對照下方進度條順序，搵出正確嘅數字朋友`
             );
-            refreshMazeGuideDots();
         }
         return;
     }
@@ -1284,12 +1473,18 @@ function animate() {
             });
         }
 
-        const camTargetX = treasureHero.currentX * 0.38;
-        const camTargetY = treasureHero.castleVictoryTriggered ? 9.2 : 14.2;
-        const camTargetZ = treasureHero.castleVictoryTriggered ? -1.2 : (treasureHero.currentZ * 0.45 + 8.6);
-        const lookX = treasureHero.currentX * 0.35;
+        const tierBarEl = document.getElementById('maze-tier-bar');
+        if (tierBarEl) {
+            tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'treasure') ? 'flex' : 'none';
+        }
+
+        // 將 lookZ 往南偏移 (+1.15)，令成個 3D 迷宮喺螢幕上往上移高，完全避開底部提示卡！
+        const camTargetX = treasureHero.currentX * 0.32;
+        const camTargetY = treasureHero.castleVictoryTriggered ? 9.2 : 14.8;
+        const camTargetZ = treasureHero.castleVictoryTriggered ? -1.2 : (treasureHero.currentZ * 0.35 + 9.4);
+        const lookX = treasureHero.currentX * 0.28;
         const lookY = treasureHero.castleVictoryTriggered ? 1.8 : 0.2;
-        const lookZ = treasureHero.castleVictoryTriggered ? -7.2 : (treasureHero.currentZ * 0.4 - 0.6);
+        const lookZ = treasureHero.castleVictoryTriggered ? -7.2 : (treasureHero.currentZ * 0.3 + 1.15);
 
         camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTargetX, dt * 4.5);
         camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTargetY, dt * 4.5);
