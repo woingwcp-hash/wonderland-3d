@@ -706,16 +706,22 @@ function nudgeTreasureHero(dx, dz) {
     }
 }
 
-// ==================== Mode 6: 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (三台並列 A + B = C 完整算式版)】 ====================
-const ADDITION_TIERS = [
-    { id: 'sum5',    label: '🌱 1.五以內 (A+B=?)' },
-    { id: 'sum10',   label: '🧩 2.十以內 (A+B=?)' },
-    { id: 'sum12',   label: '🚀 3.雙位數合體 (如6+6=12)' },
-    { id: 'missing', label: '🕵️ 4.補數 (A+?=C)' },
-    { id: 'free2',   label: '🔥 5.自由湊數 (?+?=C)' }
+// ==================== Mode 6: 【🛸 3D 競技場：加減法小兵大作戰 (三台並列 A ± B = C 完整算式版)】 ====================
+const ADDITION_OPS = [
+    { id: 'add', label: '➕ 加法' },
+    { id: 'sub', label: '➖ 減法' },
+    { id: 'mix', label: '🔄 加減混合' }
 ];
 
-// 後備安全定義：確保即使 scene3d.js 缺少輔助函式亦 100% 正常運作
+const ADDITION_TIERS = [
+    { id: 'sum5',    label: '🌱 1.五以內' },
+    { id: 'sum10',   label: '🧩 2.十以內' },
+    { id: 'sum12',   label: '🚀 3.十二以內 (如12-6)' },
+    { id: 'missing', label: '🕵️ 4.補數 (A±?=C)' },
+    { id: 'free2',   label: '🔥 5.自由湊數 (?±?=C)' }
+];
+
+// 後備安全定義：建立「？ 號半透明目標框」
 if (typeof createQuestionSlotMinion !== 'function') {
     window.createQuestionSlotMinion = function (x, z, borderColorHex = '#F59E0B') {
         const group = new THREE.Group();
@@ -747,6 +753,43 @@ if (typeof createQuestionSlotMinion !== 'function') {
     };
 }
 
+// 升級版能量球顯示：加法顯示兩堆發光球；減法會將「被減走嘅球」變成半透明暗灰色，突顯剩低幾多粒！
+window.spawnAdditionEnergyDots = function (countA, countB, isSub = false) {
+    if (!additionState.energyDotsGroup) return;
+    additionState.energyDotsGroup.clear();
+
+    const makeDots = (count, centerX, colorHex, fadedCount = 0) => {
+        if (!count || count <= 0) return;
+        const perRow = Math.min(count, 6);
+        const spacing = 0.36;
+        for (let i = 0; i < count; i++) {
+            const row = Math.floor(i / 6);
+            const col = i % 6;
+            const rowCount = (row > 0) ? Math.min(6, count - row * 6) : perRow;
+            const startX = centerX - ((rowCount - 1) * spacing) / 2;
+
+            // 喺減法模式，最後 fadedCount 粒球變成半透明灰色，代表「俾人拿走咗」！
+            const isTakenAway = isSub && fadedCount > 0 && (i >= count - fadedCount);
+            const mat = isTakenAway
+                ? new THREE.MeshStandardMaterial({ color: 0x94A3B8, roughness: 0.6, transparent: true, opacity: 0.32 })
+                : new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.2, emissive: colorHex, emissiveIntensity: 0.32 });
+
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(isTakenAway ? 0.12 : 0.15, 16, 16), mat);
+            ball.position.set(startX + col * spacing, 2.55 + row * 0.36, -1.8);
+            additionState.energyDotsGroup.add(ball);
+        }
+    };
+
+    if (isSub) {
+        const takeAway = countB || (additionState.caughtSum !== null && countA ? Math.max(0, countA - additionState.caughtSum) : 0);
+        makeDots(countA, -3.7, 0xF43F5E, takeAway);
+        makeDots(countB, 0.0, 0x0EA5E9, 0);
+    } else {
+        makeDots(countA, -3.7, 0xF43F5E, 0);
+        makeDots(countB, 0.0, 0x0EA5E9, 0);
+    }
+};
+
 function updateAdditionEquationHUD(leftVal, rightVal, sumVal) {
     let board = document.getElementById('addition-equation-hud');
     if (!board) {
@@ -761,15 +804,20 @@ function updateAdditionEquationHUD(leftVal, rightVal, sumVal) {
     }
     board.style.display = 'flex';
 
+    const isSub = (additionState.currentOp === 'sub');
+    const opSymbol = isSub ? '−' : '+';
+    const opColor = isSub ? 'text-sky-600' : 'text-amber-500';
+    const borderColor = isSub ? 'border-sky-400' : 'border-purple-400';
+
     const boxStyle = (val, bgCls) => {
         const isQ = (val === '?');
         return `<span class="inline-flex items-center justify-center min-w-[44px] sm:min-w-[58px] h-11 sm:h-14 px-3 rounded-2xl font-black text-2xl sm:text-4xl border-4 shadow-md ${isQ ? 'bg-amber-300 text-slate-950 border-orange-500 animate-bounce' : bgCls}">${val}</span>`;
     };
 
     board.innerHTML = `
-        <div class="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2 rounded-3xl border-4 border-purple-400 shadow-2xl flex items-center gap-2 sm:gap-3.5">
+        <div class="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2 rounded-3xl border-4 ${borderColor} shadow-2xl flex items-center gap-2 sm:gap-3.5">
             ${boxStyle(leftVal, 'bg-rose-500 text-white border-rose-200')}
-            <span class="text-2xl sm:text-4xl font-black text-amber-500">+</span>
+            <span class="text-3xl sm:text-5xl font-black ${opColor} px-1">${opSymbol}</span>
             ${boxStyle(rightVal, 'bg-sky-500 text-white border-sky-200')}
             <span class="text-2xl sm:text-4xl font-black text-slate-600">=</span>
             ${boxStyle(sumVal, 'bg-emerald-500 text-white border-emerald-200')}
@@ -780,10 +828,25 @@ function updateAdditionEquationHUD(leftVal, rightVal, sumVal) {
 function renderAdditionTierBarUI() {
     const tierBar = document.getElementById('maze-tier-bar');
     if (!tierBar) return;
-    const cur = additionState.tier || 'sum5';
-    let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-purple-400 shadow-lg">`;
+    const curOp = additionState.opMode || 'add';
+    const curTier = additionState.tier || 'sum5';
+
+    let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border-2 border-purple-400 shadow-lg">`;
+
+    // 左側：加法 / 減法 / 混合 切換掣
+    ADDITION_OPS.forEach(op => {
+        const active = (curOp === op.id);
+        const cls = active
+            ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm scale-105'
+            : 'bg-slate-100 hover:bg-amber-50 text-slate-600 border-slate-200';
+        html += `<button onclick="selectAdditionOpMode('${op.id}')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm border ${cls}">${op.label}</button>`;
+    });
+
+    html += `<span class="text-slate-300 font-black px-0.5">|</span>`;
+
+    // 右側：5 大難度層次切換掣
     ADDITION_TIERS.forEach(t => {
-        const active = (cur === t.id);
+        const active = (curTier === t.id);
         const cls = active
             ? 'bg-gradient-to-r from-purple-600 to-pink-500 text-white border-purple-600 shadow-sm scale-105'
             : 'bg-slate-100 hover:bg-purple-50 text-slate-600 border-slate-200';
@@ -791,6 +854,13 @@ function renderAdditionTierBarUI() {
     });
     html += `</div>`;
     tierBar.innerHTML = html;
+}
+
+function selectAdditionOpMode(opId) {
+    playPopSound(600);
+    additionState.opMode = opId;
+    renderAdditionTierBarUI();
+    startNewRound();
 }
 
 function selectAdditionTier(tierId) {
@@ -813,7 +883,7 @@ function ensureAdditionFireButton() {
     return btn;
 }
 
-// 刷新後排三座算式台 [ 左台 A (-3.7) ] + [ 中台 B (0.0) ] = [ 右台 C (+3.7) ] 上面嘅小兵與「？」框
+// 刷新後排三座算式台 [ 左台 A (-3.7) ] ± [ 中台 B (0.0) ] = [ 右台 C (+3.7) ]
 function refreshAdditionStagePods() {
     ['leftPodMinion', 'midPodMinion', 'rightPodMinion', 'slotA', 'slotB', 'slotC'].forEach(k => {
         if (additionState[k]) {
@@ -823,10 +893,18 @@ function refreshAdditionStagePods() {
         }
     });
 
+    const isSub = (additionState.currentOp === 'sub');
+
+    // 將舞台上嘅 3D 立體「＋」號自動切換成「－」減號（隱藏垂直柱 children[1]）！
+    if (additionState.plusSignMesh && additionState.plusSignMesh.children.length > 1) {
+        additionState.plusSignMesh.children[1].visible = !isSub;
+    }
+
     // 1. 左邊粉紅台 (-3.7, -1.8)
     if (additionState.caughtA !== null) {
         const mA = create3DNumberCharacter(additionState.caughtA, -3.7, -1.8, 0.72);
         mA.isPodMinion = true;
+        if (additionState.caughtA >= 10) mA.group.scale.set(0.82, 0.72, 0.72);
         additionState.leftPodMinion = mA;
     } else {
         additionState.slotA = createQuestionSlotMinion(-3.7, -1.8, '#F43F5E');
@@ -860,7 +938,7 @@ function refreshAdditionStagePods() {
     }
 
     if (typeof spawnAdditionEnergyDots === 'function') {
-        spawnAdditionEnergyDots(additionState.caughtA || 0, additionState.caughtB || 0);
+        spawnAdditionEnergyDots(additionState.caughtA || 0, additionState.caughtB || 0, isSub);
     }
     updateAdditionEquationHUD(
         additionState.caughtA !== null ? String(additionState.caughtA) : '?',
@@ -875,14 +953,18 @@ function syncAdditionBottomCard() {
     const dotsEl = document.getElementById('target-badge-dots');
     if (!cardEl || !numEl || !dotsEl) return;
 
+    const isSub = (additionState.currentOp === 'sub');
+    const opChar = isSub ? '-' : '+';
     const aStr = additionState.caughtA !== null ? additionState.caughtA : '?';
     const bStr = additionState.caughtB !== null ? additionState.caughtB : '?';
     const cStr = additionState.caughtSum !== null ? additionState.caughtSum : '?';
 
-    cardEl.style.background = 'linear-gradient(to bottom, #A855F7, #7E22CE)';
+    cardEl.style.background = isSub
+        ? 'linear-gradient(to bottom, #0284C7, #0369A1)'
+        : 'linear-gradient(to bottom, #A855F7, #7E22CE)';
     cardEl.style.color = '#FFFFFF';
-    numEl.textContent = (additionState.phase === 'catch') ? '➕' : String(additionState.targetSum);
-    dotsEl.textContent = `${aStr}+${bStr}=${cStr}`;
+    numEl.textContent = (additionState.phase === 'catch') ? (isSub ? '➖' : '➕') : String(additionState.targetSum);
+    dotsEl.textContent = `${aStr}${opChar}${bStr}=${cStr}`;
     dotsEl.className = 'text-[11px] sm:text-xs font-black text-amber-200 tracking-tighter mt-0.5';
 }
 
@@ -891,33 +973,67 @@ function setupAdditionRound() {
     if (typeof ensure3DAdditionArenaBuilt === 'function') ensure3DAdditionArenaBuilt();
     ensureMazeCompactHUD();
     ensureAdditionFireButton().classList.add('hidden');
+
+    if (!additionState.opMode) additionState.opMode = 'add';
+    const isSub = (additionState.opMode === 'sub') || (additionState.opMode === 'mix' && Math.random() < 0.5);
+    additionState.currentOp = isSub ? 'sub' : 'add';
+    additionState.opChar = isSub ? '-' : '+';
+
     renderAdditionTierBarUI();
 
     const tier = additionState.tier || 'sum5';
-    let a = 2, b = 3, sum = 5;
+    let a = 2, b = 3, sum = 5; // 在減法模式：a (左台被減數) - b (中台減數) = sum (右台差數答案)
 
-    if (tier === 'sum5') {
-        sum = 2 + Math.floor(Math.random() * 4); // 2..5
-        a = 1 + Math.floor(Math.random() * (sum - 1));
-        b = sum - a;
-    } else if (tier === 'sum10') {
-        sum = 6 + Math.floor(Math.random() * 5); // 6..10
-        a = 1 + Math.floor(Math.random() * (sum - 1));
-        b = sum - a;
-    } else if (tier === 'sum12') {
-        const pairs = [[6, 6], [5, 6], [6, 5], [7, 5], [5, 7], [6, 7], [7, 7], [8, 4], [8, 6], [9, 3]];
-        const pick = pairs[Math.floor(Math.random() * pairs.length)];
-        a = pick[0];
-        b = pick[1];
-        sum = a + b;
-    } else if (tier === 'missing') {
-        sum = 4 + Math.floor(Math.random() * 7); // 4..10
-        a = 1 + Math.floor(Math.random() * (sum - 1));
-        b = sum - a;
-    } else if (tier === 'free2') {
-        sum = 4 + Math.floor(Math.random() * 7); // 4..10
-        a = null;
-        b = null;
+    if (!isSub) {
+        // ➕ 加法出題 (a + b = sum)
+        if (tier === 'sum5') {
+            sum = 2 + Math.floor(Math.random() * 4); // 2..5
+            a = 1 + Math.floor(Math.random() * (sum - 1));
+            b = sum - a;
+        } else if (tier === 'sum10') {
+            sum = 6 + Math.floor(Math.random() * 5); // 6..10
+            a = 1 + Math.floor(Math.random() * (sum - 1));
+            b = sum - a;
+        } else if (tier === 'sum12') {
+            const pairs = [[6, 6], [5, 6], [6, 5], [7, 5], [5, 7], [6, 7], [7, 7], [8, 4], [8, 6], [9, 3]];
+            const pick = pairs[Math.floor(Math.random() * pairs.length)];
+            a = pick[0];
+            b = pick[1];
+            sum = a + b;
+        } else if (tier === 'missing') {
+            sum = 4 + Math.floor(Math.random() * 7); // 4..10
+            a = 1 + Math.floor(Math.random() * (sum - 1));
+            b = sum - a;
+        } else if (tier === 'free2') {
+            sum = 4 + Math.floor(Math.random() * 7); // 4..10
+            a = null;
+            b = null;
+        }
+    } else {
+        // ➖ 減法出題 (a - b = sum，保證結果 >= 1)
+        if (tier === 'sum5') {
+            a = 2 + Math.floor(Math.random() * 4); // 2..5
+            b = 1 + Math.floor(Math.random() * (a - 1));
+            sum = a - b;
+        } else if (tier === 'sum10') {
+            a = 6 + Math.floor(Math.random() * 5); // 6..10
+            b = 1 + Math.floor(Math.random() * (a - 1));
+            sum = a - b;
+        } else if (tier === 'sum12') {
+            const subPairs = [[12, 6], [12, 5], [12, 4], [11, 5], [11, 6], [13, 6], [14, 7], [15, 7], [16, 8]];
+            const pick = subPairs[Math.floor(Math.random() * subPairs.length)];
+            a = pick[0];
+            b = pick[1];
+            sum = a - b;
+        } else if (tier === 'missing') {
+            a = 4 + Math.floor(Math.random() * 7); // 4..10
+            b = 1 + Math.floor(Math.random() * (a - 1));
+            sum = a - b;
+        } else if (tier === 'free2') {
+            sum = 1 + Math.floor(Math.random() * 6); // 目標差數 1..6
+            a = null;
+            b = null;
+        }
     }
 
     additionState.numA = a;
@@ -964,34 +1080,58 @@ function setupAdditionRound() {
     refreshAdditionStagePods();
     syncAdditionBottomCard();
 
-    // 生成前排散步嘅候選柱方形小兵（嚴格限制喺前排 Z = 1.4 ~ 4.8，絕不撞入後排算式台！）
+    // 生成前排散步嘅候選柱方形小兵
     let roamList = [];
+    const opChar = additionState.opChar;
+
     if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
-        const candidates = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].filter(n => n !== sum && Math.abs(n - sum) <= 4);
+        const candidates = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].filter(n => n !== sum && Math.abs(n - sum) <= 4);
         candidates.sort(() => Math.random() - 0.5);
         roamList = [sum, candidates[0], candidates[1], candidates[2]].sort(() => Math.random() - 0.5);
-        setPromptUI(
-            `🛸 算式【 ${a} + ${b} = ? 】：請捉住正確答案小兵企上右邊金色「？」台！`,
-            `左台係 ${a}、中間台係 ${b}，加埋總共係幾多？控制馬利奧去捉正確數字小兵啦！`
-        );
+        if (isSub) {
+            setPromptUI(
+                `➖ 減法算式【 ${a} - ${b} = ? 】：${a} 拿走 ${b} 仲剩返幾多？請去捉答案小兵！`,
+                `數下左台 ${a} 號頭頂仲有幾多粒發光紅球（灰色球代表拿走咗），捉正確小兵企上右邊答案台！`
+            );
+        } else {
+            setPromptUI(
+                `➕ 加法算式【 ${a} + ${b} = ? 】：請捉住正確答案小兵企上右邊金色「？」台！`,
+                `左台係 ${a}、中間台係 ${b}，加埋總共係幾多？控制馬利奧去捉正確數字小兵啦！`
+            );
+        }
     } else if (tier === 'missing') {
         const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => n !== b).sort(() => Math.random() - 0.5);
         roamList = [b, pool[0], pool[1], pool[2]].sort(() => Math.random() - 0.5);
         setPromptUI(
-            `🕵️ 補數挑戰【 ${a} + ? = ${sum} 】：左台係 ${a}，右台總數係 ${sum}，中間台缺咗邊個？`,
-            `請控制馬利奧捉住正確嘅柱方形小兵，填上中間天藍台嘅「？」位啦！`
+            `🕵️ 補數挑戰【 ${a} ${opChar} ? = ${sum} 】：左台係 ${a}，右台答案係 ${sum}，中間缺咗邊個？`,
+            isSub
+                ? `${a} 減走幾多會剩返 ${sum}？（數下左台頭頂有幾多粒灰色球就知喇！）`
+                : `請控制馬利奧捉住正確嘅柱方形小兵，填上中間天藍台嘅「？」位啦！`
         );
     } else if (tier === 'free2') {
-        const p1 = Math.max(1, Math.floor(sum / 2));
-        const p2 = sum - p1;
-        const p3 = 1;
-        const p4 = sum - 1;
-        const extra = Math.max(1, (sum + 2) % 9);
-        roamList = [p1, p2, p3, p4, extra].sort(() => Math.random() - 0.5);
-        setPromptUI(
-            `🔥 自由湊數【 ? + ? = ${sum} 】：右台目標係 ${sum}，請捉 2 隻加埋等於 ${sum} 嘅小兵！`,
-            `先捉第 1 隻小兵企上左邊粉紅台，再捉第 2 隻小兵企上中間天藍台！`
-        );
+        if (!isSub) {
+            const p1 = Math.max(1, Math.floor(sum / 2));
+            const p2 = sum - p1;
+            const p3 = 1;
+            const p4 = sum - 1;
+            const extra = Math.max(1, (sum + 2) % 9);
+            roamList = [p1, p2, p3, p4, extra].sort(() => Math.random() - 0.5);
+            setPromptUI(
+                `🔥 自由加法【 ? + ? = ${sum} 】：右台目標係 ${sum}，請捉 2 隻加埋等於 ${sum} 嘅小兵！`,
+                `先捉第 1 隻小兵企上左邊粉紅台，再捉第 2 隻小兵企上中間天藍台！`
+            );
+        } else {
+            const p1 = sum + 2;
+            const p2 = 2;
+            const p3 = Math.min(10, sum + 4);
+            const p4 = p3 - sum;
+            const extra = Math.max(1, sum + 1);
+            roamList = [p1, p2, p3, p4, extra].sort(() => Math.random() - 0.5);
+            setPromptUI(
+                `🔥 自由減法【 ? - ? = ${sum} 】：右台目標係 ${sum}，請捉 2 隻相減等於 ${sum} 嘅小兵！`,
+                `先捉 1 隻大過 ${sum} 嘅小兵企上左邊粉紅台，再捉減數小兵企上中間天藍台！`
+            );
+        }
     }
 
     const startCoords = [
@@ -1018,14 +1158,23 @@ function handleAdditionMinionCaught(minion) {
     const num = minion.itemKey;
     const tier = additionState.tier;
     const sum = additionState.targetSum;
+    const isSub = (additionState.currentOp === 'sub');
+    const opChar = additionState.opChar || '+';
 
     if (tier === 'free2') {
         if (additionState.caughtA === null) {
-            if (num >= sum) {
+            if (!isSub && num >= sum) {
                 playGentleNudge();
                 minion.state = 'wrong';
                 minion.wrongTimer = 0.6;
                 setPromptUI(`呢隻係 ${num} 號，已經大過或等於目標 ${sum} 喇！請揀細啲嘅數字小兵先！`, `我哋要捉 2 隻小兵加埋等於 ${sum}`);
+                return;
+            }
+            if (isSub && num <= sum) {
+                playGentleNudge();
+                minion.state = 'wrong';
+                minion.wrongTimer = 0.6;
+                setPromptUI(`減法左台第一個數要大過答案 ${sum} 先夠減㗎！請揀大過 ${sum} 嘅小兵先！`, `目標算式：? - ? = ${sum}`);
                 return;
             }
             playCoinSound();
@@ -1035,10 +1184,10 @@ function handleAdditionMinionCaught(minion) {
             refreshAdditionStagePods();
             syncAdditionBottomCard();
 
-            const needed = sum - num;
+            const needed = isSub ? (num - sum) : (sum - num);
             gameState.targetKey = needed;
             setPromptUI(
-                `👍 左台企好「${num}」號喇！【 ${num} + ? = ${sum} 】中間台仲差幾多？`,
+                `👍 左台企好「${num}」號喇！【 ${num} ${opChar} ? = ${sum} 】中間台應該填幾多？`,
                 `快啲去捉「數字 ${needed}」小兵企上中間天藍台，完成整條算式啦！`
             );
 
@@ -1052,7 +1201,10 @@ function handleAdditionMinionCaught(minion) {
             }
             return;
         } else {
-            if (additionState.caughtA + num === sum) {
+            const isCorrectPair = isSub
+                ? (additionState.caughtA - num === sum)
+                : (additionState.caughtA + num === sum);
+            if (isCorrectPair) {
                 playCoinSound();
                 additionState.caughtB = num;
                 minion.isArenaMinion = false;
@@ -1061,14 +1213,15 @@ function handleAdditionMinionCaught(minion) {
                 syncAdditionBottomCard();
                 startMinionFusionSequence();
             } else {
+                const needed = isSub ? (additionState.caughtA - sum) : (sum - additionState.caughtA);
                 playGentleNudge();
                 minion.state = 'wrong';
                 minion.wrongTimer = 0.6;
                 additionState.targetX = null;
                 additionState.targetZ = null;
                 setPromptUI(
-                    `${additionState.caughtA} + ${num} 係 ${additionState.caughtA + num}，唔等於右台嘅 ${sum} 喎！`,
-                    `算式提示：${additionState.caughtA} + ${sum - additionState.caughtA} = ${sum}，請去捉「數字 ${sum - additionState.caughtA}」小兵啦！`
+                    `${additionState.caughtA} ${opChar} ${num} 唔等於右台嘅 ${sum} 喎！`,
+                    `算式提示：${additionState.caughtA} ${opChar} ${needed} = ${sum}，請去捉「數字 ${needed}」小兵啦！`
                 );
             }
             return;
@@ -1096,7 +1249,9 @@ function handleAdditionMinionCaught(minion) {
         additionState.targetZ = null;
         setPromptUI(
             `呢隻係「數字 ${num}」小兵，未啱喎！請睇下頂部算式板再數一次！`,
-            `你可以數下左台同中台小兵頭頂嘅彩色能量球，或者撳右上角「💡提示」！`
+            isSub
+                ? `減法小貼士：數下左台頭頂仲有幾多粒發光紅球，或者撳右上角「💡提示」！`
+                : `加法小貼士：將左台同中台頭頂嘅能量球合埋一齊數，或者撳右上角「💡提示」！`
         );
     }
 }
@@ -1116,11 +1271,12 @@ function startMinionFusionSequence() {
     const a = additionState.caughtA;
     const b = additionState.caughtB;
     const sum = additionState.targetSum;
+    const opChar = additionState.opChar || '+';
     playChestOpenSound();
     emitStarParticles(new THREE.Vector3(3.7, 1.8, -1.8));
 
     setPromptUI(
-        `🎉 算式完成！【 ${a} + ${b} = ${sum} 】三隻小兵齊齊整整企晒喺度喇！`,
+        `🎉 算式完成！【 ${a} ${opChar} ${b} = ${sum} 】三隻小兵齊齊整整企晒喺度喇！`,
         `快啲撳中間嘅「🔥 點火發射答案小兵！」按鈕，將右台嘅「${sum} 號皇冠小兵」射向飛碟啦！`
     );
 }
@@ -2208,7 +2364,7 @@ function animate() {
                 const b = additionState.caughtB;
                 const sum = additionState.targetSum;
                 setPromptUI(
-                    `💥 轟隆！正中目標！【 ${a} + ${b} = ${sum} 】${sum} 號皇冠小兵成功擊退飛碟！`,
+                    `💥 轟隆！正中目標！【 ${a} ${additionState.opChar || '+'} ${b} = ${sum} 】${sum} 號皇冠小兵成功擊退飛碟！`,
                     `準備進入下一題加法合體挑戰... 🎉`
                 );
                 const nextTimer = setTimeout(() => {
