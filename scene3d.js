@@ -1361,6 +1361,303 @@ function spawnAdditionEnergyDots(countA, countB) {
     makeDots(countA, -3.7, 0xF43F5E);
     makeDots(countB, 0.0, 0x0EA5E9);
 }
+/********************************************************************
+ * Mode 7: 🌉 馬利奧形狀修橋大作戰 (3D Shape Bridge Builder)
+ ********************************************************************/
+let shapeBridgeGroup = new THREE.Group();
+let shapeBridgeState = {
+    built: false,
+    tier: 'three', // 'single' | 'three' | 'shadow' | 'rotated'
+    slots: [],     // Array of { index, x, z, shapeId, rotAngle, filled, group, cavityGroup, repairedGroup, hitMesh, arrowMesh }
+    carryingMinion: null,
+    jumpingAnim: null, // { minion, slot, progress, startPos, endPos }
+    phase: 'repair',   // 'repair' | 'jumping' | 'crossing' | 'celebrate'
+    heroX: 0,
+    heroZ: 3.8,
+    targetX: null,
+    targetZ: null,
+    moveDirX: 0,
+    moveDirZ: 0,
+    walkCycle: 0,
+    facingAngle: Math.PI,
+    heroMesh: null,
+    compassRing: null,
+    clickMarker: null,
+    slotsContainer: null
+};
+
+function ensure3DShapeBridgeBuilt() {
+    if (shapeBridgeState.built) return;
+    shapeBridgeState.built = true;
+    shapeBridgeGroup.clear();
+    shapeBridgeGroup.visible = false;
+    if (scene) scene.add(shapeBridgeGroup);
+
+    // 1. 蔚藍大河底座 (Z = -1.5 橫貫畫面中央)
+    const waterMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(30, 30, 0.25, 48),
+        new THREE.MeshStandardMaterial({ color: 0x0EA5E9, roughness: 0.2 })
+    );
+    waterMesh.position.set(0, -0.05, -0.5);
+    shapeBridgeGroup.add(waterMesh);
+
+    // 2. 南岸草地廣場 (Z: 0.2 ~ 6.6，馬利奧與形狀小兵散步區)
+    const southSand = new THREE.Mesh(
+        new THREE.BoxGeometry(18.4, 0.3, 6.6),
+        new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
+    );
+    southSand.position.set(0, 0.1, 3.4);
+    shapeBridgeGroup.add(southSand);
+
+    const southGrass = new THREE.Mesh(
+        new THREE.BoxGeometry(17.6, 0.36, 6.2),
+        new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 })
+    );
+    southGrass.position.set(0, 0.18, 3.4);
+    southGrass.receiveShadow = true;
+    shapeBridgeGroup.add(southGrass);
+
+    // 3. 北岸皇冠城堡島 (Z: -3.2 ~ -9.0)
+    const northSand = new THREE.Mesh(
+        new THREE.BoxGeometry(18.4, 0.3, 6.0),
+        new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
+    );
+    northSand.position.set(0, 0.1, -6.1);
+    shapeBridgeGroup.add(northSand);
+
+    const northCourt = new THREE.Mesh(
+        new THREE.BoxGeometry(17.6, 0.36, 5.6),
+        new THREE.MeshStandardMaterial({ color: 0xDDD6FE, roughness: 0.65 })
+    );
+    northCourt.position.set(0, 0.18, -6.1);
+    northCourt.receiveShadow = true;
+    shapeBridgeGroup.add(northCourt);
+
+    // 北岸終點紅地毯與【🏰 3D 幾何形狀大城堡】
+    const carpet = new THREE.Mesh(
+        new THREE.BoxGeometry(8.8, 0.05, 3.2),
+        new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
+    );
+    carpet.position.set(0, 0.37, -4.8);
+    shapeBridgeGroup.add(carpet);
+
+    const castleGroup = new THREE.Group();
+    castleGroup.position.set(0, 0.36, -7.2);
+
+    const mainKeep = new THREE.Mesh(
+        new THREE.BoxGeometry(4.8, 2.8, 1.8),
+        new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.4 })
+    );
+    mainKeep.position.y = 1.4;
+    mainKeep.castShadow = true;
+    castleGroup.add(mainKeep);
+
+    // 城堡左右圓柱塔 + 三角形尖頂
+    [-2.7, 2.7].forEach(tx => {
+        const tower = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.85, 0.95, 3.2, 20),
+            new THREE.MeshStandardMaterial({ color: 0xE0F2FE, roughness: 0.4 })
+        );
+        tower.position.set(tx, 1.6, 0.1);
+        castleGroup.add(tower);
+
+        const roof = new THREE.Mesh(
+            new THREE.ConeGeometry(1.15, 1.4, 20),
+            new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.3 })
+        );
+        roof.position.set(tx, 3.85, 0.1);
+        castleGroup.add(roof);
+    });
+
+    // 城堡頂部巨型立體五角星徽章
+    const topStar = createCustom3DShapeMesh('star', 0xFACC15);
+    topStar.scale.setScalar(0.65);
+    topStar.position.set(0, 3.3, 0.2);
+    castleGroup.add(topStar);
+    shapeBridgeGroup.add(castleGroup);
+
+    // 4. 動態橋面缺口容器
+    shapeBridgeState.slotsContainer = new THREE.Group();
+    shapeBridgeGroup.add(shapeBridgeState.slotsContainer);
+
+    // 5. 點擊地面光圈與馬利奧腳下方向環
+    const clickRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.4, 0.65, 24),
+        new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    clickRing.rotation.x = -Math.PI / 2;
+    clickRing.position.set(0, 0.38, 0);
+    clickRing.visible = false;
+    shapeBridgeState.clickMarker = clickRing;
+    shapeBridgeGroup.add(clickRing);
+
+    const compassGroup = new THREE.Group();
+    const ringMesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.55, 0.75, 32),
+        new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    ringMesh.rotation.x = -Math.PI / 2;
+    compassGroup.add(ringMesh);
+
+    const arrowMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.26, 0.52, 3),
+        new THREE.MeshBasicMaterial({ color: 0xEA580C })
+    );
+    arrowMesh.rotation.x = Math.PI / 2;
+    arrowMesh.position.set(0, 0.06, 0.95);
+    compassGroup.add(arrowMesh);
+
+    compassGroup.position.set(0, 0.38, 3.8);
+    shapeBridgeState.compassRing = compassGroup;
+    shapeBridgeGroup.add(compassGroup);
+
+    const hero = marioHero.group.clone();
+    hero.scale.setScalar(0.92);
+    hero.position.set(0, 0.36, 3.8);
+    shapeBridgeState.heroMesh = hero;
+    shapeBridgeGroup.add(hero);
+}
+
+// 建立單個橋面形狀穿窿缺口與修好後嘅立體形狀橋板
+function createBridgeSlotObject(index, x, shapeId, tier) {
+    const meta = getCognitiveItemMeta(shapeId, 'shape');
+    const z = -1.5; // 橫跨大河中心
+    const slotGroup = new THREE.Group();
+    slotGroup.position.set(x, 0.36, z);
+
+    // 1. 南北兩岸木橋墩接頭 (留出中間穿窿缺口)
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.65 });
+    const railMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.4 });
+    [-1.4, 1.4].forEach(pz => {
+        const abutment = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.24, 0.65), woodMat);
+        abutment.position.set(0, 0.05, pz);
+        slotGroup.add(abutment);
+    });
+    [-1.18, 1.18].forEach(rx => {
+        const postS = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.7, 12), railMat);
+        postS.position.set(rx, 0.35, 1.45);
+        const postN = postS.clone();
+        postN.position.set(rx, 0.35, -1.45);
+        slotGroup.add(postS, postN);
+    });
+
+    // 2. 未修好時嘅【穿窿形狀缺口藍圖框】(cavityGroup)
+    const cavityGroup = new THREE.Group();
+
+    // 決定喺「旋轉挑戰」時形狀轉幾多度
+    let rotRad = 0;
+    if (tier === 'rotated') {
+        const rotMap = {
+            triangle: Math.PI,          // 倒轉三角形 ▼
+            square: Math.PI / 4,        // 菱形角度正方形 ◆
+            rectangle: Math.PI / 2,     // 打棟長方形 ▮
+            star: Math.PI / 5,          // 傾斜星形
+            heart: -0.45,               // 傾斜心形
+            circle: 0
+        };
+        rotRad = rotMap[shapeId] || 0.5;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // 繪製木橋穿窿邊框背景
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+    roundRectCanvas(ctx, 8, 8, 240, 240, 38);
+    ctx.fill();
+
+    ctx.lineWidth = 10;
+    ctx.setLineDash([18, 12]);
+    ctx.strokeStyle = (tier === 'shadow') ? '#94A3B8' : meta.hex;
+    roundRectCanvas(ctx, 16, 16, 224, 224, 32);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 繪製中央形狀穿窿缺口
+    ctx.save();
+    ctx.translate(128, 114);
+    ctx.rotate(rotRad);
+    if (tier === 'shadow') {
+        // 🕵️ 影子模式：純黑影輪廓 + 銀白虛線邊，不透露顏色與文字！
+        drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 66, '#020617', '#E2E8F0');
+    } else {
+        drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 66, meta.hex, '#FFFFFF');
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 34px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (tier === 'shadow') {
+        ctx.fillText('❓ 影子缺口', 128, 216);
+    } else if (tier === 'rotated') {
+        ctx.fillText(`🔄 ${meta.title}缺口`, 128, 216);
+    } else {
+        ctx.fillText(`${meta.title}缺口`, 128, 216);
+    }
+
+    const holeTex = new THREE.CanvasTexture(canvas);
+    const holeBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(2.15, 2.15, 0.14),
+        new THREE.MeshBasicMaterial({ map: holeTex, transparent: true })
+    );
+    holeBoard.rotation.x = -Math.PI / 2;
+    holeBoard.position.set(0, 0.08, 0);
+    cavityGroup.add(holeBoard);
+
+    // 缺口上方懸浮提示箭咀（當馬利奧帶住小兵時提示塞入呢度）
+    const arrowMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.35, 0.65, 16),
+        new THREE.MeshBasicMaterial({ color: 0xFDE047 })
+    );
+    arrowMesh.rotation.x = Math.PI;
+    arrowMesh.position.set(0, 1.55, 0);
+    arrowMesh.visible = false;
+    cavityGroup.add(arrowMesh);
+
+    slotGroup.add(cavityGroup);
+
+    // 3. 修好後嘅【實心彩虹橋板 + 鑲嵌 3D 立體形狀】(repairedGroup)
+    const repairedGroup = new THREE.Group();
+    repairedGroup.visible = false;
+
+    const plank = new THREE.Mesh(
+        new THREE.BoxGeometry(2.45, 0.26, 2.4),
+        new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.45 })
+    );
+    plank.position.y = 0.06;
+    plank.receiveShadow = true;
+    repairedGroup.add(plank);
+
+    // 鑲嵌喺橋板正中央嘅 3D 立體幾何積木
+    const shape3D = createCustom3DShapeMesh(shapeId, meta.hex);
+    shape3D.rotation.x = -Math.PI / 2;
+    shape3D.scale.setScalar(0.78);
+    shape3D.position.set(0, 0.24, 0);
+    repairedGroup.add(shape3D);
+
+    slotGroup.add(repairedGroup);
+    shapeBridgeState.slotsContainer.add(slotGroup);
+
+    const slotObj = {
+        index,
+        x,
+        z,
+        shapeId,
+        rotRad,
+        filled: false,
+        group: slotGroup,
+        cavityGroup,
+        repairedGroup,
+        hitMesh: holeBoard,
+        arrowMesh
+    };
+    holeBoard.userData = { isBridgeSlot: true, slotObj };
+    return slotObj;
+}
 function updateMarioMissionSign(targetKey) {
     if (!marioHero.missionSignMesh) return;
     const meta = getCognitiveItemMeta(targetKey);
