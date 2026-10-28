@@ -86,6 +86,8 @@ function openLobby(step = 'subject') {
     if (eqHud) eqHud.style.display = 'none';
     const addFireBtn = document.getElementById('addition-fire-btn');
     if (addFireBtn) addFireBtn.classList.add('hidden');
+    const sbBtn = document.getElementById('shape-slam-btn');
+    if (sbBtn) sbBtn.classList.add('hidden');
 
     overlay.classList.remove('hidden');
 
@@ -318,6 +320,8 @@ function startNewRound() {
 
     const addFireBtn = document.getElementById('addition-fire-btn');
     if (addFireBtn) addFireBtn.classList.add('hidden');
+    const sbBtn = document.getElementById('shape-slam-btn');
+    if (sbBtn) sbBtn.classList.add('hidden');
 
     if (gameState.mode === 'explore') {
         setupExploreMode();
@@ -776,13 +780,35 @@ function nudgeTreasureHero(dx, dz) {
     }
 }
 
-// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 (4大空間幾何層次)】 ====================
+// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 2.0 (頭頂舉兵 + 一鍵飛躍鑲嵌 + 過橋金幣)】 ====================
 const SHAPE_BRIDGE_TIERS = [
     { id: 'single',  label: '🌱 1.單孔入門 (1個缺口)' },
-    { id: 'three',   label: '🧩 2.三孔修橋 (捉小兵對準塞)' },
+    { id: 'three',   label: '🧩 2.三孔修橋 (捉小兵鑲嵌)' },
     { id: 'shadow',  label: '🕵️ 3.影子神秘缺口 (純黑影)' },
     { id: 'rotated', label: '🔄 4.旋轉形狀挑戰 (轉向配對)' }
 ];
+
+function ensureShapeSlamButton() {
+    let btn = document.getElementById('shape-slam-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'shape-slam-btn';
+        btn.onclick = () => autoSlamCarriedShapeMinion();
+        btn.className = 'fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-teal-500 via-emerald-500 to-amber-400 hover:from-teal-400 hover:to-amber-300 text-white font-black px-6 py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2.5 text-lg sm:text-2xl animate-bounce hidden';
+        btn.innerHTML = `<span>🔨</span><span id="shape-slam-btn-text">飛躍鑲嵌修橋！</span><span>✨</span>`;
+        document.body.appendChild(btn);
+    }
+    return btn;
+}
+
+function autoSlamCarriedShapeMinion() {
+    if (gameState.mode !== 'shapebridge' || shapeBridgeState.phase !== 'repair' || !shapeBridgeState.carryingMinion) return;
+    const carriedKey = shapeBridgeState.carryingMinion.itemKey;
+    const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.shapeId === carriedKey);
+    if (matchSlot) {
+        triggerPlugMinionIntoBridgeSlot(matchSlot);
+    }
+}
 
 function renderShapeBridgeTierBarUI() {
     const tierBar = document.getElementById('maze-tier-bar');
@@ -843,19 +869,22 @@ function setupShapeBridgeRound() {
     gameState.subject = 'shape';
     ensure3DShapeBridgeBuilt();
     ensureMazeCompactHUD();
+    ensureShapeSlamButton().classList.add('hidden');
     renderShapeBridgeTierBarUI();
 
     shapeBridgeState.slotsContainer.clear();
     shapeBridgeState.slots = [];
+    shapeBridgeState.bridgeCoins = [];
     shapeBridgeState.carryingMinion = null;
     shapeBridgeState.jumpingAnim = null;
+    shapeBridgeState.crossingWaypoints = [];
     shapeBridgeState.phase = 'repair';
 
     const tier = shapeBridgeState.tier || 'three';
     const allShapes = SHAPE_CURRICULUM.map(s => s.id).sort(() => Math.random() - 0.5);
     const slotCount = (tier === 'single') ? 1 : 3;
     const chosenShapes = allShapes.slice(0, slotCount);
-    const xPositions = (slotCount === 1) ? [0] : [-3.5, 0, 3.5];
+    const xPositions = (slotCount === 1) ? [0] : [-3.2, 0, 3.2];
 
     chosenShapes.forEach((shId, idx) => {
         const slot = createBridgeSlotObject(idx, xPositions[idx], shId, tier);
@@ -866,7 +895,6 @@ function setupShapeBridgeRound() {
     updateTargetBadgeUI(chosenShapes[0], false);
     updateShapeBridgeBanner();
 
-    // 重置馬利奧於南岸草地中央
     shapeBridgeState.heroX = 0;
     shapeBridgeState.heroZ = 4.2;
     shapeBridgeState.targetX = null;
@@ -882,24 +910,27 @@ function setupShapeBridgeRound() {
         shapeBridgeState.compassRing.position.set(0, 0.38, 4.2);
     }
 
-    // 喺南岸草地生成散步嘅立體形狀小兵（包含橋面需要嘅形狀 + 干擾形狀）
     const distractors = allShapes.filter(s => !chosenShapes.includes(s)).slice(0, slotCount === 1 ? 2 : 1);
     const roamShapes = [...chosenShapes, ...distractors].sort(() => Math.random() - 0.5);
     const startCoords = [
-        { x: -4.2, z: 2.0 },
-        { x: 4.2,  z: 2.0 },
-        { x: -2.2, z: 4.0 },
-        { x: 2.2,  z: 4.0 },
-        { x: 0,    z: 2.5 }
+        { x: -4.4, z: 2.3 },
+        { x: 4.4,  z: 2.3 },
+        { x: -2.3, z: 4.3 },
+        { x: 2.3,  z: 4.3 }
     ];
 
     roamShapes.forEach((shId, idx) => {
         const pt = startCoords[idx % startCoords.length];
         const minion = create3DNumberCharacter(shId, pt.x, pt.z, 0.72);
         minion.isArenaMinion = true;
+        minion.isShapeBridgeMinion = true; // 獨立控制位置與縮放，防止被主迴圈重置！
+        if (minion.haloMesh) {
+            minion.haloMesh.rotation.x = Math.PI / 2;
+            minion.haloMesh.position.set(0, -0.95, 0);
+        }
         const ang = (idx / roamShapes.length) * Math.PI * 2 + 0.4;
-        minion.vx = Math.cos(ang) * 1.45;
-        minion.vz = Math.sin(ang) * 1.15;
+        minion.vx = Math.cos(ang) * 1.35;
+        minion.vz = Math.sin(ang) * 1.05;
         interactiveBlocks.push(minion);
     });
 
@@ -907,43 +938,44 @@ function setupShapeBridgeRound() {
         const m0 = getCognitiveItemMeta(chosenShapes[0], 'shape');
         setPromptUI(
             `🌉 斷橋搶修任務：橋中間有個「${m0.title}」缺口！快啲去捉「${m0.title}小兵」塞落去！`,
-            `控制馬利奧去捉場內嘅「${m0.badgeSymbol} ${m0.title}」立體小兵修好大橋啦！`
+            `控制馬利奧去捉場內嘅「${m0.badgeSymbol} ${m0.title}」立體小兵，壓扁河底小水怪修好大橋啦！`
         );
     } else if (tier === 'shadow') {
         setPromptUI(
             `🕵️ 影子神秘缺口：觀察橋上 3 個「黑影輪廓」有幾多條邊同角？`,
-            `先控制馬利奧捉住對應嘅形狀小兵，再帶佢行去橋邊對準個黑影缺口塞落去！`
+            `捉住對應嘅形狀小兵舉喺頭頂，再行去岸邊彈射板（或撳「🔨飛躍鑲嵌」掣）修橋！`
         );
     } else if (tier === 'rotated') {
         setPromptUI(
             `🔄 旋轉形狀挑戰：橋面缺口嘅形狀轉咗彎喎！你認唔認得係邊個形狀？`,
-            `捉住正確嘅形狀小兵，再帶佢行去橋邊塞入對應嘅旋轉缺口啦！`
+            `捉住正確嘅形狀小兵舉高，帶去岸邊彈射板或撳「🔨飛躍鑲嵌」掣塞入缺口啦！`
         );
     } else {
         setPromptUI(
             `🌉 三孔修橋大作戰：請捉住場上嘅形狀小兵，帶去塞入對應嘅橋面缺口！`,
-            `第 1 步：掂一掂形狀小兵帶住佢行 ➔ 第 2 步：行去橋邊（或直接撳橋窿）塞落去！`
+            `第 1 步：捉住形狀小兵舉過頭頂 ➔ 第 2 步：行去橋口彈射板（或直接撳橋窿／🔨大掣）飛躍鑲嵌！`
         );
     }
 }
 
-// 當馬利奧喺南岸捉到一隻散步形狀小兵時觸發
 function handleShapeBridgeMinionCaught(minion) {
     if (gameState.isBusy || shapeBridgeState.phase !== 'repair' || !minion.isArenaMinion) return;
     const shId = minion.itemKey;
     const meta = getCognitiveItemMeta(shId, 'shape');
 
-    // 檢查橋上面有無未填補嘅呢種形狀缺口
     const matchingSlot = shapeBridgeState.slots.find(s => !s.filled && s.shapeId === shId);
     if (!matchingSlot) {
         playGentleNudge();
         minion.state = 'wrong';
         minion.wrongTimer = 0.6;
+        // 將錯誤小兵輕輕彈開，防止馬利奧連續誤觸卡住！
+        minion.baseX = THREE.MathUtils.clamp(minion.baseX + (minion.baseX >= shapeBridgeState.heroX ? 1.5 : -1.5), -5.2, 5.2);
+        minion.vx = -minion.vx;
         shapeBridgeState.targetX = null;
         shapeBridgeState.targetZ = null;
         setPromptUI(
-            `呢隻係「${meta.title}小兵」，但橋上面無「${meta.title}」缺口喎！`,
-            `請再望下河面大橋上面嘅缺口係咩形狀啦！`
+            `呢隻係「${meta.title}小兵」，但橋上面已經無「${meta.title}」缺口喎！`,
+            `請望下河面大橋仲差邊種形狀缺口未修好啦！`
         );
         return;
     }
@@ -952,52 +984,54 @@ function handleShapeBridgeMinionCaught(minion) {
     minion.isArenaMinion = false;
     minion.state = 'idle';
     if (minion.haloMesh) minion.haloMesh.material.opacity = 0;
+    minion.group.scale.setScalar(0.62);
     shapeBridgeState.carryingMinion = minion;
     gameState.targetKey = shId;
     updateTargetBadgeUI(shId, false);
     updateShapeBridgeBanner();
 
-    // 點亮橋面所有未填缺口嘅提示箭咀
     shapeBridgeState.slots.forEach(s => {
         if (s.arrowMesh) s.arrowMesh.visible = !s.filled;
     });
 
-    // 如果係「🌱 1.單孔入門」，一捉到正確小兵即刻凌空翻筋斗飛入橋中間缺口！
     if (shapeBridgeState.tier === 'single') {
         triggerPlugMinionIntoBridgeSlot(matchingSlot);
         return;
     }
 
+    // 顯示底部「🔨 飛躍鑲嵌修橋！」大掣，方便小朋友一鍵發射或者自己行去橋口！
+    const slamBtn = ensureShapeSlamButton();
+    const slamTxt = document.getElementById('shape-slam-btn-text');
+    if (slamTxt) slamTxt.textContent = `飛躍鑲嵌「${meta.title}」！`;
+    slamBtn.classList.remove('hidden');
+
     setPromptUI(
-        `🎉 捉到「${meta.badgeSymbol} ${meta.title}小兵」跟住你喇！快啲帶佢去橋邊塞入「${meta.title}缺口」！`,
-        `請控制馬利奧向上行去河邊對應嘅缺口，或者直接用手指撳橋面嘅「${meta.title}缺口」！`
+        `🙌 成功舉起「${meta.badgeSymbol} ${meta.title}小兵」！快啲去對準「${meta.title}缺口」飛躍鑲嵌！`,
+        `可控制馬利奧行去岸邊圓形彈射板、直接用手指撳個橋窿，或撳中間「🔨 飛躍鑲嵌」大掣！`
     );
 }
 
-// 當馬利奧帶住形狀小兵行近（或點擊）某個橋面缺口時觸發
 function triggerPlugMinionIntoBridgeSlot(slot) {
     const carried = shapeBridgeState.carryingMinion;
     if (!carried || slot.filled || shapeBridgeState.phase !== 'repair') return;
 
     const carriedMeta = getCognitiveItemMeta(carried.itemKey, 'shape');
-    const slotMeta = getCognitiveItemMeta(slot.shapeId, 'shape');
 
-    // 檢查小兵形狀同個橋窿係咪吻合！
     if (carried.itemKey !== slot.shapeId) {
         playGentleNudge();
         slot.group.position.y = 0.55;
         setTimeout(() => { slot.group.position.y = 0.36; }, 220);
         shapeBridgeState.targetX = null;
         shapeBridgeState.targetZ = null;
-        shapeBridgeState.heroZ = Math.max(1.2, shapeBridgeState.heroZ);
+        shapeBridgeState.heroZ = Math.max(1.4, shapeBridgeState.heroZ);
         setPromptUI(
-            `哎呀！「${carriedMeta.title}小兵」塞唔入呢個缺口喎！`,
-            `請帶住「${carriedMeta.title}小兵」去隔離啱形狀嘅橋面缺口啦！`
+            `哎呀！頭頂嘅「${carriedMeta.title}」塞唔入呢個缺口喎！`,
+            `請對準橋上面形狀一樣嘅缺口（或者直接撳「🔨 飛躍鑲嵌」大掣）啦！`
         );
         return;
     }
 
-    // 形狀完全吻合！啟動小兵凌空 360 度翻筋斗「咚—啪！」塞入橋窿動畫！
+    ensureShapeSlamButton().classList.add('hidden');
     playMarioJumpSound();
     shapeBridgeState.phase = 'jumping';
     shapeBridgeState.carryingMinion = null;
@@ -2349,7 +2383,9 @@ function animate() {
     interactiveBlocks.forEach(block => {
         block.animTime += dt;
 
-        if (block.isMazeFriend && block.rescued) {
+        if ((block.isMazeFriend && block.rescued) || block.isShapeBridgeMinion) {
+            return;
+        }
             return;
         }
 
@@ -2715,37 +2751,72 @@ function animate() {
         camera.lookAt(additionState.heroX * 0.15, 1.3, -1.2);
     }
 
-    // 4E. Animate 【🌉 馬利奧形狀修橋大作戰】
+    // 4E. Animate 【🌉 馬利奧形狀修橋大作戰 2.0】
     if (typeof shapeBridgeGroup !== 'undefined' && shapeBridgeGroup.visible && shapeBridgeState.heroMesh) {
         const tierBarEl = document.getElementById('maze-tier-bar');
         if (tierBarEl) {
             tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'shapebridge') ? 'flex' : tierBarEl.style.display;
         }
 
-        // 1. 橋面缺口提示箭咀上下彈跳
-        shapeBridgeState.slots.forEach(s => {
-            if (!s.filled && s.arrowMesh && s.arrowMesh.visible) {
-                s.arrowMesh.position.y = 1.45 + Math.sin(elapsed * 6) * 0.22;
+        // 1. 橋面缺口提示箭咀與河底調皮小水怪上下浮沉動畫
+        shapeBridgeState.slots.forEach((s, idx) => {
+            if (!s.filled) {
+                if (s.arrowMesh && s.arrowMesh.visible) {
+                    s.arrowMesh.position.y = 1.55 + Math.sin(elapsed * 6) * 0.22;
+                }
+                if (s.monsterGroup) {
+                    s.monsterGroup.position.y = 0.2 + Math.sin(elapsed * 4 + idx * 1.5) * 0.14;
+                    s.monsterGroup.rotation.y = Math.sin(elapsed * 2 + idx) * 0.35;
+                }
             }
         });
 
-        // 2. 南岸散步立體形狀小兵自由行路
-        interactiveBlocks.forEach(b => {
-            if (b.isArenaMinion && b.group.visible && shapeBridgeState.phase === 'repair') {
+        // 2. 南岸散步立體形狀小兵（加入防重疊互斥物理，100% 唔會再撞埋一團！）
+        const activeMinions = interactiveBlocks.filter(b => b.isArenaMinion && b.group.visible);
+        activeMinions.forEach((b, i) => {
+            if (shapeBridgeState.phase === 'repair') {
+                // 小兵之間互相保持距離，避免疊埋一齊
+                for (let j = i + 1; j < activeMinions.length; j++) {
+                    const other = activeMinions[j];
+                    const dx = b.baseX - other.baseX;
+                    const dz = b.baseZ - other.baseZ;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist < 1.85 && dist > 0.01) {
+                        const push = (1.85 - dist) * 2.5 * dt;
+                        b.baseX += (dx / dist) * push;
+                        b.baseZ += (dz / dist) * push;
+                        other.baseX -= (dx / dist) * push;
+                        other.baseZ -= (dz / dist) * push;
+                    }
+                }
+
                 b.baseX += (b.vx || 1.3) * dt;
-                b.baseZ += (b.vz || 1.1) * dt;
-                if (b.baseX < -5.5 || b.baseX > 5.5) b.vx = -(b.vx || 1.3);
-                if (b.baseZ < 1.3 || b.baseZ > 4.9) b.vz = -(b.vz || 1.1);
-                b.baseX = Math.max(-5.6, Math.min(5.6, b.baseX));
-                b.baseZ = Math.max(1.3, Math.min(4.9, b.baseZ));
-                b.group.position.x = b.baseX;
-                b.group.position.z = b.baseZ;
-                b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 7 + b.animTime)) * 0.22;
-                b.group.rotation.y = Math.atan2(b.vx, b.vz) * 0.25;
+                b.baseZ += (b.vz || 1.0) * dt;
+                if (b.baseX < -5.4 || b.baseX > 5.4) b.vx = -(b.vx || 1.3);
+                if (b.baseZ < 1.6 || b.baseZ > 4.9) b.vz = -(b.vz || 1.0);
+                b.baseX = Math.max(-5.5, Math.min(5.5, b.baseX));
+                b.baseZ = Math.max(1.6, Math.min(4.9, b.baseZ));
             }
+
+            if (b.state === 'wrong') {
+                b.wrongTimer -= dt;
+                b.group.rotation.z = Math.sin(elapsed * 28) * 0.15;
+                if (b.wrongTimer <= 0) {
+                    b.state = 'idle';
+                    b.group.rotation.z = 0;
+                }
+            } else {
+                b.group.rotation.z = 0;
+            }
+
+            b.group.position.x = b.baseX;
+            b.group.position.z = b.baseZ;
+            b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 6.5 + b.animTime)) * 0.2;
+            b.group.rotation.y = Math.atan2(b.vx || 0, b.vz || 1) * 0.25;
+            b.group.scale.setScalar(b.state === 'hint' ? 0.78 + Math.sin(elapsed * 6) * 0.05 : 0.72);
         });
 
-        // 3. 控制馬利奧奔跑（捉小兵 & 帶小兵去橋邊缺口）
+        // 3. 控制馬利奧奔跑與「沿住大橋正中央過河執金幣」路徑
         let vx = 0, vz = 0;
         const speed = 6.8;
         if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
@@ -2762,24 +2833,30 @@ function animate() {
                 } else {
                     shapeBridgeState.targetX = null;
                     shapeBridgeState.targetZ = null;
+                    if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false;
                 }
             }
         } else if (shapeBridgeState.phase === 'crossing') {
-            // 大橋修好後，馬利奧自動沿住修好嘅大橋衝過河直達北岸形狀大城堡！
-            const targetX = 0;
-            const targetZ = -5.2;
-            const dx = targetX - shapeBridgeState.heroX;
-            const dz = targetZ - shapeBridgeState.heroZ;
-            const dist = Math.hypot(dx, dz);
-            if (dist > 0.2) {
-                vx = (dx / dist) * 7.2;
-                vz = (dz / dist) * 7.2;
+            // 沿住預設嘅橋面中央路線過河（先對齊 X=0 橋頭 -> 行過橋面 -> 衝入城堡），100% 唔會再踏空水上飄！
+            if (shapeBridgeState.crossingWaypoints && shapeBridgeState.crossingWaypoints.length > 0) {
+                const wp = shapeBridgeState.crossingWaypoints[0];
+                const dx = wp.x - shapeBridgeState.heroX;
+                const dz = wp.z - shapeBridgeState.heroZ;
+                const dist = Math.hypot(dx, dz);
+                if (dist > 0.2) {
+                    vx = (dx / dist) * 7.5;
+                    vz = (dz / dist) * 7.5;
+                } else {
+                    shapeBridgeState.heroX = wp.x;
+                    shapeBridgeState.heroZ = wp.z;
+                    shapeBridgeState.crossingWaypoints.shift();
+                }
             } else {
                 shapeBridgeState.phase = 'celebrate';
                 playStageClearFanfare();
                 awardStarProgress();
                 setPromptUI(
-                    `👑 大橋修築完成！馬利奧成功過河抵達奇幻形狀大城堡喇！`,
+                    `👑 大橋修築完成！馬利奧成功沿住彩虹大橋衝入奇幻形狀大城堡喇！`,
                     `一齊欣賞城堡上空嘅勝利煙花啦！🎉`
                 );
                 [[-2.5, 3.8, -6.8], [2.5, 3.8, -6.8], [0, 4.4, -7.2], [-3.2, 3.2, -5.8], [3.2, 3.2, -5.8]].forEach(([fx, fy, fz], idx) => {
@@ -2809,13 +2886,30 @@ function animate() {
         shapeBridgeState.heroMesh.position.set(shapeBridgeState.heroX, 0.36 + hop, shapeBridgeState.heroZ);
         shapeBridgeState.heroMesh.rotation.y = THREE.MathUtils.lerp(shapeBridgeState.heroMesh.rotation.y, shapeBridgeState.facingAngle, dt * 12);
 
-        // 跟住馬利奧行緊嘅形狀小兵動畫 + 腳下黃金指南針指向目標缺口
+        // 🙌 馬利奧「頭頂舉高小兵」動畫（完全唔會遮住鏡頭或馬利奧身體！）
         if (shapeBridgeState.carryingMinion) {
             const cm = shapeBridgeState.carryingMinion;
-            cm.group.position.x = THREE.MathUtils.lerp(cm.group.position.x, shapeBridgeState.heroX, dt * 12);
-            cm.group.position.z = THREE.MathUtils.lerp(cm.group.position.z, shapeBridgeState.heroZ + 0.95, dt * 12);
-            cm.group.position.y = 1.05 + Math.abs(Math.sin(elapsed * 10)) * 0.25;
+            cm.group.position.x = shapeBridgeState.heroX;
+            cm.group.position.z = shapeBridgeState.heroZ;
+            cm.group.position.y = 2.45 + hop * 1.1;
             cm.group.rotation.y = shapeBridgeState.heroMesh.rotation.y;
+            cm.group.scale.setScalar(0.6);
+        }
+
+        // 過橋時執取橋面金幣動畫
+        if (shapeBridgeState.bridgeCoins && shapeBridgeState.bridgeCoins.length > 0) {
+            shapeBridgeState.bridgeCoins.forEach((coin, idx) => {
+                if (!coin.userData.collected) {
+                    coin.rotation.z += dt * 4;
+                    if (Math.hypot(shapeBridgeState.heroX - coin.position.x, shapeBridgeState.heroZ - coin.position.z) < 1.1) {
+                        coin.userData.collected = true;
+                        playCountingNote(idx + 1);
+                        emitStarParticles(coin.position);
+                    }
+                } else {
+                    coin.visible = false;
+                }
+            });
         }
 
         if (shapeBridgeState.compassRing) {
@@ -2834,7 +2928,7 @@ function animate() {
             shapeBridgeState.compassRing.rotation.y = Math.atan2(aimX - shapeBridgeState.heroX, aimZ - shapeBridgeState.heroZ);
         }
 
-        // 4. 判定：捉散步小兵 OR 行去河邊缺口塞小兵！
+        // 4. 判定：捉散步小兵 OR 踏上岸邊彈射板（Z < 1.35，範圍大幅放寬！）即刻發射塞入橋窿！
         if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
             if (!shapeBridgeState.carryingMinion) {
                 for (let i = 0; i < interactiveBlocks.length; i++) {
@@ -2846,11 +2940,10 @@ function animate() {
                         }
                     }
                 }
-            } else if (shapeBridgeState.heroZ < 0.85) {
-                // 馬利奧帶住小兵行到河邊，檢查最接近邊個未填嘅橋面缺口
+            } else if (shapeBridgeState.heroZ < 1.35) {
                 for (let i = 0; i < shapeBridgeState.slots.length; i++) {
                     const slot = shapeBridgeState.slots[i];
-                    if (!slot.filled && Math.abs(shapeBridgeState.heroX - slot.x) < 1.45) {
+                    if (!slot.filled && Math.abs(shapeBridgeState.heroX - slot.x) < 1.55) {
                         triggerPlugMinionIntoBridgeSlot(slot);
                         break;
                     }
@@ -2858,23 +2951,22 @@ function animate() {
             }
         }
 
-        // 5. 小兵凌空 360 度翻筋斗「咚—啪！」塞入橋面缺口動畫
+        // 5. 小兵由馬利奧頭頂凌空 360 度大迴旋飛入橋窿，壓扁水怪變身平坦 3D 形狀橋磚！
         if (shapeBridgeState.phase === 'jumping' && shapeBridgeState.jumpingAnim) {
             const ja = shapeBridgeState.jumpingAnim;
-            ja.progress = Math.min(1, ja.progress + dt * 2.2);
+            ja.progress = Math.min(1, ja.progress + dt * 2.1);
             const p = ja.progress;
             ja.minion.group.position.lerpVectors(ja.startPos, ja.endPos, p);
-            ja.minion.group.position.y += Math.sin(p * Math.PI) * 2.4;
+            ja.minion.group.position.y += Math.sin(p * Math.PI) * 2.8;
             ja.minion.group.rotation.x = p * Math.PI * 2;
+            ja.minion.group.scale.setScalar(THREE.MathUtils.lerp(0.6, 0.85, p));
 
             if (p >= 1) {
                 ja.slot.filled = true;
                 ja.slot.cavityGroup.visible = false;
                 ja.slot.repairedGroup.visible = true;
-                // 小兵企喺修好嘅橋板旁邊揮手歡呼！
-                ja.minion.group.rotation.set(0, 0, 0);
-                ja.minion.group.scale.setScalar(0.52);
-                ja.minion.group.position.set(ja.slot.x - 0.78, 0.95, ja.slot.z);
+                // 隱藏方塊小兵本體，令橋面只展示完美平整嘅 3D 立體形狀橋磚（唔會再沉入橋板切字或阻路！）
+                ja.minion.group.visible = false;
 
                 playChestOpenSound();
                 emitStarParticles(ja.endPos);
@@ -2888,23 +2980,41 @@ function animate() {
                     updateTargetBadgeUI(nextUnfilled.shapeId, false);
                     const nextMeta = getCognitiveItemMeta(nextUnfilled.shapeId, 'shape');
                     setPromptUI(
-                        `✨ 咚—啪！成功修好一格橋板！仲有缺口未修好，快啲去捉下一隻形狀小兵啦！`,
-                        `請喺草地搵出對應缺口形狀嘅立體小兵（如 ${nextMeta.badgeSymbol} ${nextMeta.title}）！`
+                        `💥 咚—啪！成功壓扁小水怪修好「${getCognitiveItemMeta(ja.slot.shapeId, 'shape').title}橋板」！`,
+                        `快啲喺草地捉下一隻形狀小兵（如 ${nextMeta.badgeSymbol} ${nextMeta.title}）繼續修橋啦！`
                     );
                 } else {
-                    // 所有橋面缺口全部塞滿晒！全橋打通，馬利奧跑過大橋去城堡！
+                    // 全橋打通！喺中央橋面生成一排過橋獎勵金幣，並引導馬利奧對準橋面正中央跑過河！
                     shapeBridgeState.phase = 'crossing';
                     shapeBridgeState.jumpingAnim = null;
                     gameState.isBusy = true;
                     interactiveBlocks.forEach(b => {
                         if (b.isArenaMinion) b.group.visible = false;
                     });
+
+                    // 在 중앙橋道 (X=0, Z: 0.2 -> -3.8) 生成 5 粒閃亮金幣俾馬利奧過橋時一路食！
+                    [0.2, -0.7, -1.6, -2.5, -3.4].forEach(cz => {
+                        const coin = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.36, 0.36, 0.12, 20),
+                            new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.2, metalness: 0.65 })
+                        );
+                        coin.rotation.x = Math.PI / 2;
+                        coin.position.set(0, 0.85, cz);
+                        coin.userData = { collected: false };
+                        shapeBridgeState.slotsContainer.add(coin);
+                        shapeBridgeState.bridgeCoins.push(coin);
+                    });
+
+                    shapeBridgeState.crossingWaypoints = [
+                        { x: 0, z: 0.6 },   // 第1步：先跑到中央橋頭
+                        { x: 0, z: -1.5 },  // 第2步：踏上修好嘅中央大橋過河
+                        { x: 0, z: -5.0 }   // 第3步：衝上北岸紅地毯城堡前
+                    ];
                     playSuccessChime();
                 }
             }
         }
 
-        // 鏡頭平滑跟隨（過橋時自動推進去北岸形狀大城堡！）
         const camX = shapeBridgeState.heroX * 0.25;
         const camY = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate') ? 8.2 : 9.8;
         const camZ = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate') ? 5.8 : 11.8;
