@@ -1062,6 +1062,294 @@ function create3DMazeNumberFriend(num, col, row) {
     return wrapper;
 }
 
+/********************************************************************
+ * Mode 6: 🛸 3D 競技場：馬利奧捉小兵合體大作戰 (10以內加法)
+ ********************************************************************/
+let additionArenaGroup = new THREE.Group();
+let additionState = {
+    built: false,
+    tier: 'sum5', // 'sum5' | 'sum10' | 'missing' | 'free2'
+    numA: 2,
+    numB: 3,
+    targetSum: 5,
+    caughtA: null,
+    caughtB: null,
+    phase: 'catch', // 'catch' | 'fusing' | 'readyToFire' | 'firing' | 'celebrate'
+    fuseTimer: 0,
+    fireProgress: 0,
+    ufoHitTimer: 0,
+    heroX: 0,
+    heroZ: 3.4,
+    targetX: null,
+    targetZ: null,
+    moveDirX: 0,
+    moveDirZ: 0,
+    walkCycle: 0,
+    facingAngle: Math.PI,
+    heroMesh: null,
+    compassRing: null,
+    clickMarker: null,
+    leftPodMinion: null,
+    rightPodMinion: null,
+    giantMinion: null,
+    cannonGroup: null,
+    ufoGroup: null,
+    ufoSignMesh: null,
+    plusSignMesh: null,
+    energyDotsGroup: null
+};
+
+function ensure3DAdditionArenaBuilt() {
+    if (additionState.built) return;
+    additionState.built = true;
+    additionArenaGroup.clear();
+    additionArenaGroup.visible = false;
+    if (scene) scene.add(additionArenaGroup);
+
+    // 1. 碧海與圓形競技場舞台
+    const sea = new THREE.Mesh(
+        new THREE.CylinderGeometry(28, 28, 0.25, 48),
+        new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.25 })
+    );
+    sea.position.set(0, -0.08, -0.5);
+    additionArenaGroup.add(sea);
+
+    const outerRim = new THREE.Mesh(
+        new THREE.CylinderGeometry(8.6, 9.0, 0.36, 48),
+        new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.5 })
+    );
+    outerRim.position.set(0, 0.1, 0.5);
+    additionArenaGroup.add(outerRim);
+
+    const arenaFloor = new THREE.Mesh(
+        new THREE.CylinderGeometry(8.0, 8.2, 0.4, 48),
+        new THREE.MeshStandardMaterial({ color: 0x86EFAC, roughness: 0.7 })
+    );
+    arenaFloor.position.set(0, 0.16, 0.5);
+    arenaFloor.receiveShadow = true;
+    additionArenaGroup.add(arenaFloor);
+
+    // 競技場中央圓形跑道線
+    const trackRing = new THREE.Mesh(
+        new THREE.RingGeometry(4.2, 4.5, 40),
+        new THREE.MeshBasicMaterial({ color: 0xFEF08A, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+    );
+    trackRing.rotation.x = -Math.PI / 2;
+    trackRing.position.set(0, 0.37, 1.4);
+    additionArenaGroup.add(trackRing);
+
+    // 2. 左、右「⚡ 小兵合體充電台」与中央立體「+」號
+    const padCoords = [
+        { x: -2.5, z: -2.0, color: 0xFB7185 }, // 左合體台
+        { x: 2.5,  z: -2.0, color: 0x38BDF8 }  // 右合體台
+    ];
+    padCoords.forEach(p => {
+        const pad = new THREE.Group();
+        const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.15, 1.3, 0.28, 28),
+            new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.3 })
+        );
+        base.position.y = 0.14;
+        pad.add(base);
+
+        const glow = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.95, 0.95, 0.32, 24),
+            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+        );
+        glow.position.y = 0.15;
+        pad.add(glow);
+
+        pad.position.set(p.x, 0.35, p.z);
+        additionArenaGroup.add(pad);
+    });
+
+    // 中央立體旋轉「+」加號
+    const plusGroup = new THREE.Group();
+    const plusMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.3 });
+    const hBar = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.32, 0.32), plusMat);
+    const vBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.1, 0.32), plusMat);
+    plusGroup.add(hBar, vBar);
+    plusGroup.position.set(0, 1.25, -2.0);
+    additionState.plusSignMesh = plusGroup;
+    additionArenaGroup.add(plusGroup);
+
+    // 3. 北面中央【🌈 彩虹合體大砲】
+    const cannonGroup = new THREE.Group();
+    cannonGroup.position.set(0, 0.36, -3.8);
+
+    const cannonBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.35, 1.6, 0.7, 24),
+        new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.3 })
+    );
+    cannonBase.position.y = 0.35;
+    cannonGroup.add(cannonBase);
+
+    const barrelGroup = new THREE.Group();
+    barrelGroup.position.set(0, 0.85, 0);
+    barrelGroup.rotation.x = -0.45; // 指向高空飛碟魔王
+
+    const barrelBody = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.88, 1.05, 2.2, 24),
+        new THREE.MeshStandardMaterial({ color: 0xEC4899, roughness: 0.3, metalness: 0.2 })
+    );
+    barrelGroup.add(barrelBody);
+
+    const muzzleRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.92, 0.16, 12, 24),
+        new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.5 })
+    );
+    muzzleRing.rotation.x = Math.PI / 2;
+    muzzleRing.position.y = 1.05;
+    barrelGroup.add(muzzleRing);
+
+    cannonGroup.add(barrelGroup);
+    additionState.cannonGroup = cannonGroup;
+    additionArenaGroup.add(cannonGroup);
+
+    // 4. 空中搖擺【🛸 彩蛋飛碟大魔王 + 算式護盾牌】
+    const ufoGroup = new THREE.Group();
+    ufoGroup.position.set(0, 3.8, -7.2);
+
+    const saucer = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 2.8, 0.65, 32),
+        new THREE.MeshStandardMaterial({ color: 0xA855F7, roughness: 0.25, metalness: 0.3 })
+    );
+    ufoGroup.add(saucer);
+
+    const ufoDome = new THREE.Mesh(
+        new THREE.SphereGeometry(1.35, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.1, transparent: true, opacity: 0.85 })
+    );
+    ufoDome.position.y = 0.25;
+    ufoGroup.add(ufoDome);
+
+    // 飛碟邊緣發光彩燈
+    for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const bulb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 12, 12),
+            new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xFDE047 : 0xF43F5E })
+        );
+        bulb.position.set(Math.cos(ang) * 2.25, -0.05, Math.sin(ang) * 2.25);
+        ufoGroup.add(bulb);
+    }
+
+    // 飛碟正前方大型「算式護盾顯示牌」
+    const signFrame = new THREE.Mesh(
+        new THREE.BoxGeometry(4.4, 1.55, 0.22),
+        new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.3 })
+    );
+    signFrame.position.set(0, -1.25, 0.9);
+    ufoGroup.add(signFrame);
+
+    const signFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.15, 1.32),
+        new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+    );
+    signFace.position.set(0, -1.25, 1.03);
+    ufoGroup.add(signFace);
+
+    additionState.ufoSignMesh = signFace;
+    additionState.ufoGroup = ufoGroup;
+    additionArenaGroup.add(ufoGroup);
+
+    // 5. 具象能量球群組 (顯示喺左右合體台上方幫幼兒點數)
+    additionState.energyDotsGroup = new THREE.Group();
+    additionArenaGroup.add(additionState.energyDotsGroup);
+
+    // 6. 點擊地面導航光圈與馬利奧腳下光環
+    const clickRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.4, 0.65, 24),
+        new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    clickRing.rotation.x = -Math.PI / 2;
+    clickRing.position.set(0, 0.38, 0);
+    clickRing.visible = false;
+    additionState.clickMarker = clickRing;
+    additionArenaGroup.add(clickRing);
+
+    const compassRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.55, 0.75, 32),
+        new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    compassRing.rotation.x = -Math.PI / 2;
+    compassRing.position.set(0, 0.38, 3.4);
+    additionState.compassRing = compassRing;
+    additionArenaGroup.add(compassRing);
+
+    const hero = marioHero.group.clone();
+    hero.scale.setScalar(0.95);
+    hero.position.set(0, 0.36, 3.4);
+    additionState.heroMesh = hero;
+    additionArenaGroup.add(hero);
+}
+
+// 更新飛碟大魔王前面嘅「算式護盾牌」(例如: 3 + 2 = ? 或 4 + ? = 7)
+function updateAdditionUfoSign(leftStr, rightStr, sumStr) {
+    if (!additionState.ufoSignMesh) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 160;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#FFFBEB';
+    ctx.fillRect(0, 0, 512, 160);
+    ctx.strokeStyle = '#F59E0B';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(5, 5, 502, 150);
+
+    ctx.font = '900 82px "Fredoka", "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // 左數
+    ctx.fillStyle = leftStr === '?' ? '#9333EA' : '#E11D48';
+    ctx.fillText(leftStr, 95, 82);
+
+    // + 號
+    ctx.fillStyle = '#D97706';
+    ctx.fillText('+', 195, 82);
+
+    // 右數
+    ctx.fillStyle = rightStr === '?' ? '#9333EA' : '#0284C7';
+    ctx.fillText(rightStr, 295, 82);
+
+    // = 號
+    ctx.fillStyle = '#475569';
+    ctx.fillText('=', 375, 82);
+
+    // 總和
+    ctx.fillStyle = sumStr === '?' ? '#16A34A' : '#EA580C';
+    ctx.fillText(sumStr, 448, 82);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    additionState.ufoSignMesh.material.map = tex;
+    additionState.ufoSignMesh.material.needsUpdate = true;
+}
+
+// 在左右合體台上方生成對應數量嘅 3D 發光能量球，方便幼兒一粒一粒數！
+function spawnAdditionEnergyDots(countA, countB) {
+    if (!additionState.energyDotsGroup) return;
+    additionState.energyDotsGroup.clear();
+
+    const makeDots = (count, centerX, colorHex) => {
+        if (!count || count <= 0) return;
+        const spacing = 0.42;
+        const startX = centerX - ((count - 1) * spacing) / 2;
+        for (let i = 0; i < count; i++) {
+            const ball = new THREE.Mesh(
+                new THREE.SphereGeometry(0.17, 16, 16),
+                new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.2, emissive: colorHex, emissiveIntensity: 0.25 })
+            );
+            ball.position.set(startX + i * spacing, 2.75, -2.0);
+            additionState.energyDotsGroup.add(ball);
+        }
+    };
+
+    makeDots(countA, -2.5, 0xF43F5E);
+    makeDots(countB, 2.5, 0x0EA5E9);
+}
+
 function updateMarioMissionSign(targetKey) {
     if (!marioHero.missionSignMesh) return;
     const meta = getCognitiveItemMeta(targetKey);
