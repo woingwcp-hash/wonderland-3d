@@ -1,6 +1,6 @@
 /********************************************************************
  * [FILE: main.js]
- * 7. CORE GAMEPLAY LOGIC, LOBBY, 9x9 MAZE PARADE & 3-POD ADDITION ARENA
+ * 7. CORE GAMEPLAY LOGIC, LOBBY, 9x9 MAZE, ADD/SUB ARENA & SHAPE BRIDGE 2.0
  ********************************************************************/
 const SUBJECT_DISPLAY_META = {
     number: { icon: '🔢', title: '數字樂園', short: '🔢 數字' },
@@ -62,7 +62,7 @@ function ensureAdditionLobbyCard() {
                     <span class="text-xs font-black bg-gradient-to-r from-teal-500 to-sky-600 text-white px-3 py-1 rounded-full shadow-sm">🔺 形狀樂園王牌新玩法</span>
                 </div>
                 <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">
-                    通往城堡嘅大橋有唔同形狀嘅穿窿缺口！控制馬利奧捉住對應嘅立體形狀小兵，親手行去塞入橋面缺口修好條橋過關！
+                    通往城堡嘅大橋有唔同形狀嘅穿窿缺口！控制馬利奧捉住對應嘅立體形狀小兵，親手飛躍鑲嵌修好大橋過關！
                 </p>
             </div>
         `;
@@ -453,6 +453,8 @@ function ensureMazeCompactHUD() {
     }
     if (gameState.mode === 'addition') {
         renderAdditionTierBarUI();
+    } else if (gameState.mode === 'shapebridge') {
+        renderShapeBridgeTierBarUI();
     } else {
         renderMazeTierBarUI();
     }
@@ -780,7 +782,7 @@ function nudgeTreasureHero(dx, dz) {
     }
 }
 
-// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 2.0 (頭頂舉兵 + 一鍵飛躍鑲嵌 + 過橋金幣)】 ====================
+// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 2.0】 ====================
 const SHAPE_BRIDGE_TIERS = [
     { id: 'single',  label: '🌱 1.單孔入門 (1個缺口)' },
     { id: 'three',   label: '🧩 2.三孔修橋 (捉小兵鑲嵌)' },
@@ -867,7 +869,7 @@ function updateShapeBridgeBanner() {
 
 function setupShapeBridgeRound() {
     gameState.subject = 'shape';
-    ensure3DShapeBridgeBuilt();
+    if (typeof ensure3DShapeBridgeBuilt === 'function') ensure3DShapeBridgeBuilt();
     ensureMazeCompactHUD();
     ensureShapeSlamButton().classList.add('hidden');
     renderShapeBridgeTierBarUI();
@@ -923,7 +925,7 @@ function setupShapeBridgeRound() {
         const pt = startCoords[idx % startCoords.length];
         const minion = create3DNumberCharacter(shId, pt.x, pt.z, 0.72);
         minion.isArenaMinion = true;
-        minion.isShapeBridgeMinion = true; // 獨立控制位置與縮放，防止被主迴圈重置！
+        minion.isShapeBridgeMinion = true;
         if (minion.haloMesh) {
             minion.haloMesh.rotation.x = Math.PI / 2;
             minion.haloMesh.position.set(0, -0.95, 0);
@@ -968,7 +970,6 @@ function handleShapeBridgeMinionCaught(minion) {
         playGentleNudge();
         minion.state = 'wrong';
         minion.wrongTimer = 0.6;
-        // 將錯誤小兵輕輕彈開，防止馬利奧連續誤觸卡住！
         minion.baseX = THREE.MathUtils.clamp(minion.baseX + (minion.baseX >= shapeBridgeState.heroX ? 1.5 : -1.5), -5.2, 5.2);
         minion.vx = -minion.vx;
         shapeBridgeState.targetX = null;
@@ -999,7 +1000,6 @@ function handleShapeBridgeMinionCaught(minion) {
         return;
     }
 
-    // 顯示底部「🔨 飛躍鑲嵌修橋！」大掣，方便小朋友一鍵發射或者自己行去橋口！
     const slamBtn = ensureShapeSlamButton();
     const slamTxt = document.getElementById('shape-slam-btn-text');
     if (slamTxt) slamTxt.textContent = `飛躍鑲嵌「${meta.title}」！`;
@@ -1068,7 +1068,6 @@ const ADDITION_TIERS = [
     { id: 'free2',   label: '🔥 5.自由湊數 (?±?=C)' }
 ];
 
-// 後備安全定義：建立「？ 號半透明目標框」
 if (typeof createQuestionSlotMinion !== 'function') {
     window.createQuestionSlotMinion = function (x, z, borderColorHex = '#F59E0B') {
         const group = new THREE.Group();
@@ -1100,7 +1099,6 @@ if (typeof createQuestionSlotMinion !== 'function') {
     };
 }
 
-// 升級版能量球顯示：加法顯示兩堆發光球；減法會將「被減走嘅球」變成半透明暗灰色，突顯剩低幾多粒！
 window.spawnAdditionEnergyDots = function (countA, countB, isSub = false) {
     if (!additionState.energyDotsGroup) return;
     additionState.energyDotsGroup.clear();
@@ -1115,7 +1113,6 @@ window.spawnAdditionEnergyDots = function (countA, countB, isSub = false) {
             const rowCount = (row > 0) ? Math.min(6, count - row * 6) : perRow;
             const startX = centerX - ((rowCount - 1) * spacing) / 2;
 
-            // 喺減法模式，最後 fadedCount 粒球變成半透明灰色，代表「俾人拿走咗」！
             const isTakenAway = isSub && fadedCount > 0 && (i >= count - fadedCount);
             const mat = isTakenAway
                 ? new THREE.MeshStandardMaterial({ color: 0x94A3B8, roughness: 0.6, transparent: true, opacity: 0.32 })
@@ -1180,7 +1177,6 @@ function renderAdditionTierBarUI() {
 
     let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border-2 border-purple-400 shadow-lg">`;
 
-    // 左側：加法 / 減法 / 混合 切換掣
     ADDITION_OPS.forEach(op => {
         const active = (curOp === op.id);
         const cls = active
@@ -1191,7 +1187,6 @@ function renderAdditionTierBarUI() {
 
     html += `<span class="text-slate-300 font-black px-0.5">|</span>`;
 
-    // 右側：5 大難度層次切換掣
     ADDITION_TIERS.forEach(t => {
         const active = (curTier === t.id);
         const cls = active
@@ -1230,7 +1225,6 @@ function ensureAdditionFireButton() {
     return btn;
 }
 
-// 刷新後排三座算式台 [ 左台 A (-3.7) ] ± [ 中台 B (0.0) ] = [ 右台 C (+3.7) ]
 function refreshAdditionStagePods() {
     ['leftPodMinion', 'midPodMinion', 'rightPodMinion', 'slotA', 'slotB', 'slotC'].forEach(k => {
         if (additionState[k]) {
@@ -1242,12 +1236,10 @@ function refreshAdditionStagePods() {
 
     const isSub = (additionState.currentOp === 'sub');
 
-    // 將舞台上嘅 3D 立體「＋」號自動切換成「－」減號（隱藏垂直柱 children[1]）！
     if (additionState.plusSignMesh && additionState.plusSignMesh.children.length > 1) {
         additionState.plusSignMesh.children[1].visible = !isSub;
     }
 
-    // 1. 左邊粉紅台 (-3.7, -1.8)
     if (additionState.caughtA !== null) {
         const mA = create3DNumberCharacter(additionState.caughtA, -3.7, -1.8, 0.72);
         mA.isPodMinion = true;
@@ -1257,7 +1249,6 @@ function refreshAdditionStagePods() {
         additionState.slotA = createQuestionSlotMinion(-3.7, -1.8, '#F43F5E');
     }
 
-    // 2. 中間天藍台 (0.0, -1.8)
     if (additionState.caughtB !== null) {
         const mB = create3DNumberCharacter(additionState.caughtB, 0.0, -1.8, 0.72);
         mB.isPodMinion = true;
@@ -1266,7 +1257,6 @@ function refreshAdditionStagePods() {
         additionState.slotB = createQuestionSlotMinion(0.0, -1.8, '#0EA5E9');
     }
 
-    // 3. 右邊金色答案台 (+3.7, -1.8)
     if (additionState.caughtSum !== null) {
         const mC = create3DNumberCharacter(additionState.caughtSum, 3.7, -1.8, 0.86);
         mC.isPodMinion = true;
@@ -1329,16 +1319,15 @@ function setupAdditionRound() {
     renderAdditionTierBarUI();
 
     const tier = additionState.tier || 'sum5';
-    let a = 2, b = 3, sum = 5; // 在減法模式：a (左台被減數) - b (中台減數) = sum (右台差數答案)
+    let a = 2, b = 3, sum = 5;
 
     if (!isSub) {
-        // ➕ 加法出題 (a + b = sum)
         if (tier === 'sum5') {
-            sum = 2 + Math.floor(Math.random() * 4); // 2..5
+            sum = 2 + Math.floor(Math.random() * 4);
             a = 1 + Math.floor(Math.random() * (sum - 1));
             b = sum - a;
         } else if (tier === 'sum10') {
-            sum = 6 + Math.floor(Math.random() * 5); // 6..10
+            sum = 6 + Math.floor(Math.random() * 5);
             a = 1 + Math.floor(Math.random() * (sum - 1));
             b = sum - a;
         } else if (tier === 'sum12') {
@@ -1348,22 +1337,21 @@ function setupAdditionRound() {
             b = pick[1];
             sum = a + b;
         } else if (tier === 'missing') {
-            sum = 4 + Math.floor(Math.random() * 7); // 4..10
+            sum = 4 + Math.floor(Math.random() * 7);
             a = 1 + Math.floor(Math.random() * (sum - 1));
             b = sum - a;
         } else if (tier === 'free2') {
-            sum = 4 + Math.floor(Math.random() * 7); // 4..10
+            sum = 4 + Math.floor(Math.random() * 7);
             a = null;
             b = null;
         }
     } else {
-        // ➖ 減法出題 (a - b = sum，保證結果 >= 1)
         if (tier === 'sum5') {
-            a = 2 + Math.floor(Math.random() * 4); // 2..5
+            a = 2 + Math.floor(Math.random() * 4);
             b = 1 + Math.floor(Math.random() * (a - 1));
             sum = a - b;
         } else if (tier === 'sum10') {
-            a = 6 + Math.floor(Math.random() * 5); // 6..10
+            a = 6 + Math.floor(Math.random() * 5);
             b = 1 + Math.floor(Math.random() * (a - 1));
             sum = a - b;
         } else if (tier === 'sum12') {
@@ -1373,11 +1361,11 @@ function setupAdditionRound() {
             b = pick[1];
             sum = a - b;
         } else if (tier === 'missing') {
-            a = 4 + Math.floor(Math.random() * 7); // 4..10
+            a = 4 + Math.floor(Math.random() * 7);
             b = 1 + Math.floor(Math.random() * (a - 1));
             sum = a - b;
         } else if (tier === 'free2') {
-            sum = 1 + Math.floor(Math.random() * 6); // 目標差數 1..6
+            sum = 1 + Math.floor(Math.random() * 6);
             a = null;
             b = null;
         }
@@ -1427,7 +1415,6 @@ function setupAdditionRound() {
     refreshAdditionStagePods();
     syncAdditionBottomCard();
 
-    // 生成前排散步嘅候選柱方形小兵
     let roamList = [];
     const opChar = additionState.opChar;
 
@@ -1710,14 +1697,19 @@ function onWindowKeyDown(e) {
             e.preventDefault();
             marioJumpAction();
         }
-    } else if (gameState.mode === 'treasure' || gameState.mode === 'addition') {
+    } else if (gameState.mode === 'treasure' || gameState.mode === 'addition' || gameState.mode === 'shapebridge') {
         if (gameState.mode === 'addition' && additionState.phase === 'readyToFire' && (e.key === ' ' || e.key === 'Enter')) {
             e.preventDefault();
             fireAdditionCannon();
             return;
         }
-        const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : treasureHero.moveDirZ;
-        const curX = gameState.mode === 'addition' ? additionState.moveDirX : treasureHero.moveDirX;
+        if (gameState.mode === 'shapebridge' && shapeBridgeState.carryingMinion && (e.key === ' ' || e.key === 'Enter')) {
+            e.preventDefault();
+            autoSlamCarriedShapeMinion();
+            return;
+        }
+        const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : (gameState.mode === 'shapebridge' ? shapeBridgeState.moveDirZ : treasureHero.moveDirZ);
+        const curX = gameState.mode === 'addition' ? additionState.moveDirX : (gameState.mode === 'shapebridge' ? shapeBridgeState.moveDirX : treasureHero.moveDirX);
         if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
             setTreasureMoveDir(-1, curZ);
         } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -1733,9 +1725,9 @@ function onWindowKeyDown(e) {
 }
 
 function onWindowKeyUp(e) {
-    if (gameState.mode !== 'treasure' && gameState.mode !== 'addition') return;
-    const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : treasureHero.moveDirZ;
-    const curX = gameState.mode === 'addition' ? additionState.moveDirX : treasureHero.moveDirX;
+    if (gameState.mode !== 'treasure' && gameState.mode !== 'addition' && gameState.mode !== 'shapebridge') return;
+    const curZ = gameState.mode === 'addition' ? additionState.moveDirZ : (gameState.mode === 'shapebridge' ? shapeBridgeState.moveDirZ : treasureHero.moveDirZ);
+    const curX = gameState.mode === 'addition' ? additionState.moveDirX : (gameState.mode === 'shapebridge' ? shapeBridgeState.moveDirX : treasureHero.moveDirX);
     if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) {
         setTreasureMoveDir(0, curZ);
     }
@@ -1788,17 +1780,13 @@ function onCanvasPointerDown(event) {
 
     raycaster.setFromCamera(pointer, camera);
 
-    // 🌉 形狀修橋模式：如果馬利奧已經帶住形狀小兵，檢查小朋友係咪直接撳咗橋面缺口！
+    // 🌉 形狀修橋模式：如果馬利奧已經舉住形狀小兵，檢查小朋友係咪直接撳咗橋面缺口！
     if (gameState.mode === 'shapebridge' && shapeBridgeState.phase === 'repair' && shapeBridgeState.carryingMinion) {
         const slotMeshes = shapeBridgeState.slots.filter(s => !s.filled && s.hitMesh).map(s => s.hitMesh);
         const slotHits = raycaster.intersectObjects(slotMeshes, false);
         if (slotHits.length > 0 && slotHits[0].object.userData.slotObj) {
             const targetSlot = slotHits[0].object.userData.slotObj;
-            playPopSound(560);
-            shapeBridgeState.moveDirX = 0;
-            shapeBridgeState.moveDirZ = 0;
-            shapeBridgeState.targetX = targetSlot.x;
-            shapeBridgeState.targetZ = 0.45;
+            triggerPlugMinionIntoBridgeSlot(targetSlot);
             return;
         }
     }
@@ -1812,6 +1800,7 @@ function onCanvasPointerDown(event) {
         }
     });
     const intersects = raycaster.intersectObjects(meshes, false);
+
     if (intersects.length > 0) {
         const tappedWrapper = intersects[0].object.userData.parentWrapper;
         if (tappedWrapper) {
@@ -1834,7 +1823,6 @@ function onCanvasPointerDown(event) {
                 shapeBridgeState.moveDirZ = 0;
                 shapeBridgeState.targetX = tappedWrapper.group.position.x;
                 shapeBridgeState.targetZ = tappedWrapper.group.position.z;
-            } else if (gameState.mode === 'addition') {
             } else if (gameState.mode === 'addition') {
                 if (additionState.phase === 'readyToFire') {
                     fireAdditionCannon();
@@ -1863,6 +1851,23 @@ function onCanvasPointerDown(event) {
             }
             return;
         }
+    }
+
+    if (gameState.mode === 'shapebridge' && !gameState.isBusy && shapeBridgeState.phase === 'repair') {
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+        const hitPt = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, hitPt)) {
+            playPopSound(460);
+            shapeBridgeState.moveDirX = 0;
+            shapeBridgeState.moveDirZ = 0;
+            shapeBridgeState.targetX = THREE.MathUtils.clamp(hitPt.x, -5.8, 5.8);
+            shapeBridgeState.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.4, 5.6);
+            if (shapeBridgeState.clickMarker) {
+                shapeBridgeState.clickMarker.position.set(shapeBridgeState.targetX, 0.38, shapeBridgeState.targetZ);
+                shapeBridgeState.clickMarker.visible = true;
+            }
+        }
+        return;
     }
 
     if (gameState.mode === 'addition' && !gameState.isBusy) {
@@ -1933,7 +1938,6 @@ function handleBlockTapped(block) {
         return;
     }
 
-    // Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊】
     if (gameState.mode === 'treasure') {
         if (block.rescued) return;
 
@@ -2010,7 +2014,6 @@ function handleBlockTapped(block) {
         return;
     }
 
-    // Mode 1, Mode 2 & Mode 4:
     if (tappedKey === gameState.targetKey) {
         gameState.isBusy = true;
         block.state = 'celebrate';
@@ -2185,942 +2188,4 @@ function runQuantityCountingSequence(itemKey, autoAdvanceAfter, isCoin = false) 
                         if (!isToyModalOpen()) startNewRound();
                     }, 650);
                 }, 1100);
-                activeCountingTimeouts.push(nextTimer);
-            }
-        } else {
-            gameState.isBusy = false;
-        }
-    }, totalDuration);
-    activeCountingTimeouts.push(endTimer);
-}
-
-/********************************************************************
- * 9. REWARD STARS & TOY CABINET SYSTEM
- ********************************************************************/
-function awardStarProgress() {
-    gameState.stars = Math.min(5, gameState.stars + 1);
-    renderStarsBar();
-
-    if (gameState.stars >= 5) {
-        const nextToy = TOY_CATALOG.find(t => !gameState.unlockedToys.includes(t.num));
-        const unlocked = nextToy || TOY_CATALOG[Math.floor(Math.random() * TOY_CATALOG.length)];
-        if (!gameState.unlockedToys.includes(unlocked.num)) {
-            gameState.unlockedToys.push(unlocked.num);
-        }
-
-        setTimeout(() => {
-            gameState.stars = 0;
-            renderStarsBar();
-            showNewToyRewardModal(unlocked);
-        }, 1600);
-    }
-}
-
-function renderStarsBar() {
-    const container = document.getElementById('stars-bar');
-    container.innerHTML = '';
-    for (let i = 1; i <= 5; i++) {
-        const star = document.createElement('i');
-        if (i <= gameState.stars) {
-            star.className = 'fa-solid fa-star text-amber-400 drop-shadow star-earned';
-        } else {
-            star.className = 'fa-solid fa-star text-slate-200';
-        }
-        container.appendChild(star);
-    }
-    document.getElementById('toy-count-badge').textContent = String(gameState.unlockedToys.length);
-}
-
-function showNewToyRewardModal(toyObj) {
-    playStageClearFanfare();
-    const banner = document.getElementById('new-reward-banner');
-    const nameEl = document.getElementById('new-reward-name');
-    banner.classList.remove('hidden');
-    nameEl.textContent = `${toyObj.icon} ${toyObj.name}`;
-    renderToyCabinetGrid();
-    document.getElementById('toy-modal').classList.remove('hidden');
-}
-
-function renderToyCabinetGrid() {
-    const grid = document.getElementById('toy-grid');
-    grid.innerHTML = '';
-    TOY_CATALOG.forEach(toy => {
-        const isUnlocked = gameState.unlockedToys.includes(toy.num);
-        const card = document.createElement('button');
-        if (isUnlocked) {
-            card.className = 'btn-toy-sm bg-gradient-to-b from-pink-50 to-amber-50 hover:from-amber-100 hover:to-pink-100 border-2 border-pink-300 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 text-center';
-            card.onclick = () => {
-                playCoinSound();
-            };
-            card.innerHTML = `
-                <span class="text-4xl sm:text-5xl mb-1">${toy.icon}</span>
-                <span class="text-xs sm:text-sm font-black text-slate-800">${toy.name}</span>
-                <span class="text-[11px] font-bold text-pink-600 bg-pink-100 px-2 py-0.5 rounded-full">✨ 已收集</span>
-            `;
-        } else {
-            card.className = 'bg-slate-100 border-2 border-dashed border-slate-300 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 text-center opacity-70 cursor-default';
-            card.innerHTML = `
-                <span class="text-3xl sm:text-4xl text-slate-400 mb-1">🔒</span>
-                <span class="text-xs sm:text-sm font-bold text-slate-400">第 ${toy.num} 號玩具</span>
-                <span class="text-[11px] text-slate-400">集齊5星解鎖</span>
-            `;
-        }
-        grid.appendChild(card);
-    });
-}
-
-function isToyModalOpen() {
-    return !document.getElementById('toy-modal').classList.contains('hidden');
-}
-
-function toggleToyModal(show) {
-    playPopSound(500);
-    if (show) {
-        document.getElementById('new-reward-banner').classList.add('hidden');
-        renderToyCabinetGrid();
-        document.getElementById('toy-modal').classList.remove('hidden');
-    } else {
-        document.getElementById('toy-modal').classList.add('hidden');
-        if (gameState.isBusy) {
-            startNewRound();
-        }
-    }
-}
-
-/********************************************************************
- * 10. TEACHER / PARENT SETTINGS MODAL CONTROLS
- ********************************************************************/
-function toggleSettingsModal(show) {
-    playPopSound(480);
-    const modal = document.getElementById('settings-modal');
-    if (show) {
-        syncSettingsUI();
-        modal.classList.remove('hidden');
-    } else {
-        modal.classList.add('hidden');
-    }
-}
-
-function updateSetting(key, value) {
-    playPopSound(540);
-    gameState.settings[key] = value;
-
-    if (key === 'lowDistraction') {
-        environmentGroup.visible = !value && (gameState.mode !== 'treasure' && gameState.mode !== 'addition');
-        scene.background = new THREE.Color(value ? '#F8FAFC' : '#CBEBFB');
-        const floor = scene.getObjectByName('mainFloor');
-        if (floor) {
-            floor.material.color.set(value ? '#E2E8F0' : '#9AE66E');
-        }
-    }
-
-    syncSettingsUI();
-    startNewRound();
-}
-
-function syncSettingsUI() {
-    const s = gameState.settings;
-    const activeClass = 'bg-indigo-600 text-white border-indigo-600 shadow-md';
-    const inactiveClass = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
-
-    ['number', 'color', 'shape'].forEach(subj => {
-        const el = document.getElementById(`set-subj-${subj}`);
-        if (el) el.className = `setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${gameState.subject === subj ? activeClass : inactiveClass}`;
-    });
-
-    ['1-5', '6-10', '1-10'].forEach(r => {
-        const el = document.getElementById(`set-range-${r}`);
-        if (el) el.className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${s.range === r ? activeClass : inactiveClass}`;
-    });
-
-    [1, 2, 3].forEach(c => {
-        const el = document.getElementById(`set-choices-${c}`);
-        if (el) el.className = `setting-pill py-3 px-2 rounded-2xl font-bold text-sm sm:text-base border-2 transition-all ${s.choices === c ? activeClass : inactiveClass}`;
-    });
-
-    document.getElementById('set-bg-rich').className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${!s.lowDistraction ? activeClass : inactiveClass}`;
-    document.getElementById('set-bg-calm').className = `setting-pill py-3 px-3 rounded-2xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${s.lowDistraction ? activeClass : inactiveClass}`;
-
-    const autoBtn = document.getElementById('toggle-autoprompt');
-    autoBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.autoPrompt ? 'bg-emerald-500' : 'bg-slate-300'}`;
-    autoBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.autoPrompt ? 'translate-x-6' : 'translate-x-0'}`;
-
-    const countBtn = document.getElementById('toggle-counting');
-    countBtn.className = `w-14 h-8 rounded-full transition-colors p-1 flex items-center ${s.countObjects ? 'bg-emerald-500' : 'bg-slate-300'}`;
-    countBtn.firstElementChild.className = `w-6 h-6 rounded-full bg-white shadow transform transition-transform ${s.countObjects ? 'translate-x-6' : 'translate-x-0'}`;
-}
-
-/********************************************************************
- * 11. MAIN 60FPS 3D ANIMATION LOOP
- ********************************************************************/
-function animate() {
-    requestAnimationFrame(animate);
-    const dt = Math.min(clock.getDelta(), 0.1);
-    const elapsed = clock.getElapsedTime();
-
-    cloudsList.forEach(c => {
-        c.position.x = c.userData.baseX + Math.sin(elapsed * c.userData.speed) * 1.4;
-    });
-
-    if (gachaSpinTimer > 0 && gachaDialMesh) {
-        gachaSpinTimer -= dt;
-        gachaDialMesh.rotation.z += dt * 10;
-    }
-
-    if (trainGroup.visible) {
-        const mover = trainGroup.getObjectByName('trainMover');
-        if (mover) {
-            const diff = trainAnimState.targetX - trainAnimState.currentX;
-            trainAnimState.currentX += diff * Math.min(1, dt * 4.2);
-            mover.position.x = trainAnimState.currentX;
-            mover.position.y = 0.45 + Math.abs(Math.sin(elapsed * 8)) * (Math.abs(diff) > 0.1 ? 0.06 : 0.015);
-            trainAnimState.wheels.forEach(w => {
-                w.rotation.z -= diff * dt * 2.5;
-            });
-        }
-    }
-
-    interactiveBlocks.forEach(block => {
-        block.animTime += dt;
-
-        if ((block.isMazeFriend && block.rescued) || block.isShapeBridgeMinion) {
-            return;
-        }
-            return;
-        }
-
-        if (block.bumpOffset && block.bumpOffset > 0) {
-            block.bumpOffset = Math.max(0, block.bumpOffset - dt * 2.2);
-        }
-        const bumpY = block.bumpOffset ? Math.sin(block.bumpOffset * Math.PI) * 0.55 : 0;
-
-        if (block.state === 'idle') {
-            block.group.position.y = block.baseY + Math.sin(block.animTime * 2.4) * 0.07 + bumpY;
-            block.group.rotation.z = Math.sin(block.animTime * 1.5) * 0.025;
-            block.group.rotation.y = THREE.MathUtils.lerp(block.group.rotation.y, 0, dt * 5);
-            block.group.scale.setScalar(THREE.MathUtils.lerp(block.group.scale.x, block.baseScale, dt * 6));
-        } else if (block.state === 'hint') {
-            block.group.position.y = block.baseY + Math.abs(Math.sin(block.animTime * 6.5)) * 0.28 + bumpY;
-            if (block.haloMesh) block.haloMesh.rotation.z += dt * 2.5;
-            const pulseScale = block.baseScale * (1.1 + Math.sin(block.animTime * 6.5) * 0.06);
-            block.group.scale.setScalar(pulseScale);
-        } else if (block.state === 'wrong') {
-            block.wrongTimer -= dt;
-            block.group.position.y = block.baseY + bumpY;
-            block.group.rotation.z = Math.sin(block.animTime * 28) * 0.14;
-            if (block.wrongTimer <= 0) {
-                block.state = 'idle';
-                block.group.rotation.z = 0;
-            }
-        } else if (block.state === 'celebrate') {
-            if (block.isMarioBrick) {
-                block.group.position.y = block.baseY + bumpY;
-                block.group.scale.setScalar(block.baseScale * 1.08);
-            } else {
-                block.group.position.y = block.baseY + 0.55 + Math.abs(Math.sin(block.animTime * 8)) * 0.45;
-                block.group.rotation.y += dt * 6.5;
-            }
-            if (gameState.mode === 'explore') {
-                block.celebrateTimer -= dt;
-                if (block.celebrateTimer <= 0) {
-                    block.state = 'idle';
-                }
-            }
-        }
-    });
-
-    // 4C. Animate 【1-2-3-4-5 迷宮救兵大巡遊】
-    if (treasureIslandGroup.visible && treasureHero.group) {
-        if (treasureHero.castleGate) {
-            const gate = treasureHero.castleGate;
-            const targetAngle = treasureHero.allRescued ? 1.75 : 0;
-            gate.leftPivot.rotation.y = THREE.MathUtils.lerp(gate.leftPivot.rotation.y, -targetAngle, dt * 5);
-            gate.rightPivot.rotation.y = THREE.MathUtils.lerp(gate.rightPivot.rotation.y, targetAngle, dt * 5);
-            if (gate.lockMesh) gate.lockMesh.visible = !treasureHero.allRescued;
-        }
-
-        let vx = 0;
-        let vz = 0;
-        const walkSpeed = 6.2;
-
-        if (treasureHero.moveDirX !== 0 || treasureHero.moveDirZ !== 0) {
-            vx = treasureHero.moveDirX * walkSpeed;
-            vz = treasureHero.moveDirZ * walkSpeed;
-        } else if (treasureHero.pathQueue && treasureHero.pathQueue.length > 0) {
-            const nextPt = treasureHero.pathQueue[0];
-            const dx = nextPt.x - treasureHero.currentX;
-            const dz = nextPt.z - treasureHero.currentZ;
-            const dist = Math.hypot(dx, dz);
-            if (dist > 0.12) {
-                vx = (dx / dist) * walkSpeed;
-                vz = (dz / dist) * walkSpeed;
-            } else {
-                treasureHero.currentX = nextPt.x;
-                treasureHero.currentZ = nextPt.z;
-                treasureHero.pathQueue.shift();
-                if (treasureHero.pathQueue.length === 0 && treasureHero.clickMarker) {
-                    treasureHero.clickMarker.visible = false;
-                }
-            }
-        }
-
-        const isWalking = Math.hypot(vx, vz) > 0.05;
-        if (isWalking && !gameState.isBusy) {
-            const heroRadius = 0.42;
-            const canStandAt = (wx, wz) => {
-                const corners = [
-                    [wx - heroRadius, wz - heroRadius],
-                    [wx + heroRadius, wz - heroRadius],
-                    [wx - heroRadius, wz + heroRadius],
-                    [wx + heroRadius, wz + heroRadius]
-                ];
-                return corners.every(([cx, cz]) => {
-                    const cell = mazeWorldToGrid(cx, cz);
-                    return isMazeCellWalkable(cell.col, cell.row);
-                });
-            };
-
-            const nextX = treasureHero.currentX + vx * dt;
-            const nextZ = treasureHero.currentZ + vz * dt;
-            const curCell = mazeWorldToGrid(treasureHero.currentX, treasureHero.currentZ);
-            const cellCenter = mazeGridToWorld(curCell.col, curCell.row);
-
-            if (canStandAt(nextX, treasureHero.currentZ)) {
-                treasureHero.currentX = nextX;
-                if (Math.abs(vz) < 0.1) {
-                    treasureHero.currentZ = THREE.MathUtils.lerp(treasureHero.currentZ, cellCenter.z, dt * 8);
-                }
-            } else if (Math.abs(vx) > 0.1) {
-                treasureHero.currentZ = THREE.MathUtils.lerp(treasureHero.currentZ, cellCenter.z, dt * 12);
-            }
-
-            if (canStandAt(treasureHero.currentX, nextZ)) {
-                treasureHero.currentZ = nextZ;
-                if (Math.abs(vx) < 0.1) {
-                    treasureHero.currentX = THREE.MathUtils.lerp(treasureHero.currentX, cellCenter.x, dt * 8);
-                }
-            } else if (Math.abs(vz) > 0.1) {
-                treasureHero.currentX = THREE.MathUtils.lerp(treasureHero.currentX, cellCenter.x, dt * 12);
-            }
-
-            treasureHero.walkCycle += dt * 16;
-            treasureHero.facingAngle = Math.atan2(vx, vz);
-
-            const lastTrail = treasureHero.trail[0];
-            if (!lastTrail || Math.hypot(treasureHero.currentX - lastTrail.x, treasureHero.currentZ - lastTrail.z) > 0.11) {
-                treasureHero.trail.unshift({
-                    x: treasureHero.currentX,
-                    z: treasureHero.currentZ,
-                    angle: treasureHero.facingAngle
-                });
-                if (treasureHero.trail.length > 90) treasureHero.trail.pop();
-                refreshMazeGuideDots();
-            }
-        }
-
-        const walkBounce = isWalking ? Math.abs(Math.sin(treasureHero.walkCycle)) * 0.16 : Math.sin(elapsed * 3) * 0.03;
-        treasureHero.group.position.set(
-            treasureHero.currentX,
-            0.3 + walkBounce,
-            treasureHero.currentZ
-        );
-        treasureHero.group.rotation.y = THREE.MathUtils.lerp(treasureHero.group.rotation.y, treasureHero.facingAngle, dt * 12);
-
-        if (treasureHero.paradeFollowers && treasureHero.paradeFollowers.length > 0) {
-            treasureHero.paradeFollowers.forEach((follower, idx) => {
-                const trailIdx = Math.min(treasureHero.trail.length - 1, (idx + 1) * 10);
-                const targetPt = treasureHero.trail[trailIdx] || { x: treasureHero.currentX, z: treasureHero.currentZ + (idx + 1) * 1.1, angle: 0 };
-                follower.group.position.x = THREE.MathUtils.lerp(follower.group.position.x, targetPt.x, dt * 10);
-                follower.group.position.z = THREE.MathUtils.lerp(follower.group.position.z, targetPt.z, dt * 10);
-                const hop = isWalking ? Math.abs(Math.sin(treasureHero.walkCycle - idx * 1.1)) * 0.22 : Math.sin(elapsed * 4 + idx) * 0.05;
-                follower.group.position.y = 0.72 + hop;
-                follower.group.rotation.y = THREE.MathUtils.lerp(follower.group.rotation.y, targetPt.angle, dt * 8);
-            });
-        }
-
-        const tierBarEl = document.getElementById('maze-tier-bar');
-        if (tierBarEl) {
-            tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'treasure') ? 'flex' : 'none';
-        }
-
-        const camTargetX = treasureHero.currentX * 0.32;
-        const camTargetY = treasureHero.castleVictoryTriggered ? 9.2 : 14.8;
-        const camTargetZ = treasureHero.castleVictoryTriggered ? -1.2 : (treasureHero.currentZ * 0.35 + 9.4);
-        const lookX = treasureHero.currentX * 0.28;
-        const lookY = treasureHero.castleVictoryTriggered ? 1.8 : 0.2;
-        const lookZ = treasureHero.castleVictoryTriggered ? -7.2 : (treasureHero.currentZ * 0.3 + 1.15);
-
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTargetX, dt * 4.5);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTargetY, dt * 4.5);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTargetZ, dt * 4.5);
-        camera.lookAt(lookX, lookY, lookZ);
-
-        if (treasureHero.compassRing) {
-            treasureHero.compassRing.position.set(treasureHero.currentX, 0.34, treasureHero.currentZ);
-            let aimX = 0;
-            let aimZ = -6.6;
-            if (!treasureHero.allRescued) {
-                const nextFriend = interactiveBlocks.find(b => !b.rescued && b.itemKey === gameState.targetKey);
-                if (nextFriend) {
-                    aimX = nextFriend.baseX;
-                    aimZ = nextFriend.baseZ;
-                }
-            }
-            treasureHero.compassRing.rotation.y = Math.atan2(aimX - treasureHero.currentX, aimZ - treasureHero.currentZ);
-        }
-
-        if (!gameState.isBusy) {
-            if (treasureHero.allRescued) {
-                if (Math.hypot(treasureHero.currentX - 0, treasureHero.currentZ - (-6.6)) < 1.35) {
-                    triggerMazeCastleVictory();
-                }
-            } else {
-                for (let i = 0; i < interactiveBlocks.length; i++) {
-                    const friend = interactiveBlocks[i];
-                    if (!friend.rescued && friend.state !== 'wrong') {
-                        const dist = Math.hypot(treasureHero.currentX - friend.baseX, treasureHero.currentZ - friend.baseZ);
-                        if (dist < 1.15) {
-                            handleBlockTapped(friend);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 隱藏非加法模式時嘅頂部大算式板
-    const eqHudEl = document.getElementById('addition-equation-hud');
-    if (eqHudEl && (gameState.mode !== 'addition' || gameState.inLobby)) {
-        eqHudEl.style.display = 'none';
-    }
-
-    // 4D. Animate 【🛸 3D 競技場：馬利奧捉小兵合體大作戰 (三台並列 A + B = C 版)】
-    if (typeof additionArenaGroup !== 'undefined' && additionArenaGroup.visible && additionState.heroMesh) {
-        const tierBarEl = document.getElementById('maze-tier-bar');
-        if (tierBarEl) {
-            tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'addition') ? 'flex' : tierBarEl.style.display;
-        }
-
-        if (additionState.plusSignMesh) {
-            additionState.plusSignMesh.rotation.z = Math.sin(elapsed * 3) * 0.08;
-        }
-        if (additionState.equalSignMesh) {
-            additionState.equalSignMesh.position.y = 1.35 + Math.sin(elapsed * 3) * 0.05;
-        }
-        ['slotA', 'slotB', 'slotC'].forEach(k => {
-            if (additionState[k]) {
-                const s = 1.0 + Math.sin(elapsed * 5) * 0.05;
-                additionState[k].scale.setScalar(s);
-            }
-        });
-
-        if (additionState.ufoGroup) {
-            if (additionState.ufoHitTimer > 0) {
-                additionState.ufoHitTimer -= dt;
-                additionState.ufoGroup.rotation.y += dt * 18;
-                additionState.ufoGroup.position.y = 4.5 + Math.sin(elapsed * 30) * 0.35;
-            } else {
-                additionState.ufoGroup.position.x = Math.sin(elapsed * 1.2) * 2.4;
-                additionState.ufoGroup.position.y = 4.5 + Math.sin(elapsed * 2.8) * 0.18;
-                additionState.ufoGroup.rotation.z = Math.sin(elapsed * 1.2) * 0.06;
-            }
-        }
-
-        // 前排散步小兵自由行路（嚴格限制喺前排 Z = 1.4 ~ 4.8，絕不撞入後排算式台！）
-        interactiveBlocks.forEach(b => {
-            if (b.isArenaMinion && b.group.visible && additionState.phase === 'catch') {
-                b.baseX += (b.vx || 1.2) * dt;
-                b.baseZ += (b.vz || 1.1) * dt;
-                if (b.baseX < -5.4 || b.baseX > 5.4) b.vx = -(b.vx || 1.2);
-                if (b.baseZ < 1.4 || b.baseZ > 4.8) b.vz = -(b.vz || 1.1);
-                b.baseX = Math.max(-5.5, Math.min(5.5, b.baseX));
-                b.baseZ = Math.max(1.4, Math.min(4.8, b.baseZ));
-                b.group.position.x = b.baseX;
-                b.group.position.z = b.baseZ;
-                b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 7 + b.animTime)) * 0.22;
-                b.group.rotation.y = Math.atan2(b.vx, b.vz) * 0.25;
-            }
-        });
-
-        let vx = 0, vz = 0;
-        const speed = 6.8;
-        if (additionState.phase === 'catch' && !gameState.isBusy) {
-            if (additionState.moveDirX !== 0 || additionState.moveDirZ !== 0) {
-                vx = additionState.moveDirX * speed;
-                vz = additionState.moveDirZ * speed;
-            } else if (additionState.targetX !== null && additionState.targetZ !== null) {
-                const dx = additionState.targetX - additionState.heroX;
-                const dz = additionState.targetZ - additionState.heroZ;
-                const dist = Math.hypot(dx, dz);
-                if (dist > 0.15) {
-                    vx = (dx / dist) * speed;
-                    vz = (dz / dist) * speed;
-                } else {
-                    additionState.targetX = null;
-                    additionState.targetZ = null;
-                    if (additionState.clickMarker) additionState.clickMarker.visible = false;
-                }
-            }
-        }
-
-        const isWalking = Math.hypot(vx, vz) > 0.05;
-        if (isWalking) {
-            additionState.heroX = Math.max(-6.2, Math.min(6.2, additionState.heroX + vx * dt));
-            additionState.heroZ = Math.max(0.6, Math.min(5.8, additionState.heroZ + vz * dt));
-            additionState.walkCycle += dt * 16;
-            additionState.facingAngle = Math.atan2(vx, vz);
-        }
-
-        const hop = isWalking ? Math.abs(Math.sin(additionState.walkCycle)) * 0.18 : Math.sin(elapsed * 3) * 0.03;
-        additionState.heroMesh.position.set(additionState.heroX, 0.36 + hop, additionState.heroZ);
-        additionState.heroMesh.rotation.y = THREE.MathUtils.lerp(additionState.heroMesh.rotation.y, additionState.facingAngle, dt * 12);
-        if (additionState.compassRing) {
-            additionState.compassRing.position.set(additionState.heroX, 0.38, additionState.heroZ);
-        }
-
-        if (additionState.phase === 'catch' && !gameState.isBusy) {
-            for (let i = 0; i < interactiveBlocks.length; i++) {
-                const m = interactiveBlocks[i];
-                if (m.isArenaMinion && m.group.visible && m.state !== 'wrong') {
-                    if (Math.hypot(additionState.heroX - m.group.position.x, additionState.heroZ - m.group.position.z) < 1.25) {
-                        handleAdditionMinionCaught(m);
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (additionState.phase === 'fusing') {
-            additionState.fuseTimer += dt * 2.0;
-            const p = Math.min(1, additionState.fuseTimer);
-            if (additionState.leftPodMinion) {
-                additionState.leftPodMinion.group.position.y = 1.15 + Math.abs(Math.sin(p * Math.PI * 2)) * 0.45;
-            }
-            if (additionState.midPodMinion) {
-                additionState.midPodMinion.group.position.y = 1.15 + Math.abs(Math.sin(p * Math.PI * 2)) * 0.45;
-            }
-            if (additionState.rightPodMinion) {
-                const s = THREE.MathUtils.lerp(0.86, 1.12, p);
-                additionState.rightPodMinion.group.scale.setScalar(s);
-                additionState.rightPodMinion.group.position.y = 1.25 + Math.sin(p * Math.PI) * 0.6;
-            }
-            if (p >= 1) {
-                playSuccessChime();
-                additionState.phase = 'readyToFire';
-                ensureAdditionFireButton().classList.remove('hidden');
-            }
-        }
-
-        if (additionState.phase === 'firing' && additionState.rightPodMinion && additionState.ufoGroup) {
-            additionState.fireProgress = Math.min(1, additionState.fireProgress + dt * 2.2);
-            const fp = additionState.fireProgress;
-            const ufoPos = additionState.ufoGroup.position;
-            const ansMinion = additionState.rightPodMinion.group;
-            ansMinion.position.x = THREE.MathUtils.lerp(3.7, ufoPos.x, fp);
-            ansMinion.position.y = THREE.MathUtils.lerp(1.35, ufoPos.y, fp) + Math.sin(fp * Math.PI) * 1.8;
-            ansMinion.position.z = THREE.MathUtils.lerp(-1.8, ufoPos.z, fp);
-            ansMinion.rotation.x += dt * 14;
-
-            if (fp >= 1) {
-                ansMinion.visible = false;
-                additionState.phase = 'celebrate';
-                additionState.ufoHitTimer = 1.8;
-                gameState.isBusy = true;
-                playStageClearFanfare();
-                emitStarParticles(ufoPos.clone());
-                awardStarProgress();
-
-                const a = additionState.caughtA;
-                const b = additionState.caughtB;
-                const sum = additionState.targetSum;
-                setPromptUI(
-                    `💥 轟隆！正中目標！【 ${a} ${additionState.opChar || '+'} ${b} = ${sum} 】${sum} 號皇冠小兵成功擊退飛碟！`,
-                    `準備進入下一題加法合體挑戰... 🎉`
-                );
-                const nextTimer = setTimeout(() => {
-                    if (!isToyModalOpen()) startNewRound();
-                }, 2200);
-                activeCountingTimeouts.push(nextTimer);
-            }
-        }
-
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, additionState.heroX * 0.22, dt * 4);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 9.2, dt * 4);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, 12.4, dt * 4);
-        camera.lookAt(additionState.heroX * 0.15, 1.3, -1.2);
-    }
-
-    // 4E. Animate 【🌉 馬利奧形狀修橋大作戰 2.0】
-    if (typeof shapeBridgeGroup !== 'undefined' && shapeBridgeGroup.visible && shapeBridgeState.heroMesh) {
-        const tierBarEl = document.getElementById('maze-tier-bar');
-        if (tierBarEl) {
-            tierBarEl.style.display = (!gameState.inLobby && gameState.mode === 'shapebridge') ? 'flex' : tierBarEl.style.display;
-        }
-
-        // 1. 橋面缺口提示箭咀與河底調皮小水怪上下浮沉動畫
-        shapeBridgeState.slots.forEach((s, idx) => {
-            if (!s.filled) {
-                if (s.arrowMesh && s.arrowMesh.visible) {
-                    s.arrowMesh.position.y = 1.55 + Math.sin(elapsed * 6) * 0.22;
-                }
-                if (s.monsterGroup) {
-                    s.monsterGroup.position.y = 0.2 + Math.sin(elapsed * 4 + idx * 1.5) * 0.14;
-                    s.monsterGroup.rotation.y = Math.sin(elapsed * 2 + idx) * 0.35;
-                }
-            }
-        });
-
-        // 2. 南岸散步立體形狀小兵（加入防重疊互斥物理，100% 唔會再撞埋一團！）
-        const activeMinions = interactiveBlocks.filter(b => b.isArenaMinion && b.group.visible);
-        activeMinions.forEach((b, i) => {
-            if (shapeBridgeState.phase === 'repair') {
-                // 小兵之間互相保持距離，避免疊埋一齊
-                for (let j = i + 1; j < activeMinions.length; j++) {
-                    const other = activeMinions[j];
-                    const dx = b.baseX - other.baseX;
-                    const dz = b.baseZ - other.baseZ;
-                    const dist = Math.hypot(dx, dz);
-                    if (dist < 1.85 && dist > 0.01) {
-                        const push = (1.85 - dist) * 2.5 * dt;
-                        b.baseX += (dx / dist) * push;
-                        b.baseZ += (dz / dist) * push;
-                        other.baseX -= (dx / dist) * push;
-                        other.baseZ -= (dz / dist) * push;
-                    }
-                }
-
-                b.baseX += (b.vx || 1.3) * dt;
-                b.baseZ += (b.vz || 1.0) * dt;
-                if (b.baseX < -5.4 || b.baseX > 5.4) b.vx = -(b.vx || 1.3);
-                if (b.baseZ < 1.6 || b.baseZ > 4.9) b.vz = -(b.vz || 1.0);
-                b.baseX = Math.max(-5.5, Math.min(5.5, b.baseX));
-                b.baseZ = Math.max(1.6, Math.min(4.9, b.baseZ));
-            }
-
-            if (b.state === 'wrong') {
-                b.wrongTimer -= dt;
-                b.group.rotation.z = Math.sin(elapsed * 28) * 0.15;
-                if (b.wrongTimer <= 0) {
-                    b.state = 'idle';
-                    b.group.rotation.z = 0;
-                }
-            } else {
-                b.group.rotation.z = 0;
-            }
-
-            b.group.position.x = b.baseX;
-            b.group.position.z = b.baseZ;
-            b.group.position.y = 0.95 + Math.abs(Math.sin(elapsed * 6.5 + b.animTime)) * 0.2;
-            b.group.rotation.y = Math.atan2(b.vx || 0, b.vz || 1) * 0.25;
-            b.group.scale.setScalar(b.state === 'hint' ? 0.78 + Math.sin(elapsed * 6) * 0.05 : 0.72);
-        });
-
-        // 3. 控制馬利奧奔跑與「沿住大橋正中央過河執金幣」路徑
-        let vx = 0, vz = 0;
-        const speed = 6.8;
-        if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
-            if (shapeBridgeState.moveDirX !== 0 || shapeBridgeState.moveDirZ !== 0) {
-                vx = shapeBridgeState.moveDirX * speed;
-                vz = shapeBridgeState.moveDirZ * speed;
-            } else if (shapeBridgeState.targetX !== null && shapeBridgeState.targetZ !== null) {
-                const dx = shapeBridgeState.targetX - shapeBridgeState.heroX;
-                const dz = shapeBridgeState.targetZ - shapeBridgeState.heroZ;
-                const dist = Math.hypot(dx, dz);
-                if (dist > 0.15) {
-                    vx = (dx / dist) * speed;
-                    vz = (dz / dist) * speed;
-                } else {
-                    shapeBridgeState.targetX = null;
-                    shapeBridgeState.targetZ = null;
-                    if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false;
-                }
-            }
-        } else if (shapeBridgeState.phase === 'crossing') {
-            // 沿住預設嘅橋面中央路線過河（先對齊 X=0 橋頭 -> 行過橋面 -> 衝入城堡），100% 唔會再踏空水上飄！
-            if (shapeBridgeState.crossingWaypoints && shapeBridgeState.crossingWaypoints.length > 0) {
-                const wp = shapeBridgeState.crossingWaypoints[0];
-                const dx = wp.x - shapeBridgeState.heroX;
-                const dz = wp.z - shapeBridgeState.heroZ;
-                const dist = Math.hypot(dx, dz);
-                if (dist > 0.2) {
-                    vx = (dx / dist) * 7.5;
-                    vz = (dz / dist) * 7.5;
-                } else {
-                    shapeBridgeState.heroX = wp.x;
-                    shapeBridgeState.heroZ = wp.z;
-                    shapeBridgeState.crossingWaypoints.shift();
-                }
-            } else {
-                shapeBridgeState.phase = 'celebrate';
-                playStageClearFanfare();
-                awardStarProgress();
-                setPromptUI(
-                    `👑 大橋修築完成！馬利奧成功沿住彩虹大橋衝入奇幻形狀大城堡喇！`,
-                    `一齊欣賞城堡上空嘅勝利煙花啦！🎉`
-                );
-                [[-2.5, 3.8, -6.8], [2.5, 3.8, -6.8], [0, 4.4, -7.2], [-3.2, 3.2, -5.8], [3.2, 3.2, -5.8]].forEach(([fx, fy, fz], idx) => {
-                    const fw = setTimeout(() => {
-                        playCoinSound();
-                        emitStarParticles(new THREE.Vector3(fx, fy, fz));
-                    }, idx * 300);
-                    activeCountingTimeouts.push(fw);
-                });
-                const nextT = setTimeout(() => {
-                    if (!isToyModalOpen()) startNewRound();
-                }, 2600);
-                activeCountingTimeouts.push(nextT);
-            }
-        }
-
-        const isWalking = Math.hypot(vx, vz) > 0.05;
-        if (isWalking) {
-            const minZ = (shapeBridgeState.phase === 'crossing') ? -5.5 : 0.35;
-            shapeBridgeState.heroX = Math.max(-6.2, Math.min(6.2, shapeBridgeState.heroX + vx * dt));
-            shapeBridgeState.heroZ = Math.max(minZ, Math.min(5.8, shapeBridgeState.heroZ + vz * dt));
-            shapeBridgeState.walkCycle += dt * 16;
-            shapeBridgeState.facingAngle = Math.atan2(vx, vz);
-        }
-
-        const hop = isWalking ? Math.abs(Math.sin(shapeBridgeState.walkCycle)) * 0.18 : Math.sin(elapsed * 3) * 0.03;
-        shapeBridgeState.heroMesh.position.set(shapeBridgeState.heroX, 0.36 + hop, shapeBridgeState.heroZ);
-        shapeBridgeState.heroMesh.rotation.y = THREE.MathUtils.lerp(shapeBridgeState.heroMesh.rotation.y, shapeBridgeState.facingAngle, dt * 12);
-
-        // 🙌 馬利奧「頭頂舉高小兵」動畫（完全唔會遮住鏡頭或馬利奧身體！）
-        if (shapeBridgeState.carryingMinion) {
-            const cm = shapeBridgeState.carryingMinion;
-            cm.group.position.x = shapeBridgeState.heroX;
-            cm.group.position.z = shapeBridgeState.heroZ;
-            cm.group.position.y = 2.45 + hop * 1.1;
-            cm.group.rotation.y = shapeBridgeState.heroMesh.rotation.y;
-            cm.group.scale.setScalar(0.6);
-        }
-
-        // 過橋時執取橋面金幣動畫
-        if (shapeBridgeState.bridgeCoins && shapeBridgeState.bridgeCoins.length > 0) {
-            shapeBridgeState.bridgeCoins.forEach((coin, idx) => {
-                if (!coin.userData.collected) {
-                    coin.rotation.z += dt * 4;
-                    if (Math.hypot(shapeBridgeState.heroX - coin.position.x, shapeBridgeState.heroZ - coin.position.z) < 1.1) {
-                        coin.userData.collected = true;
-                        playCountingNote(idx + 1);
-                        emitStarParticles(coin.position);
-                    }
-                } else {
-                    coin.visible = false;
-                }
-            });
-        }
-
-        if (shapeBridgeState.compassRing) {
-            shapeBridgeState.compassRing.position.set(shapeBridgeState.heroX, 0.38, shapeBridgeState.heroZ);
-            let aimX = 0, aimZ = -1.5;
-            if (shapeBridgeState.carryingMinion) {
-                const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.shapeId === shapeBridgeState.carryingMinion.itemKey);
-                if (matchSlot) { aimX = matchSlot.x; aimZ = matchSlot.z; }
-            } else {
-                const nextSlot = shapeBridgeState.slots.find(s => !s.filled);
-                if (nextSlot) {
-                    const matchMinion = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.itemKey === nextSlot.shapeId);
-                    if (matchMinion) { aimX = matchMinion.group.position.x; aimZ = matchMinion.group.position.z; }
-                }
-            }
-            shapeBridgeState.compassRing.rotation.y = Math.atan2(aimX - shapeBridgeState.heroX, aimZ - shapeBridgeState.heroZ);
-        }
-
-        // 4. 判定：捉散步小兵 OR 踏上岸邊彈射板（Z < 1.35，範圍大幅放寬！）即刻發射塞入橋窿！
-        if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
-            if (!shapeBridgeState.carryingMinion) {
-                for (let i = 0; i < interactiveBlocks.length; i++) {
-                    const m = interactiveBlocks[i];
-                    if (m.isArenaMinion && m.group.visible && m.state !== 'wrong') {
-                        if (Math.hypot(shapeBridgeState.heroX - m.group.position.x, shapeBridgeState.heroZ - m.group.position.z) < 1.25) {
-                            handleShapeBridgeMinionCaught(m);
-                            break;
-                        }
-                    }
-                }
-            } else if (shapeBridgeState.heroZ < 1.35) {
-                for (let i = 0; i < shapeBridgeState.slots.length; i++) {
-                    const slot = shapeBridgeState.slots[i];
-                    if (!slot.filled && Math.abs(shapeBridgeState.heroX - slot.x) < 1.55) {
-                        triggerPlugMinionIntoBridgeSlot(slot);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 5. 小兵由馬利奧頭頂凌空 360 度大迴旋飛入橋窿，壓扁水怪變身平坦 3D 形狀橋磚！
-        if (shapeBridgeState.phase === 'jumping' && shapeBridgeState.jumpingAnim) {
-            const ja = shapeBridgeState.jumpingAnim;
-            ja.progress = Math.min(1, ja.progress + dt * 2.1);
-            const p = ja.progress;
-            ja.minion.group.position.lerpVectors(ja.startPos, ja.endPos, p);
-            ja.minion.group.position.y += Math.sin(p * Math.PI) * 2.8;
-            ja.minion.group.rotation.x = p * Math.PI * 2;
-            ja.minion.group.scale.setScalar(THREE.MathUtils.lerp(0.6, 0.85, p));
-
-            if (p >= 1) {
-                ja.slot.filled = true;
-                ja.slot.cavityGroup.visible = false;
-                ja.slot.repairedGroup.visible = true;
-                // 隱藏方塊小兵本體，令橋面只展示完美平整嘅 3D 立體形狀橋磚（唔會再沉入橋板切字或阻路！）
-                ja.minion.group.visible = false;
-
-                playChestOpenSound();
-                emitStarParticles(ja.endPos);
-                updateShapeBridgeBanner();
-
-                const nextUnfilled = shapeBridgeState.slots.find(s => !s.filled);
-                if (nextUnfilled) {
-                    shapeBridgeState.phase = 'repair';
-                    shapeBridgeState.jumpingAnim = null;
-                    gameState.targetKey = nextUnfilled.shapeId;
-                    updateTargetBadgeUI(nextUnfilled.shapeId, false);
-                    const nextMeta = getCognitiveItemMeta(nextUnfilled.shapeId, 'shape');
-                    setPromptUI(
-                        `💥 咚—啪！成功壓扁小水怪修好「${getCognitiveItemMeta(ja.slot.shapeId, 'shape').title}橋板」！`,
-                        `快啲喺草地捉下一隻形狀小兵（如 ${nextMeta.badgeSymbol} ${nextMeta.title}）繼續修橋啦！`
-                    );
-                } else {
-                    // 全橋打通！喺中央橋面生成一排過橋獎勵金幣，並引導馬利奧對準橋面正中央跑過河！
-                    shapeBridgeState.phase = 'crossing';
-                    shapeBridgeState.jumpingAnim = null;
-                    gameState.isBusy = true;
-                    interactiveBlocks.forEach(b => {
-                        if (b.isArenaMinion) b.group.visible = false;
-                    });
-
-                    // 在 중앙橋道 (X=0, Z: 0.2 -> -3.8) 生成 5 粒閃亮金幣俾馬利奧過橋時一路食！
-                    [0.2, -0.7, -1.6, -2.5, -3.4].forEach(cz => {
-                        const coin = new THREE.Mesh(
-                            new THREE.CylinderGeometry(0.36, 0.36, 0.12, 20),
-                            new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.2, metalness: 0.65 })
-                        );
-                        coin.rotation.x = Math.PI / 2;
-                        coin.position.set(0, 0.85, cz);
-                        coin.userData = { collected: false };
-                        shapeBridgeState.slotsContainer.add(coin);
-                        shapeBridgeState.bridgeCoins.push(coin);
-                    });
-
-                    shapeBridgeState.crossingWaypoints = [
-                        { x: 0, z: 0.6 },   // 第1步：先跑到中央橋頭
-                        { x: 0, z: -1.5 },  // 第2步：踏上修好嘅中央大橋過河
-                        { x: 0, z: -5.0 }   // 第3步：衝上北岸紅地毯城堡前
-                    ];
-                    playSuccessChime();
-                }
-            }
-        }
-
-        const camX = shapeBridgeState.heroX * 0.25;
-        const camY = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate') ? 8.2 : 9.8;
-        const camZ = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate') ? 5.8 : 11.8;
-        const lookZ = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate') ? -4.5 : -1.0;
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, camX, dt * 4);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, dt * 4);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, dt * 4);
-        camera.lookAt(shapeBridgeState.heroX * 0.18, 0.8, lookZ);
-    }
-    // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
-    if (marioStageGroup.visible && marioHero.group) {
-        const dx = marioHero.targetX - marioHero.currentX;
-        if (Math.abs(dx) > 0.03) {
-            const moveSpeed = marioHero.runningToFlag ? 6.5 : 8.5;
-            marioHero.currentX += Math.sign(dx) * Math.min(Math.abs(dx), dt * moveSpeed);
-            marioHero.walkCycle += dt * 16;
-            marioHero.group.rotation.y = THREE.MathUtils.lerp(
-                marioHero.group.rotation.y,
-                dx > 0 ? 0.35 : -0.35,
-                dt * 10
-            );
-        } else {
-            marioHero.currentX = marioHero.targetX;
-            marioHero.group.rotation.y = THREE.MathUtils.lerp(marioHero.group.rotation.y, 0, dt * 10);
-            if (marioHero.autoJumpOnArrive && marioHero.pendingBrick) {
-                startHeroJump(marioHero.pendingBrick);
-            }
-        }
-
-        if (marioHero.isJumping) {
-            marioHero.currentY += marioHero.jumpVel * dt;
-            marioHero.jumpVel -= 22.0 * dt;
-
-            if (!marioHero.hitTriggered && marioHero.currentY >= 1.52) {
-                marioHero.hitTriggered = true;
-                marioHero.jumpVel = -2.5;
-                if (marioHero.pendingBrick) {
-                    handleBlockTapped(marioHero.pendingBrick);
-                }
-            }
-
-            if (marioHero.currentY <= marioHero.baseY) {
-                marioHero.currentY = marioHero.baseY;
-                marioHero.isJumping = false;
-                marioHero.jumpVel = 0;
-            }
-        } else {
-            const isMoving = Math.abs(dx) > 0.04;
-            marioHero.currentY = marioHero.baseY + (isMoving ? Math.abs(Math.sin(marioHero.walkCycle)) * 0.14 : Math.sin(elapsed * 3) * 0.03);
-        }
-
-        marioHero.group.position.x = marioHero.currentX;
-        marioHero.group.position.y = marioHero.currentY;
-
-        if (marioHero.selectionRing && interactiveBlocks[gameState.marioSelectedIdx]) {
-            const ringTargetX = interactiveBlocks[gameState.marioSelectedIdx].baseX;
-            marioHero.selectionRing.position.x = THREE.MathUtils.lerp(marioHero.selectionRing.position.x, ringTargetX, dt * 12);
-            marioHero.selectionRing.rotation.z += dt * 1.8;
-        }
-
-        if (marioHero.runningToFlag && marioHero.flagMesh) {
-            marioHero.flagSlideY = Math.max(0.85, marioHero.flagSlideY - dt * 2.4);
-            marioHero.flagMesh.position.y = marioHero.flagSlideY;
-        }
-    }
-
-    spawnedCountingItems.forEach(item => {
-        item.currentScale = THREE.MathUtils.lerp(item.currentScale, item.targetScale, dt * 10);
-        item.bouncePhase += dt * 4;
-        item.group.scale.setScalar(item.currentScale);
-        item.group.position.y = (item.baseY || 0.55) + Math.abs(Math.sin(item.bouncePhase)) * 0.15;
-        item.group.rotation.y += dt * 2.2;
-
-        const proj = item.group.position.clone();
-        proj.y += 0.72;
-        proj.project(camera);
-        const sx = (proj.x * 0.5 + 0.5) * window.innerWidth;
-        const sy = (-proj.y * 0.5 + 0.5) * window.innerHeight;
-        item.labelEl.style.left = `${sx}px`;
-        item.labelEl.style.top = `${sy}px`;
-    });
-
-    for (let i = activeParticles.length - 1; i >= 0; i--) {
-        const p = activeParticles[i];
-        p.life -= dt;
-        p.vy -= 9.8 * dt;
-        p.mesh.position.x += p.vx * dt;
-        p.mesh.position.y += p.vy * dt;
-        p.mesh.position.z += p.vz * dt;
-        p.mesh.rotation.x += dt * 5;
-        p.mesh.rotation.y += dt * 5;
-        p.mesh.scale.setScalar(Math.max(0.01, p.life));
-
-        if (p.life <= 0) {
-            particlesGroup.remove(p.mesh);
-            activeParticles.splice(i, 1);
-        }
-    }
-
-    renderer.render(scene, camera);
-}
-
-window.onload = function () {
-    initThreeScene();
-    renderStarsBar();
-    switchMode('gacha');
-    openLobby('subject');
-    animate();
-};
+                activeCountingTimeouts
