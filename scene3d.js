@@ -1362,20 +1362,28 @@ function spawnAdditionEnergyDots(countA, countB) {
     makeDots(countB, 0.0, 0x0EA5E9);
 }
 /********************************************************************
- * Mode 7: 🌉 馬利奧形狀修橋大作戰 2.0 (頭頂舉兵 + 彈射鑲嵌 + 河底小水怪 + 金幣大橋)
+ * Mode 7: 🌉 馬利奧形狀修橋大作戰 3.0 (跨海三島大地图 + 神秘木箱 + 2合1幾何合成工坊)
  ********************************************************************/
 let shapeBridgeGroup = new THREE.Group();
 let shapeBridgeState = {
     built: false,
-    tier: 'three', // 'single' | 'three' | 'shadow' | 'rotated'
+    tier: 'expedition', // 'expedition' | 'mystery' | 'fusion' | 'challenge'
+    currentRiver: 1,    // 1 = 第1條河 (Z: +1.0), 2 = 第2條河 (Z: -7.5)
     slots: [],
+    mysteryCrates: [],
+    speedPads: [],
     bridgeCoins: [],
+    fusionAltar: null,
+    fusionParts: [],
+    fusionTargetShape: null,
+    fusionPartShape: null,
+    speedBoostTimer: 0,
     carryingMinion: null,
     jumpingAnim: null,
     crossingWaypoints: [],
     phase: 'repair', // 'repair' | 'jumping' | 'crossing' | 'celebrate'
     heroX: 0,
-    heroZ: 3.8,
+    heroZ: 6.2,
     targetX: null,
     targetZ: null,
     moveDirX: 0,
@@ -1395,91 +1403,136 @@ function ensure3DShapeBridgeBuilt() {
     shapeBridgeGroup.visible = false;
     if (scene) scene.add(shapeBridgeGroup);
 
-    // 1. 蔚藍大河底座
+    // 1. 廣闊蔚藍汪洋大海底座 (覆蓋 Z: +15 ~ -22)
     const waterMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(30, 30, 0.25, 48),
+        new THREE.CylinderGeometry(42, 42, 0.25, 48),
         new THREE.MeshStandardMaterial({ color: 0x0EA5E9, roughness: 0.2 })
     );
-    waterMesh.position.set(0, -0.05, -0.5);
+    waterMesh.position.set(0, -0.06, -3.0);
     shapeBridgeGroup.add(waterMesh);
 
-    // 2. 南岸草地廣場 (Z: 0.2 ~ 6.6)
-    const southSand = new THREE.Mesh(
-        new THREE.BoxGeometry(18.4, 0.3, 6.6),
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.65 });
+
+    // ==================== 第 1 島：🌴 南岸翡翠森林島 (Z: +2.6 ~ +8.8) ====================
+    const isl1Sand = new THREE.Mesh(
+        new THREE.BoxGeometry(19.2, 0.3, 6.6),
         new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
     );
-    southSand.position.set(0, 0.1, 3.4);
-    shapeBridgeGroup.add(southSand);
+    isl1Sand.position.set(0, 0.1, 5.7);
+    shapeBridgeGroup.add(isl1Sand);
 
-    const southGrass = new THREE.Mesh(
-        new THREE.BoxGeometry(17.6, 0.36, 6.2),
+    const isl1Grass = new THREE.Mesh(
+        new THREE.BoxGeometry(18.4, 0.36, 6.2),
         new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 })
     );
-    southGrass.position.set(0, 0.18, 3.4);
-    southGrass.receiveShadow = true;
-    shapeBridgeGroup.add(southGrass);
+    isl1Grass.position.set(0, 0.18, 5.7);
+    isl1Grass.receiveShadow = true;
+    shapeBridgeGroup.add(isl1Grass);
 
-    // 3. 北岸皇冠城堡島 (Z: -3.2 ~ -9.0)
-    const northSand = new THREE.Mesh(
-        new THREE.BoxGeometry(18.4, 0.3, 6.0),
+    const isl1Road = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.04, 6.0), pathMat);
+    isl1Road.position.set(0, 0.37, 5.7);
+    shapeBridgeGroup.add(isl1Road);
+
+    // 南島森林小樹裝飾
+    [[-7.6, 7.5], [7.6, 7.5], [-7.6, 3.8], [7.6, 3.8]].forEach(([tx, tz]) => {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.0, 12), new THREE.MeshStandardMaterial({ color: 0x92400E }));
+        trunk.position.y = 0.5;
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), new THREE.MeshStandardMaterial({ color: 0x16A34A }));
+        crown.position.y = 1.25;
+        tree.add(trunk, crown);
+        tree.position.set(tx, 0.35, tz);
+        shapeBridgeGroup.add(tree);
+    });
+
+    // ==================== 第 2 島：🏜️ 中央黃金機關島 (Z: -5.6 ~ -0.6) ====================
+    const isl2Sand = new THREE.Mesh(
+        new THREE.BoxGeometry(19.6, 0.3, 5.4),
+        new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.75 })
+    );
+    isl2Sand.position.set(0, 0.1, -3.1);
+    shapeBridgeGroup.add(isl2Sand);
+
+    const isl2Top = new THREE.Mesh(
+        new THREE.BoxGeometry(18.8, 0.36, 5.0),
+        new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.65 })
+    );
+    isl2Top.position.set(0, 0.18, -3.1);
+    isl2Top.receiveShadow = true;
+    shapeBridgeGroup.add(isl2Top);
+
+    const isl2CrossRoad = new THREE.Mesh(new THREE.BoxGeometry(14.5, 0.04, 2.2), pathMat);
+    isl2CrossRoad.position.set(0, 0.37, -3.1);
+    shapeBridgeGroup.add(isl2CrossRoad);
+
+    // 中島兩側金字塔裝飾
+    [-8.0, 8.0].forEach(px => {
+        const pyr = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.7, 4), new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.4 }));
+        pyr.position.set(px, 1.2, -3.1);
+        pyr.rotation.y = Math.PI / 4;
+        shapeBridgeGroup.add(pyr);
+    });
+
+    // ==================== 第 3 島：🏰 北岸皇冠形狀大城堡島 (Z: -15.0 ~ -9.4) ====================
+    const isl3Sand = new THREE.Mesh(
+        new THREE.BoxGeometry(19.2, 0.3, 5.8),
         new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
     );
-    northSand.position.set(0, 0.1, -6.1);
-    shapeBridgeGroup.add(northSand);
+    isl3Sand.position.set(0, 0.1, -12.2);
+    shapeBridgeGroup.add(isl3Sand);
 
-    const northCourt = new THREE.Mesh(
-        new THREE.BoxGeometry(17.6, 0.36, 5.6),
+    const isl3Court = new THREE.Mesh(
+        new THREE.BoxGeometry(18.4, 0.36, 5.4),
         new THREE.MeshStandardMaterial({ color: 0xDDD6FE, roughness: 0.65 })
     );
-    northCourt.position.set(0, 0.18, -6.1);
-    northCourt.receiveShadow = true;
-    shapeBridgeGroup.add(northCourt);
+    isl3Court.position.set(0, 0.18, -12.2);
+    isl3Court.receiveShadow = true;
+    shapeBridgeGroup.add(isl3Court);
 
     const carpet = new THREE.Mesh(
-        new THREE.BoxGeometry(10.5, 0.05, 3.2),
+        new THREE.BoxGeometry(10.2, 0.05, 3.4),
         new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.5 })
     );
-    carpet.position.set(0, 0.37, -4.8);
+    carpet.position.set(0, 0.37, -11.2);
     shapeBridgeGroup.add(carpet);
 
     const castleGroup = new THREE.Group();
-    castleGroup.position.set(0, 0.36, -7.2);
+    castleGroup.position.set(0, 0.36, -13.6);
 
     const mainKeep = new THREE.Mesh(
-        new THREE.BoxGeometry(4.8, 2.8, 1.8),
+        new THREE.BoxGeometry(5.0, 2.9, 1.8),
         new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.4 })
     );
-    mainKeep.position.y = 1.4;
+    mainKeep.position.y = 1.45;
     mainKeep.castShadow = true;
     castleGroup.add(mainKeep);
 
-    [-2.7, 2.7].forEach(tx => {
+    [-2.8, 2.8].forEach(tx => {
         const tower = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.85, 0.95, 3.2, 20),
+            new THREE.CylinderGeometry(0.88, 0.98, 3.3, 20),
             new THREE.MeshStandardMaterial({ color: 0xE0F2FE, roughness: 0.4 })
         );
-        tower.position.set(tx, 1.6, 0.1);
+        tower.position.set(tx, 1.65, 0.1);
         castleGroup.add(tower);
 
         const roof = new THREE.Mesh(
-            new THREE.ConeGeometry(1.15, 1.4, 20),
+            new THREE.ConeGeometry(1.18, 1.45, 20),
             new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.3 })
         );
-        roof.position.set(tx, 3.85, 0.1);
+        roof.position.set(tx, 3.95, 0.1);
         castleGroup.add(roof);
     });
 
     const topStar = createCustom3DShapeMesh('star', 0xFACC15);
-    topStar.scale.setScalar(0.65);
-    topStar.position.set(0, 3.3, 0.2);
+    topStar.scale.setScalar(0.7);
+    topStar.position.set(0, 3.4, 0.2);
     castleGroup.add(topStar);
     shapeBridgeGroup.add(castleGroup);
 
-    // 4. 動態橋面缺口與金幣容器
+    // 動態橋面、閃電加速板、神秘木箱與合成台容器
     shapeBridgeState.slotsContainer = new THREE.Group();
     shapeBridgeGroup.add(shapeBridgeState.slotsContainer);
 
-    // 5. 點擊地面光圈與馬利奧腳下方向環
     const clickRing = new THREE.Mesh(
         new THREE.RingGeometry(0.4, 0.65, 24),
         new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
@@ -1506,26 +1559,24 @@ function ensure3DShapeBridgeBuilt() {
     arrowMesh.position.set(0, 0.06, 0.95);
     compassGroup.add(arrowMesh);
 
-    compassGroup.position.set(0, 0.38, 3.8);
+    compassGroup.position.set(0, 0.38, 6.2);
     shapeBridgeState.compassRing = compassGroup;
     shapeBridgeGroup.add(compassGroup);
 
     const hero = marioHero.group.clone();
     hero.scale.setScalar(0.92);
-    hero.position.set(0, 0.36, 3.8);
+    hero.position.set(0, 0.36, 6.2);
     shapeBridgeState.heroMesh = hero;
     shapeBridgeGroup.add(hero);
 }
 
-// 建立橋面形狀穿窿缺口 + 岸邊彈射踏板 + 河底調皮小水怪 + 鑲嵌式 3D 形狀橋磚
-function createBridgeSlotObject(index, x, shapeId, tier) {
+// 建立橋面形狀穿窿缺口 (支援第 1 條河 z = +1.0 及 第 2 條河 z = -7.5)
+function createBridgeSlotObject(index, x, shapeId, tier, riverZ = 1.0, riverId = 1) {
     const meta = getCognitiveItemMeta(shapeId, 'shape');
-    const z = -1.5;
     const slotGroup = new THREE.Group();
-    slotGroup.position.set(x, 0.36, z);
+    slotGroup.position.set(x, 0.36, riverZ);
 
-    // 1. 寬闊連貫嘅黃金木橋框架（令左、中、右三格橋面連成一體，無斷裂感！）
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.65 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: riverId === 1 ? 0xB45309 : 0x7C3AED, roughness: 0.6 });
     const railMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.4 });
     [-1.42, 1.42].forEach(pz => {
         const abutment = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.26, 0.68), woodMat);
@@ -1544,7 +1595,7 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
         slotGroup.add(postS, postN);
     });
 
-    // 2. 南岸橋口【⚡ 彩虹彈射踏板】(位於 Z = +1.95，即南岸草地邊緣，馬利奧一踩即發射修橋！)
+    // 橋口南側【⚡ 彩虹彈射踏板】
     const launchPad = new THREE.Group();
     launchPad.position.set(0, 0.04, 2.05);
     const padOuter = new THREE.Mesh(
@@ -1558,19 +1609,13 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     launchPad.add(padOuter, padInner);
     slotGroup.add(launchPad);
 
-    // 3. 未修好時嘅【穿窿形狀缺口 + 河底調皮小水怪】(cavityGroup)
     const cavityGroup = new THREE.Group();
+    const isShadow = (tier === 'challenge' && riverId === 1);
+    const isRotated = (tier === 'challenge' && riverId === 2);
 
     let rotRad = 0;
-    if (tier === 'rotated') {
-        const rotMap = {
-            triangle: Math.PI,
-            square: Math.PI / 4,
-            rectangle: Math.PI / 2,
-            star: Math.PI / 5,
-            heart: -0.45,
-            circle: 0
-        };
+    if (isRotated) {
+        const rotMap = { triangle: Math.PI, square: Math.PI / 4, rectangle: Math.PI / 2, star: Math.PI / 5, heart: -0.45, circle: 0 };
         rotRad = rotMap[shapeId] || 0.5;
     }
 
@@ -1579,13 +1624,13 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
     roundRectCanvas(ctx, 6, 6, 244, 244, 36);
     ctx.fill();
 
     ctx.lineWidth = 10;
     ctx.setLineDash([18, 12]);
-    ctx.strokeStyle = (tier === 'shadow') ? '#94A3B8' : meta.hex;
+    ctx.strokeStyle = isShadow ? '#94A3B8' : meta.hex;
     roundRectCanvas(ctx, 16, 16, 224, 224, 30);
     ctx.stroke();
     ctx.setLineDash([]);
@@ -1593,7 +1638,7 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     ctx.save();
     ctx.translate(128, 112);
     ctx.rotate(rotRad);
-    if (tier === 'shadow') {
+    if (isShadow) {
         drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 68, '#020617', '#E2E8F0');
     } else {
         drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 68, meta.hex, '#FFFFFF');
@@ -1604,7 +1649,7 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     ctx.font = '900 34px "Noto Sans TC", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(tier === 'shadow' ? '❓ 影子缺口' : `${meta.title}缺口`, 128, 218);
+    ctx.fillText(isShadow ? '❓ 影子缺口' : (isRotated ? `🔄 ${meta.title}` : `${meta.title}缺口`), 128, 218);
 
     const holeTex = new THREE.CanvasTexture(canvas);
     const holeBoard = new THREE.Mesh(
@@ -1615,11 +1660,11 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     holeBoard.position.set(0, 0.06, 0);
     cavityGroup.add(holeBoard);
 
-    // 🐊 河底探頭出嚟嘅調皮小水怪（修橋時會俾形狀橋磚「咚！」一聲壓返落水底！）
+    // 河底調皮小水怪
     const monsterGroup = new THREE.Group();
     const monBody = new THREE.Mesh(
         new THREE.SphereGeometry(0.48, 16, 16),
-        new THREE.MeshStandardMaterial({ color: 0x10B981, roughness: 0.3 })
+        new THREE.MeshStandardMaterial({ color: riverId === 1 ? 0x10B981 : 0xF43F5E, roughness: 0.3 })
     );
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
     const pupilMat = new THREE.MeshBasicMaterial({ color: 0x0F172A });
@@ -1644,8 +1689,7 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
 
     slotGroup.add(cavityGroup);
 
-    // 4. 修好後嘅【平坦黃金橋面 + 巨型發光 3D 形狀鑲嵌磚】(repairedGroup)
-    // 100% 唔會再有方塊小兵棟喺橋面阻路或切字！
+    // 修好後嘅平坦黃金橋板 + 3D 立體形狀磚
     const repairedGroup = new THREE.Group();
     repairedGroup.visible = false;
 
@@ -1667,24 +1711,125 @@ function createBridgeSlotObject(index, x, shapeId, tier) {
     shapeBridgeState.slotsContainer.add(slotGroup);
 
     const slotObj = {
-        index,
-        x,
-        z,
-        shapeId,
-        rotRad,
-        filled: false,
-        group: slotGroup,
-        cavityGroup,
-        monsterGroup,
-        repairedGroup,
-        launchPad,
-        hitMesh: holeBoard,
-        arrowMesh
+        index, x, z: riverZ, riverId, shapeId, rotRad, filled: false,
+        group: slotGroup, cavityGroup, monsterGroup, repairedGroup, launchPad,
+        hitMesh: holeBoard, arrowMesh
     };
     holeBoard.userData = { isBridgeSlot: true, slotObj };
     padOuter.userData = { isBridgeSlot: true, slotObj };
     padInner.userData = { isBridgeSlot: true, slotObj };
     return slotObj;
+}
+
+// 建立島上嘅【📦 3D 神秘問號木箱】（馬利奧撞開會爆出隱藏形狀小兵或金幣！）
+function createBridgeMysteryCrate(x, z, hiddenShapeId) {
+    const group = new THREE.Group();
+    group.position.set(x, 0.36, z);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#F59E0B';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#FEF3C7';
+    roundRectCanvas(ctx, 18, 18, 220, 220, 32);
+    ctx.fill();
+    ctx.fillStyle = '#D97706';
+    ctx.font = '900 155px "Fredoka", "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 128, 134);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const boxMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.45, 1.45, 1.45),
+        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 })
+    );
+    boxMesh.position.y = 0.75;
+    boxMesh.castShadow = true;
+    group.add(boxMesh);
+
+    shapeBridgeState.slotsContainer.add(group);
+    const crateObj = { x, z, hiddenShapeId, opened: false, group, boxMesh, animPhase: Math.random() * 6 };
+    boxMesh.userData = { isMysteryCrate: true, crateObj };
+    return crateObj;
+}
+
+// 建立島上嘅【⚡ 閃電星星加速板】
+function createBridgeSpeedPad(x, z) {
+    const padGroup = new THREE.Group();
+    const outer = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.85, 0.95, 0.1, 24),
+        new THREE.MeshStandardMaterial({ color: 0x06B6D4, roughness: 0.2, emissive: 0x0891B2, emissiveIntensity: 0.35 })
+    );
+    outer.position.y = 0.05;
+    const starCore = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.55, 0.55, 0.14, 6),
+        new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.2, emissive: 0xFACC15, emissiveIntensity: 0.4 })
+    );
+    starCore.position.y = 0.08;
+    padGroup.add(outer, starCore);
+    padGroup.position.set(x, 0.36, z);
+    padGroup.userData = { x, z, starCore };
+    shapeBridgeState.slotsContainer.add(padGroup);
+    return padGroup;
+}
+
+// 建立【🧩 2合1 魔法幾何合成台】（將 2 隻細形狀小兵合成為目標大形狀！）
+function createShapeFusionAltar(x, z, partShapeId, targetShapeId) {
+    const partMeta = getCognitiveItemMeta(partShapeId, 'shape');
+    const targetMeta = getCognitiveItemMeta(targetShapeId, 'shape');
+    const group = new THREE.Group();
+    group.position.set(x, 0.38, z);
+
+    const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.1, 2.3, 0.22, 32),
+        new THREE.MeshStandardMaterial({ color: 0x9333EA, roughness: 0.3 })
+    );
+    base.position.y = 0.11;
+    group.add(base);
+
+    const innerRing = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.75, 1.75, 0.26, 28),
+        new THREE.MeshBasicMaterial({ color: 0xF3E8FF })
+    );
+    innerRing.position.y = 0.12;
+    group.add(innerRing);
+
+    // 合成配方指示牌 (例如：▲ + ▲ = ■)
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 160;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    roundRectCanvas(ctx, 8, 8, 496, 144, 30);
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#9333EA';
+    roundRectCanvas(ctx, 12, 12, 488, 136, 26);
+    ctx.stroke();
+
+    drawShapeSymbolOnCanvas(ctx, partShapeId, 95, 80, 44, partMeta.hex, '#1E293B');
+    ctx.fillStyle = '#7E22CE';
+    ctx.font = '900 64px "Fredoka", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+', 185, 80);
+    drawShapeSymbolOnCanvas(ctx, partShapeId, 275, 80, 44, partMeta.hex, '#1E293B');
+    ctx.fillText('=', 355, 80);
+    drawShapeSymbolOnCanvas(ctx, targetShapeId, 430, 80, 48, targetMeta.hex, '#1E293B');
+
+    const signTex = new THREE.CanvasTexture(canvas);
+    const signBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(3.5, 1.1, 0.14),
+        new THREE.MeshBasicMaterial({ map: signTex })
+    );
+    signBoard.position.set(0, 1.75, -0.8);
+    group.add(signBoard);
+
+    shapeBridgeState.slotsContainer.add(group);
+    return { x, z, group, signBoard };
 }
 function updateMarioMissionSign(targetKey) {
     if (!marioHero.missionSignMesh) return;
