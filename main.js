@@ -376,15 +376,52 @@ const MAZE_COUNTING_TIERS = [
 ];
 
 function ensureMazeCompactHUD() {
+    // 1. 將十字方向盤固定喺「右下角」最底，緊湊唔佔位
     const dpad = document.getElementById('treasure-dpad-bar');
     if (dpad && !dpad.dataset.compactMoved) {
         dpad.dataset.compactMoved = 'true';
         document.body.appendChild(dpad);
-        dpad.className = 'fixed right-3 sm:right-6 bottom-24 sm:bottom-28 z-30 pointer-events-auto items-center justify-center gap-1.5 sm:gap-2 bg-slate-900/75 backdrop-blur-md p-2 sm:p-3 rounded-3xl border-2 border-amber-400 shadow-xl hidden';
+        dpad.className = 'fixed right-2.5 sm:right-5 bottom-2.5 sm:bottom-4 z-30 pointer-events-auto items-center justify-center gap-1 sm:gap-1.5 bg-slate-900/75 backdrop-blur-md p-1.5 sm:p-2.5 rounded-3xl border-2 border-amber-400 shadow-xl hidden';
         const infoBox = dpad.querySelector('div.border-r');
         if (infoBox) infoBox.className = 'hidden';
     }
 
+    // 2. 將原本霸住「中間下面」嘅白色大任務框，縮細並移去「左下角」，兼加入觸控穿透 (pointer-events-none)！
+    const targetBadge = document.getElementById('target-number-card');
+    const promptCard = targetBadge ? targetBadge.parentElement : null;
+    if (promptCard && !promptCard.dataset.movedToCorner) {
+        promptCard.dataset.movedToCorner = 'true';
+        document.body.appendChild(promptCard);
+        promptCard.className = 'fixed left-2.5 sm:left-4 bottom-2.5 sm:bottom-4 z-20 pointer-events-none bg-white/85 backdrop-blur-md px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl border-2 border-sky-300 shadow-lg flex items-center gap-2 max-w-[270px] sm:max-w-[360px] transition-all';
+
+        // 縮小左邊目標數字章
+        targetBadge.className = 'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex flex-col items-center justify-center font-black shadow-sm flex-shrink-0 border-2 border-amber-400';
+        const badgeNum = document.getElementById('target-badge-num');
+        if (badgeNum) badgeNum.className = 'text-lg sm:text-xl font-black leading-none';
+
+        // 縮小提示主標題，並隱藏冗長嘅第 2 行副標題，大幅減少高度！
+        const mainPrompt = document.getElementById('prompt-text');
+        if (mainPrompt) mainPrompt.className = 'text-xs sm:text-sm font-black text-slate-800 leading-snug text-left line-clamp-2';
+        const subPrompt = document.getElementById('sub-prompt-text');
+        if (subPrompt) subPrompt.className = 'hidden';
+
+        // 只保留「下一關 / 換新大橋」細掣可以點擊，框體其餘部份完全穿透唔阻手指操控 3D 畫面！
+        const rightBtnLabel = document.getElementById('right-btn-label');
+        const rightBtn = rightBtnLabel ? rightBtnLabel.closest('button') : null;
+        if (rightBtn) {
+            rightBtn.className = 'pointer-events-auto btn-toy-sm bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-2.5 py-1.5 rounded-xl border-2 border-amber-500 shadow text-xs whitespace-nowrap flex items-center gap-1 flex-shrink-0';
+        }
+    }
+
+    // 3. 將中間下面嘅「進度條 (#counting-banner)」移去左下角任務框正上方，設為觸控穿透！
+    const banner = document.getElementById('counting-banner');
+    if (banner && !banner.dataset.movedToCorner) {
+        banner.dataset.movedToCorner = 'true';
+        document.body.appendChild(banner);
+        banner.className = 'fixed left-2.5 sm:left-4 bottom-16 sm:bottom-20 z-20 pointer-events-none bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-2xl border-2 border-amber-300 shadow-md flex items-center gap-1.5 max-w-[270px] sm:max-w-[360px] overflow-x-auto hidden';
+    }
+
+    // 4. 頂部難度層次切換欄
     let tierBar = document.getElementById('maze-tier-bar');
     if (!tierBar) {
         tierBar = document.createElement('div');
@@ -672,8 +709,8 @@ function ensureShapeSlamButton() {
         btn = document.createElement('button');
         btn.id = 'shape-slam-btn';
         btn.onclick = () => autoSlamCarriedShapeMinion();
-        btn.className = 'fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-teal-500 via-emerald-500 to-amber-400 hover:from-teal-400 hover:to-amber-300 text-white font-black px-6 py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2.5 text-lg sm:text-2xl animate-bounce hidden';
-        btn.innerHTML = `<span>🔨</span><span id="shape-slam-btn-text">飛躍鑲嵌修橋！</span><span>✨</span>`;
+        btn.className = 'fixed right-2.5 sm:right-5 bottom-32 sm:bottom-36 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-teal-500 via-emerald-500 to-amber-400 hover:from-teal-400 hover:to-amber-300 text-white font-black px-4 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2 text-base sm:text-xl animate-bounce hidden';
+        btn.innerHTML = `<span>🔨</span><span id="shape-slam-btn-text">飛躍鑲嵌！</span><span>✨</span>`;
         document.body.appendChild(btn);
     }
     return btn;
@@ -1036,8 +1073,8 @@ function ensureAdditionFireButton() {
         btn = document.createElement('button');
         btn.id = 'addition-fire-btn';
         btn.onclick = () => fireAdditionCannon();
-        btn.className = 'fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 hover:from-red-400 hover:to-amber-300 text-white font-black px-7 py-3.5 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-3 text-xl sm:text-2xl animate-bounce hidden';
-        btn.innerHTML = `<span>🔥</span><span>點火發射答案小兵！</span><span>🚀</span>`;
+        btn.className = 'fixed right-2.5 sm:right-5 bottom-32 sm:bottom-36 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 hover:from-red-400 hover:to-amber-300 text-white font-black px-4 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2 text-base sm:text-xl animate-bounce hidden';
+        btn.innerHTML = `<span>🔥</span><span>點火發射！</span><span>🚀</span>`;
         document.body.appendChild(btn);
     }
     return btn;
