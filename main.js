@@ -1,6 +1,6 @@
 /********************************************************************
  * [FILE: main.js - PART 1 OF 2 (上半部)]
- * 包含：大廳導航、迷宮救兵(Mode 5)、加減法競技場(Mode 6)、形狀修橋2.0(Mode 7)
+ * 包含：大廳導航、清爽左下角HUD、迷宮救兵(Mode 5)、形狀修橋大作戰(Mode 7 新版)
  ********************************************************************/
 const SUBJECT_DISPLAY_META = {
     number: { icon: '🔢', title: '數字樂園', short: '🔢 數字' },
@@ -23,11 +23,13 @@ if (typeof window.shapeBridgeGroup === 'undefined') {
 }
 if (typeof window.shapeBridgeState === 'undefined') {
     window.shapeBridgeState = {
-        built: false, tier: 'three', slots: [], bridgeCoins: [],
-        carryingMinion: null, jumpingAnim: null, crossingWaypoints: [],
+        built: false, tier: 'turtle', slots: [], pedestals: [], bridgeCoins: [],
+        carryingMinion: null, jumpingAnim: null, flyingMonsters: [],
         phase: 'repair', heroX: 0, heroZ: 3.8, targetX: null, targetZ: null,
-        moveDirX: 0, moveDirZ: 0, walkCycle: 0, facingAngle: Math.PI,
-        heroMesh: null, compassRing: null, clickMarker: null, slotsContainer: null
+        autoPickMinion: null, autoPlugSlot: null, moveDirX: 0, moveDirZ: 0,
+        walkCycle: 0, facingAngle: Math.PI, isPointerDragging: false,
+        heroMesh: null, hammerMesh: null, rainbowTrackMesh: null,
+        compassRing: null, clickMarker: null, slotsContainer: null
     };
 }
 
@@ -62,10 +64,10 @@ function ensureAdditionLobbyCard() {
             <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-sky-600 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">🌉</div>
             <div class="flex-1">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-lg sm:text-2xl font-black text-slate-800">馬利奧形狀修橋大作戰（3D 捉小兵塞橋窿）</span>
+                    <span class="text-lg sm:text-2xl font-black text-slate-800">馬利奧形狀修橋大作戰（黃金大槌＋狂食金幣）</span>
                     <span class="text-xs font-black bg-gradient-to-r from-teal-500 to-sky-600 text-white px-3 py-1 rounded-full shadow-sm">🔺 形狀樂園王牌新玩法</span>
                 </div>
-                <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">控制馬利奧捉住立體形狀小兵舉過頭頂，飛躍鑲嵌壓扁小水怪修好大橋過關！</p>
+                <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">一篤即捉蘑菇台形狀小兵，揮動黃金大槌「咚咚」打樁彈飛水怪，再喺彩虹大橋左右狂食金幣！</p>
             </div>`;
         treasureCard.parentNode.appendChild(bridgeCard);
     }
@@ -326,13 +328,13 @@ function startNewRound() {
     });
 
     if (gameState.mode === 'gacha') {
-        setPromptUI(`請搵出「${meta.title}」扭蛋尋寶！`, `可對照左方目標提示卡，輕觸畫面中的立體「${meta.title}」公仔`);
+        setPromptUI(`請搵出「${meta.title}」扭蛋尋寶！`, `輕觸畫面中的立體「${meta.title}」公仔`);
     } else if (gameState.mode === 'train') {
         updateTrainSignTexture(target);
         trainAnimState.currentX = -12;
         trainAnimState.targetX = 0;
         playTrainWhistle();
-        setPromptUI(`小火車載住「${meta.title}」，請搵出一樣嘅積木公仔！`, `視覺配對：請輕觸與火車牌相同的立體「${meta.title}」`);
+        setPromptUI(`小火車載住「${meta.title}」，請搵出一樣嘅積木公仔！`, `請輕觸與火車牌相同的立體「${meta.title}」`);
     }
 
     if (!gameState.inLobby) scheduleAutoVisualPrompt();
@@ -366,7 +368,7 @@ function setupMarioRound(choices, target, meta) {
     setPromptUI(`🍄 關卡 1-${gameState.marioStage}：請頂開「${meta.title}」嘅金磚塊！`, `直接點擊空中磚塊，或用下方按鈕移動並跳起頂磚塊`);
 }
 
-// ==================== Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊】 ====================
+// ==================== Mode 5: 【1-2-3-4-5 迷宮救兵大巡遊 & 清爽零遮擋 HUD】 ====================
 const MAZE_COUNTING_TIERS = [
     { id: 'forward',  label: '🌱 1.基礎順數' },
     { id: 'count_on', label: '🧩 2.中途接數' },
@@ -376,7 +378,14 @@ const MAZE_COUNTING_TIERS = [
 ];
 
 function ensureMazeCompactHUD() {
-    // 1. 將十字方向盤固定喺「右下角」最底，緊湊唔佔位
+    // 1. 綁定手指按住拖曳跟隨 (Touch-Drag Follow)，令小朋友喺 iPad 拖住手指就識順滑行路！
+    if (renderer && renderer.domElement && !renderer.domElement.dataset.dragBound) {
+        renderer.domElement.dataset.dragBound = 'true';
+        renderer.domElement.addEventListener('pointermove', onCanvasPointerMove, false);
+        window.addEventListener('pointerup', onCanvasPointerUp, false);
+    }
+
+    // 2. 將十字方向盤固定喺「右下角」最底
     const dpad = document.getElementById('treasure-dpad-bar');
     if (dpad && !dpad.dataset.compactMoved) {
         dpad.dataset.compactMoved = 'true';
@@ -386,26 +395,20 @@ function ensureMazeCompactHUD() {
         if (infoBox) infoBox.className = 'hidden';
     }
 
-    // 2. 將原本霸住「中間下面」嘅白色大任務框，縮細並移去「左下角」，兼加入觸控穿透 (pointer-events-none)！
+    // 3. 將中間下面嘅白色大任務框縮細移去「左下角」，設為 pointer-events-none 觸控穿透！
     const targetBadge = document.getElementById('target-number-card');
     const promptCard = targetBadge ? targetBadge.parentElement : null;
     if (promptCard && !promptCard.dataset.movedToCorner) {
         promptCard.dataset.movedToCorner = 'true';
         document.body.appendChild(promptCard);
         promptCard.className = 'fixed left-2.5 sm:left-4 bottom-2.5 sm:bottom-4 z-20 pointer-events-none bg-white/85 backdrop-blur-md px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl border-2 border-sky-300 shadow-lg flex items-center gap-2 max-w-[270px] sm:max-w-[360px] transition-all';
-
-        // 縮小左邊目標數字章
         targetBadge.className = 'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex flex-col items-center justify-center font-black shadow-sm flex-shrink-0 border-2 border-amber-400';
         const badgeNum = document.getElementById('target-badge-num');
         if (badgeNum) badgeNum.className = 'text-lg sm:text-xl font-black leading-none';
-
-        // 縮小提示主標題，並隱藏冗長嘅第 2 行副標題，大幅減少高度！
         const mainPrompt = document.getElementById('prompt-text');
         if (mainPrompt) mainPrompt.className = 'text-xs sm:text-sm font-black text-slate-800 leading-snug text-left line-clamp-2';
         const subPrompt = document.getElementById('sub-prompt-text');
         if (subPrompt) subPrompt.className = 'hidden';
-
-        // 只保留「下一關 / 換新大橋」細掣可以點擊，框體其餘部份完全穿透唔阻手指操控 3D 畫面！
         const rightBtnLabel = document.getElementById('right-btn-label');
         const rightBtn = rightBtnLabel ? rightBtnLabel.closest('button') : null;
         if (rightBtn) {
@@ -413,7 +416,7 @@ function ensureMazeCompactHUD() {
         }
     }
 
-    // 3. 將中間下面嘅「進度條 (#counting-banner)」移去左下角任務框正上方，設為觸控穿透！
+    // 4. 進度條移去左下角任務框正上方
     const banner = document.getElementById('counting-banner');
     if (banner && !banner.dataset.movedToCorner) {
         banner.dataset.movedToCorner = 'true';
@@ -421,7 +424,6 @@ function ensureMazeCompactHUD() {
         banner.className = 'fixed left-2.5 sm:left-4 bottom-16 sm:bottom-20 z-20 pointer-events-none bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-2xl border-2 border-amber-300 shadow-md flex items-center gap-1.5 max-w-[270px] sm:max-w-[360px] overflow-x-auto hidden';
     }
 
-    // 4. 頂部難度層次切換欄
     let tierBar = document.getElementById('maze-tier-bar');
     if (!tierBar) {
         tierBar = document.createElement('div');
@@ -641,24 +643,30 @@ function setupTreasureRound() {
     const shownTitle = (treasureHero.blindMode && !treasureHero.hintRevealedThisStep) ? '神秘數字（？）' : firstMeta.title;
 
     if (tier === 'missing') {
-        setPromptUI(`🕵️ 失蹤填空：隊伍有 ${preRescuedNums.join('、')}，中間缺咗邊個？請搵出嚟插隊！`, `觀察進度條 [ ✓${seq[0]} ➔ 🎯？ ➔ ✓${seq[2]} ]，喺迷宮搵出正確數字補返入隊伍啦！`);
+        setPromptUI(`🕵️ 失蹤填空：隊伍有 ${preRescuedNums.join('、')}，請搵出失蹤數字插隊！`, ``);
     } else if (tier === 'backward') {
-        setPromptUI(`🚀 火箭倒數挑戰（${seq[0]} 倒數去 ${seq[4]}）：請先救「${shownTitle}」！`, `由大至細倒數：${seq.join(' ➔ ')}，帶佢哋去皇冠城堡發射煙花！`);
+        setPromptUI(`🚀 火箭倒數挑戰（${seq[0]}➔${seq[4]}）：請先救「${shownTitle}」！`, ``);
     } else if (tier === 'skip') {
-        const oddEvenLabel = (seq[0] % 2 === 0) ? '雙數小隊 (2,4,6,8,10)' : '單數小隊 (1,3,5,7,9)';
-        setPromptUI(`⚡ 跳數挑戰【${oddEvenLabel}】：請先去救「${shownTitle}」！`, `兩個一數：${seq.join(' ➔ ')}，試下直接撳迷宮入面嘅數字自動轉彎行過去！`);
+        const oddEvenLabel = (seq[0] % 2 === 0) ? '雙數小隊' : '單數小隊';
+        setPromptUI(`⚡ ${oddEvenLabel}：請先去救「${shownTitle}」！`, ``);
     } else if (tier === 'count_on') {
-        setPromptUI(`🧩 中途接數（由 ${seq[0]} 開始順數）：請先去救「${shownTitle}」！`, `接龍任務：${seq.join(' ➔ ')}，可按右下角方向掣或直接撳數字公仔！`);
+        setPromptUI(`🧩 中途接數（由 ${seq[0]} 起數）：請先救「${shownTitle}」！`, ``);
     } else {
-        setPromptUI(`${lvl.name}：請先去救「${shownTitle}」組隊巡遊！`, `順序搵出 ${seq.join(' ➔ ')} 排隊跟尾！（頂部可隨時切換 5 種數數難度層次）`);
+        setPromptUI(`${lvl.name}：請先去救「${shownTitle}」組隊巡遊！`, ``);
     }
 }
 
 function setTreasureMoveDir(dx, dz) {
     if (gameState.mode === 'shapebridge') {
-        if (gameState.isBusy || shapeBridgeState.phase !== 'repair') { shapeBridgeState.moveDirX = 0; shapeBridgeState.moveDirZ = 0; return; }
+        if (shapeBridgeState.phase !== 'repair' && shapeBridgeState.phase !== 'crossing') {
+            shapeBridgeState.moveDirX = 0; shapeBridgeState.moveDirZ = 0; return;
+        }
         shapeBridgeState.moveDirX = dx; shapeBridgeState.moveDirZ = dz;
-        if (dx !== 0 || dz !== 0) { shapeBridgeState.targetX = null; shapeBridgeState.targetZ = null; if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false; }
+        if (dx !== 0 || dz !== 0) {
+            shapeBridgeState.targetX = null; shapeBridgeState.targetZ = null;
+            shapeBridgeState.autoPickMinion = null; shapeBridgeState.autoPlugSlot = null;
+            if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false;
+        }
         return;
     }
     if (gameState.mode === 'addition') {
@@ -674,10 +682,14 @@ function setTreasureMoveDir(dx, dz) {
 
 function nudgeTreasureHero(dx, dz) {
     if (gameState.mode === 'shapebridge') {
+        if (shapeBridgeState.phase === 'crossing') {
+            shapeBridgeState.targetX = Math.max(-2.6, Math.min(2.6, shapeBridgeState.heroX + dx * 2.2));
+            return;
+        }
         if (gameState.isBusy || shapeBridgeState.phase !== 'repair') return;
         playPopSound(440);
-        shapeBridgeState.targetX = Math.max(-6.2, Math.min(6.2, shapeBridgeState.heroX + dx * 1.5));
-        shapeBridgeState.targetZ = Math.max(0.2, Math.min(5.6, shapeBridgeState.heroZ + dz * 1.5));
+        shapeBridgeState.targetX = Math.max(-6.2, Math.min(6.2, shapeBridgeState.heroX + dx * 1.6));
+        shapeBridgeState.targetZ = Math.max(0.4, Math.min(5.6, shapeBridgeState.heroZ + dz * 1.6));
         return;
     }
     if (gameState.mode === 'addition') {
@@ -694,20 +706,20 @@ function nudgeTreasureHero(dx, dz) {
         treasureHero.pathQueue = [mazeGridToWorld(cur.col + dx, cur.row + dz)];
     }
 }
-// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 3.0 (跨海三島大地图 + 4大全新玩法)】 ====================
+
+// ==================== Mode 7: 【🌉 馬利奧形狀修橋大作戰 (蘑菇台 + 黃金大魔槌 + 過橋狂食金幣)】 ====================
 const SHAPE_BRIDGE_TIERS = [
-    { id: 'expedition', label: '🗺️ 1.三島長征 (連闖兩河)' },
-    { id: 'mystery',    label: '📦 2.神秘木箱尋寶 (撞箱救兵)' },
-    { id: 'fusion',     label: '🧩 3.幾何合成工坊 (2合1變身)' },
-    { id: 'challenge',  label: '🕵️ 4.影子與旋轉大挑戰' }
+    { id: 'turtle',   label: '🐢 1.烏龜浮橋 (基礎配對)' },
+    { id: 'shadow',   label: '🕵️ 2.神秘黑影橋 (純輪廓)' },
+    { id: 'windmill', label: '🔄 3.大風車旋轉橋 (轉向)' },
+    { id: 'split',    label: '🧩 4.雙拼合體橋 (2合1拼圖)' }
 ];
 
-// 幾何 2 合 1 合成配方：2 個三角形 = 正方形、2 個正方形 = 長方形、2 個三角形 = 五角星、2 個圓形 = 心形
-const SHAPE_FUSION_RECIPES = [
-    { target: 'square',    part: 'triangle', desc: '2 個「▲三角形」可以拼成 1 個「■正方形」' },
-    { target: 'rectangle', part: 'square',   desc: '2 個「■正方形」可以拼成 1 個「▬長方形」' },
-    { target: 'star',      part: 'triangle', desc: '2 個「▲三角形」可以魔法合成「★星形」' },
-    { target: 'heart',     part: 'circle',   desc: '2 個「●圓形」可以魔法合成「♥心形」' }
+const SPLIT_BRIDGE_RECIPES = [
+    { target: 'square',    part: 'triangle', title: '2隻「▲三角形」拼成「■正方形」' },
+    { target: 'rectangle', part: 'square',   title: '2隻「■正方形」拼成「▬長方形」' },
+    { target: 'star',      part: 'triangle', title: '2隻「▲三角形」拼成「★五角星」' },
+    { target: 'heart',     part: 'circle',   title: '2隻「●圓形」拼成「♥心形」' }
 ];
 
 function ensureShapeSlamButton() {
@@ -717,7 +729,7 @@ function ensureShapeSlamButton() {
         btn.id = 'shape-slam-btn';
         btn.onclick = () => autoSlamCarriedShapeMinion();
         btn.className = 'fixed right-2.5 sm:right-5 bottom-32 sm:bottom-36 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-teal-500 via-emerald-500 to-amber-400 hover:from-teal-400 hover:to-amber-300 text-white font-black px-4 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2 text-base sm:text-xl animate-bounce hidden';
-        btn.innerHTML = `<span>🔨</span><span id="shape-slam-btn-text">飛躍鑲嵌！</span><span>✨</span>`;
+        btn.innerHTML = `<span>🔨</span><span id="shape-slam-btn-text">大槌打樁修橋！</span><span>✨</span>`;
         document.body.appendChild(btn);
     }
     return btn;
@@ -726,21 +738,14 @@ function ensureShapeSlamButton() {
 function autoSlamCarriedShapeMinion() {
     if (gameState.mode !== 'shapebridge' || shapeBridgeState.phase !== 'repair' || !shapeBridgeState.carryingMinion) return;
     const carriedKey = shapeBridgeState.carryingMinion.itemKey;
-
-    // 如果喺「🧩 幾何合成工坊」舉住組件小兵，撳大掣會自動送入合成台！
-    if (shapeBridgeState.tier === 'fusion' && shapeBridgeState.fusionAltar && carriedKey === shapeBridgeState.fusionPartShape && shapeBridgeState.fusionParts.length < 2) {
-        depositMinionIntoFusionAltar();
-        return;
-    }
-
-    const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.riverId === shapeBridgeState.currentRiver && s.shapeId === carriedKey);
+    const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.requiredShapeId === carriedKey);
     if (matchSlot) triggerPlugMinionIntoBridgeSlot(matchSlot);
 }
 
 function renderShapeBridgeTierBarUI() {
     const tierBar = document.getElementById('maze-tier-bar');
     if (!tierBar) return;
-    const cur = shapeBridgeState.tier || 'expedition';
+    const cur = shapeBridgeState.tier || 'turtle';
     let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-teal-400 shadow-lg">`;
     SHAPE_BRIDGE_TIERS.forEach(t => {
         const active = (cur === t.id);
@@ -773,92 +778,19 @@ function updateShapeBridgeBanner() {
     shapeBridgeState.slots.forEach(slot => {
         const meta = getCognitiveItemMeta(slot.shapeId, 'shape');
         const pill = document.createElement('span');
-        const isCurrentRiver = (slot.riverId === shapeBridgeState.currentRiver);
+        const isCarriedMatch = shapeBridgeState.carryingMinion && shapeBridgeState.carryingMinion.itemKey === slot.requiredShapeId && !slot.filled;
         if (slot.filled) {
             pill.className = 'inline-flex items-center gap-1 bg-emerald-500 text-white px-2 py-0.5 rounded-xl text-xs sm:text-sm font-black shadow-sm star-earned';
-            pill.textContent = `✓河${slot.riverId}:${meta.badgeSymbol}`;
-        } else if (isCurrentRiver) {
+            pill.textContent = `✓${meta.badgeSymbol}${meta.title}`;
+        } else if (isCarriedMatch) {
             pill.className = 'inline-flex items-center gap-1 bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-xl text-xs sm:text-base font-black border-2 border-orange-500 animate-bounce shadow';
-            pill.textContent = `🎯河${slot.riverId}:${meta.badgeSymbol}${meta.title}`;
+            pill.textContent = `🔨篤橋窿打樁！`;
         } else {
-            pill.className = 'inline-flex items-center gap-1 bg-slate-100 text-slate-400 px-2 py-0.5 rounded-xl text-xs font-bold';
-            pill.textContent = `🔒河${slot.riverId}:${meta.badgeSymbol}`;
+            pill.className = 'inline-flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-xl text-xs font-bold border border-slate-300';
+            const progressTxt = slot.neededCount > 1 ? `(${slot.currentCount}/2)` : '';
+            pill.textContent = (shapeBridgeState.tier === 'shadow') ? `❓黑影窿` : `${meta.badgeSymbol}${meta.title}${progressTxt}`;
         }
         dotsContainer.appendChild(pill);
-    });
-}
-
-// 在指定島嶼生成散步形狀小兵與神秘問號木箱
-function spawnIslandMinionsAndCrates(riverId) {
-    interactiveBlocks.forEach(b => {
-        if (b.isArenaMinion) b.group.visible = false;
-    });
-    shapeBridgeState.mysteryCrates = [];
-
-    const tier = shapeBridgeState.tier || 'expedition';
-    const riverSlots = shapeBridgeState.slots.filter(s => s.riverId === riverId && !s.filled);
-    const neededShapes = riverSlots.map(s => s.shapeId);
-    const allShapes = SHAPE_CURRICULUM.map(s => s.id);
-    const zCenter = (riverId === 1) ? 5.8 : -3.1;
-
-    // 玩法 3：🧩 幾何合成工坊（喺第 2 島用 2 隻細形狀合成 1 隻目標大形狀！）
-    if (tier === 'fusion' && riverId === 2 && neededShapes.length > 0) {
-        const recipe = SHAPE_FUSION_RECIPES.find(r => r.target === neededShapes[0]) || SHAPE_FUSION_RECIPES[0];
-        shapeBridgeState.fusionTargetShape = recipe.target;
-        shapeBridgeState.fusionPartShape = recipe.part;
-        shapeBridgeState.fusionParts = [];
-        shapeBridgeState.fusionAltar = createShapeFusionAltar(0, -3.2, recipe.part, recipe.target);
-
-        const distractors = allShapes.filter(s => s !== recipe.part && s !== recipe.target).sort(() => Math.random() - 0.5);
-        const spawnList = [recipe.part, recipe.part, distractors[0], distractors[1]];
-        const coords = [{ x: -5.2, z: -2.2 }, { x: 5.2, z: -2.2 }, { x: -3.5, z: -4.4 }, { x: 3.5, z: -4.4 }];
-        spawnList.forEach((shId, idx) => {
-            const pt = coords[idx % coords.length];
-            const m = create3DNumberCharacter(shId, pt.x, pt.z, 0.7);
-            m.isArenaMinion = true;
-            m.isShapeBridgeMinion = true;
-            m.islandId = riverId;
-            m.vx = (idx % 2 === 0 ? 1 : -1) * 1.3;
-            m.vz = 0.9;
-            interactiveBlocks.push(m);
-        });
-        gameState.targetKey = recipe.part;
-        updateTargetBadgeUI(recipe.part, false);
-        setPromptUI(`🧩 幾何合成工坊：${recipe.desc}！`, `請捉 2 隻「${getCognitiveItemMeta(recipe.part, 'shape').title}小兵」放入島中央紫色合成台！`);
-        return;
-    }
-
-    const distractors = allShapes.filter(s => !neededShapes.includes(s)).sort(() => Math.random() - 0.5).slice(0, 2);
-    const roamList = [...neededShapes, ...distractors];
-
-    // 玩法 2：📦 神秘木箱尋寶（將其中一隻目標形狀小兵藏入 3D 問號木箱入面！）
-    if (tier === 'mystery') {
-        const hiddenSh = neededShapes[0];
-        const crateCoords = (riverId === 1) ? [[-4.2, 5.2], [4.2, 5.2]] : [[-4.8, -3.1], [4.8, -3.1]];
-        const pickIdx = Math.floor(Math.random() * 2);
-        crateCoords.forEach(([cx, cz], idx) => {
-            const cShape = (idx === pickIdx) ? hiddenSh : distractors[0];
-            shapeBridgeState.mysteryCrates.push(createBridgeMysteryCrate(cx, cz, cShape));
-        });
-    }
-
-    const coords = [
-        { x: -4.6, z: zCenter - 1.2 },
-        { x: 4.6,  z: zCenter - 1.2 },
-        { x: -2.4, z: zCenter + 1.2 },
-        { x: 2.4,  z: zCenter + 1.2 }
-    ];
-    roamList.forEach((shId, idx) => {
-        const pt = coords[idx % coords.length];
-        const minion = create3DNumberCharacter(shId, pt.x, pt.z, 0.72);
-        minion.isArenaMinion = true;
-        minion.isShapeBridgeMinion = true;
-        minion.islandId = riverId;
-        if (minion.haloMesh) { minion.haloMesh.rotation.x = Math.PI / 2; minion.haloMesh.position.set(0, -0.95, 0); }
-        const ang = (idx / roamList.length) * Math.PI * 2 + 0.4;
-        minion.vx = Math.cos(ang) * 1.35;
-        minion.vz = Math.sin(ang) * 1.05;
-        interactiveBlocks.push(minion);
     });
 }
 
@@ -870,181 +802,115 @@ function setupShapeBridgeRound() {
     renderShapeBridgeTierBarUI();
 
     if (shapeBridgeState.slotsContainer) shapeBridgeState.slotsContainer.clear();
+    if (shapeBridgeState.rainbowTrackMesh) shapeBridgeState.rainbowTrackMesh.visible = false;
+    if (shapeBridgeState.hammerMesh) shapeBridgeState.hammerMesh.visible = false;
+
     shapeBridgeState.slots = [];
-    shapeBridgeState.mysteryCrates = [];
-    shapeBridgeState.speedPads = [];
+    shapeBridgeState.pedestals = [];
     shapeBridgeState.bridgeCoins = [];
-    shapeBridgeState.fusionAltar = null;
-    shapeBridgeState.fusionParts = [];
+    shapeBridgeState.flyingMonsters = [];
     shapeBridgeState.carryingMinion = null;
     shapeBridgeState.jumpingAnim = null;
-    shapeBridgeState.crossingWaypoints = [];
-    shapeBridgeState.currentRiver = 1;
-    shapeBridgeState.speedBoostTimer = 0;
+    shapeBridgeState.autoPickMinion = null;
+    shapeBridgeState.autoPlugSlot = null;
     shapeBridgeState.phase = 'repair';
 
-    const tier = shapeBridgeState.tier || 'expedition';
+    const tier = shapeBridgeState.tier || 'turtle';
     const allShapes = SHAPE_CURRICULUM.map(s => s.id).sort(() => Math.random() - 0.5);
 
-    // 1. 建立第 1 條河橋面缺口 (位於 Z = +1.0，1 個缺口鎮守中央大橋)
-    const r1Shape = allShapes[0];
-    shapeBridgeState.slots.push(createBridgeSlotObject(0, 0, r1Shape, tier, 1.0, 1));
-
-    // 2. 建立第 2 條河橋面缺口 (位於 Z = -7.5)
-    if (tier === 'fusion') {
-        const recipe = SHAPE_FUSION_RECIPES[Math.floor(Math.random() * SHAPE_FUSION_RECIPES.length)];
-        shapeBridgeState.slots.push(createBridgeSlotObject(1, 0, recipe.target, tier, -7.5, 2));
+    let pedestalShapes = [];
+    if (tier === 'split') {
+        // 🧩 雙拼合體橋：2 個大橋窿，每個橋窿需要 2 隻細形狀小兵拼合！
+        const pickedRecipes = [...SPLIT_BRIDGE_RECIPES].sort(() => Math.random() - 0.5).slice(0, 2);
+        const xPos = [-2.5, 2.5];
+        pickedRecipes.forEach((rec, idx) => {
+            shapeBridgeState.slots.push(createBridgeSlotObject(idx, xPos[idx], rec.target, tier, rec.part));
+            pedestalShapes.push(rec.part, rec.part);
+        });
     } else {
-        const r2Shapes = [allShapes[1], allShapes[2]];
-        shapeBridgeState.slots.push(createBridgeSlotObject(1, -2.6, r2Shapes[0], tier, -7.5, 2));
-        shapeBridgeState.slots.push(createBridgeSlotObject(2, 2.6, r2Shapes[1], tier, -7.5, 2));
+        // 3 個烏龜浮橋缺口 (-3.3, 0, +3.3)
+        const chosenShapes = allShapes.slice(0, 3);
+        const xPos = [-3.3, 0, 3.3];
+        chosenShapes.forEach((shId, idx) => {
+            shapeBridgeState.slots.push(createBridgeSlotObject(idx, xPos[idx], shId, tier, null));
+        });
+        const distractor = allShapes[3];
+        pedestalShapes = [...chosenShapes, distractor].sort(() => Math.random() - 0.5);
     }
 
-    // 3. 在三島大地图加入「⚡ 閃電星星加速板」
-    if (typeof createBridgeSpeedPad === 'function') {
-        shapeBridgeState.speedPads.push(
-            createBridgeSpeedPad(-3.2, 6.8),
-            createBridgeSpeedPad(3.2, 6.8),
-            createBridgeSpeedPad(-4.8, -1.8),
-            createBridgeSpeedPad(4.8, -1.8)
-        );
-    }
+    // 在南岸草地建立 4 座【🍄 彩色彈彈蘑菇台】，小兵企定定喺蘑菇台上面彈跳揮手，100% 唔會亂撞！
+    const pedCoords = [
+        { x: -4.5, z: 3.4, color: 0xFB7185 },
+        { x: -1.5, z: 4.1, color: 0x38BDF8 },
+        { x: 1.5,  z: 4.1, color: 0xA855F7 },
+        { x: 4.5,  z: 3.4, color: 0xF59E0B }
+    ];
+    pedestalShapes.forEach((shId, idx) => {
+        const pt = pedCoords[idx % pedCoords.length];
+        createMushroomPedestal(pt.x, pt.z, pt.color);
+        const minion = create3DNumberCharacter(shId, pt.x, pt.z, 0.74);
+        minion.isArenaMinion = true;
+        minion.isShapeBridgeMinion = true;
+        minion.homeX = pt.x;
+        minion.homeZ = pt.z;
+        if (minion.haloMesh) {
+            minion.haloMesh.rotation.x = Math.PI / 2;
+            minion.haloMesh.position.set(0, -0.95, 0);
+        }
+        interactiveBlocks.push(minion);
+    });
 
-    // 生成第 1 島（南島）嘅形狀小兵與神秘問號木箱
-    spawnIslandMinionsAndCrates(1);
-
-    gameState.targetKey = r1Shape;
-    updateTargetBadgeUI(r1Shape, false);
+    const firstSlot = shapeBridgeState.slots[0];
+    gameState.targetKey = firstSlot.requiredShapeId;
+    updateTargetBadgeUI(firstSlot.requiredShapeId, false);
     updateShapeBridgeBanner();
 
     shapeBridgeState.heroX = 0;
-    shapeBridgeState.heroZ = 7.2;
+    shapeBridgeState.heroZ = 2.1;
     shapeBridgeState.targetX = null;
     shapeBridgeState.targetZ = null;
     shapeBridgeState.moveDirX = 0;
     shapeBridgeState.moveDirZ = 0;
-    shapeBridgeState.facingAngle = Math.PI;
+    shapeBridgeState.facingAngle = 0;
     if (shapeBridgeState.heroMesh) {
-        shapeBridgeState.heroMesh.position.set(0, 0.36, 7.2);
-        shapeBridgeState.heroMesh.rotation.y = Math.PI;
+        shapeBridgeState.heroMesh.position.set(0, 0.36, 2.1);
+        shapeBridgeState.heroMesh.rotation.y = 0;
     }
-    if (shapeBridgeState.compassRing) shapeBridgeState.compassRing.position.set(0, 0.38, 7.2);
+    if (shapeBridgeState.compassRing) shapeBridgeState.compassRing.position.set(0, 0.38, 2.1);
 
-    const m0 = getCognitiveItemMeta(r1Shape, 'shape');
-    if (tier === 'mystery') {
-        setPromptUI(`📦 神秘木箱尋寶：撞開島上嘅「？木箱」搵出「${m0.title}小兵」修好第 1 條橋！`, `踩「⚡加速板」可以極速衝刺！`);
+    if (tier === 'split') {
+        setPromptUI(`🧩 雙拼合體橋：篤蘑菇台上嘅細形狀小兵，2隻拼埋修好大缺口！`, ``);
+    } else if (tier === 'shadow') {
+        setPromptUI(`🕵️ 神秘黑影橋：觀察橋窿有幾多隻角？直接篤蘑菇台上嘅小兵去修橋！`, ``);
+    } else if (tier === 'windmill') {
+        setPromptUI(`🔄 大風車旋轉橋：橋窿識得轉彎㗎！快啲揀啱形狀小兵用黃金大槌打樁！`, ``);
     } else {
-        setPromptUI(`🗺️ 三島長征（第 1 島）：請先捉「${m0.badgeSymbol}${m0.title}小兵」修好第 1 條橋過河！`, `修好第 1 條橋就可以過河進入黃金機關島！`);
+        setPromptUI(`🐢 烏龜浮橋：直接篤蘑菇台上嘅形狀小兵，再用黃金大槌打樁彈飛水怪！`, ``);
     }
 }
 
-// 當馬利奧撞開島上嘅「📦 神秘問號木箱」時觸發
-function openBridgeMysteryCrate(crate) {
-    if (!crate || crate.opened) return;
-    crate.opened = true;
-    crate.group.visible = false;
-    playChestOpenSound();
-    emitStarParticles(new THREE.Vector3(crate.x, 1.2, crate.z));
-
-    const minion = create3DNumberCharacter(crate.hiddenShapeId, crate.x, crate.z, 0.72);
-    minion.isArenaMinion = true;
-    minion.isShapeBridgeMinion = true;
-    minion.islandId = shapeBridgeState.currentRiver;
-    minion.vx = 1.2;
-    minion.vz = 1.0;
-    interactiveBlocks.push(minion);
-
-    const meta = getCognitiveItemMeta(crate.hiddenShapeId, 'shape');
-    setPromptUI(`🎉 嘭！撞開神秘木箱跳出咗「${meta.badgeSymbol}${meta.title}小兵」呀！`, `快啲捉住佢去修橋啦！`);
-}
-
-// 當馬利奧喺「🧩 幾何合成工坊」將組件小兵放入中央合成台時觸發
-function depositMinionIntoFusionAltar() {
-    const carried = shapeBridgeState.carryingMinion;
-    if (!carried || !shapeBridgeState.fusionAltar) return;
-
-    playCoinSound();
-    shapeBridgeState.carryingMinion = null;
-    ensureShapeSlamButton().classList.add('hidden');
-
-    const idx = shapeBridgeState.fusionParts.length;
-    carried.group.position.set(idx === 0 ? -0.9 : 0.9, 1.15, shapeBridgeState.fusionAltar.z);
-    carried.group.rotation.set(0, 0, 0);
-    carried.group.scale.setScalar(0.58);
-    shapeBridgeState.fusionParts.push(carried);
-    emitStarParticles(carried.group.position.clone());
-
-    if (shapeBridgeState.fusionParts.length < 2) {
-        const partMeta = getCognitiveItemMeta(shapeBridgeState.fusionPartShape, 'shape');
-        setPromptUI(`✨ 已放入第 1 隻「${partMeta.title}」！仲差 1 隻「${partMeta.title}」就可以合體變身！`, `快啲喺島上捉多 1 隻「${partMeta.title}小兵」放入紫色合成台啦！`);
-    } else {
-        // 集齊 2 隻組件小兵！閃電合體變身成目標形狀小兵並直接舉上馬利奧頭頂！
-        playStageClearFanfare();
-        shapeBridgeState.fusionParts.forEach(p => { p.group.visible = false; });
-        emitStarParticles(new THREE.Vector3(0, 1.8, shapeBridgeState.fusionAltar.z));
-
-        const targetSh = shapeBridgeState.fusionTargetShape;
-        const fusedMinion = create3DNumberCharacter(targetSh, shapeBridgeState.heroX, shapeBridgeState.heroZ, 0.65);
-        fusedMinion.isArenaMinion = false;
-        fusedMinion.isShapeBridgeMinion = true;
-        shapeBridgeState.carryingMinion = fusedMinion;
-        interactiveBlocks.push(fusedMinion);
-
-        gameState.targetKey = targetSh;
-        updateTargetBadgeUI(targetSh, false);
-
-        const targetMeta = getCognitiveItemMeta(targetSh, 'shape');
-        const slamBtn = ensureShapeSlamButton();
-        const slamTxt = document.getElementById('shape-slam-btn-text');
-        if (slamTxt) slamTxt.textContent = `飛躍鑲嵌「${targetMeta.title}」！`;
-        slamBtn.classList.remove('hidden');
-
-        setPromptUI(`⚡ 2合1 合成成功！變出「${targetMeta.badgeSymbol}${targetMeta.title}小兵」喇！`, `快啲行去北面第 2 條橋口（或撳右下角「🔨飛躍鑲嵌」掣）修好大橋！`);
-    }
-}
-
+// 當馬利奧去到蘑菇台揀中形狀小兵時（支援隨時換兵，零挫敗感！）
 function handleShapeBridgeMinionCaught(minion) {
     if (gameState.isBusy || shapeBridgeState.phase !== 'repair' || !minion.isArenaMinion) return;
-    const shId = minion.itemKey;
-    const meta = getCognitiveItemMeta(shId, 'shape');
-    const curRiver = shapeBridgeState.currentRiver;
 
-    // 檢查係咪喺「🧩 幾何合成工坊」捉組件小兵
-    if (shapeBridgeState.tier === 'fusion' && curRiver === 2 && shapeBridgeState.fusionParts.length < 2) {
-        if (shId !== shapeBridgeState.fusionPartShape) {
-            playGentleNudge();
-            minion.state = 'wrong';
-            minion.wrongTimer = 0.6;
-            minion.baseX = THREE.MathUtils.clamp(minion.baseX + 1.5, -5.2, 5.2);
-            const needMeta = getCognitiveItemMeta(shapeBridgeState.fusionPartShape, 'shape');
-            setPromptUI(`合成配方需要 2 隻「${needMeta.title}」先啱喎！`, `請睇下紫色合成台上面嘅算式牌！`);
-            return;
-        }
-        playCoinSound();
-        minion.isArenaMinion = false;
-        minion.state = 'idle';
-        if (minion.haloMesh) minion.haloMesh.material.opacity = 0;
-        shapeBridgeState.carryingMinion = minion;
-
-        const slamBtn = ensureShapeSlamButton();
-        const slamTxt = document.getElementById('shape-slam-btn-text');
-        if (slamTxt) slamTxt.textContent = `放入合成台！`;
-        slamBtn.classList.remove('hidden');
-
-        setPromptUI(`🙌 捉到「${meta.title}」組件！快啲行去島中央「紫色合成台」（或撳右下角大掣）！`, `集齊 2 隻就可以合體變出新形狀！`);
-        return;
+    // 如果頭頂已經舉住另一隻小兵，自動放返落原本嘅蘑菇台，換呢隻新小兵上頭頂！
+    if (shapeBridgeState.carryingMinion && shapeBridgeState.carryingMinion !== minion) {
+        const prev = shapeBridgeState.carryingMinion;
+        prev.isArenaMinion = true;
+        prev.group.position.set(prev.homeX, 1.15, prev.homeZ);
+        prev.group.scale.setScalar(0.74);
     }
 
-    const matchingSlot = shapeBridgeState.slots.find(s => !s.filled && s.riverId === curRiver && s.shapeId === shId);
+    const shId = minion.itemKey;
+    const meta = getCognitiveItemMeta(shId, 'shape');
+    const matchingSlot = shapeBridgeState.slots.find(s => !s.filled && s.requiredShapeId === shId);
+
     if (!matchingSlot) {
         playGentleNudge();
         minion.state = 'wrong';
         minion.wrongTimer = 0.6;
-        minion.baseX = THREE.MathUtils.clamp(minion.baseX + (minion.baseX >= shapeBridgeState.heroX ? 1.5 : -1.5), -5.2, 5.2);
-        minion.vx = -minion.vx;
-        shapeBridgeState.targetX = null;
-        shapeBridgeState.targetZ = null;
-        setPromptUI(`呢隻係「${meta.title}小兵」，同眼前條橋嘅缺口唔同形狀喎！`, `請望下第 ${curRiver} 條河橋面缺口係咩形狀（或撞開？木箱搵下）！`);
+        shapeBridgeState.autoPickMinion = null;
+        setPromptUI(`「${meta.title}」已經修好或者橋上無呢個窿喎！請篤另一隻形狀小兵啦！`, ``);
         return;
     }
 
@@ -1054,34 +920,35 @@ function handleShapeBridgeMinionCaught(minion) {
     if (minion.haloMesh) minion.haloMesh.material.opacity = 0;
     minion.group.scale.setScalar(0.62);
     shapeBridgeState.carryingMinion = minion;
+    shapeBridgeState.autoPickMinion = null;
     gameState.targetKey = shId;
     updateTargetBadgeUI(shId, false);
     updateShapeBridgeBanner();
 
     shapeBridgeState.slots.forEach(s => {
-        if (s.arrowMesh) s.arrowMesh.visible = (!s.filled && s.riverId === curRiver);
+        if (s.arrowMesh) s.arrowMesh.visible = (!s.filled && s.requiredShapeId === shId);
     });
 
     const slamBtn = ensureShapeSlamButton();
     const slamTxt = document.getElementById('shape-slam-btn-text');
-    if (slamTxt) slamTxt.textContent = `飛躍鑲嵌「${meta.title}」！`;
+    if (slamTxt) slamTxt.textContent = `大槌打樁「${meta.title}」！`;
     slamBtn.classList.remove('hidden');
 
-    setPromptUI(`🙌 舉起「${meta.badgeSymbol}${meta.title}小兵」喇！行去橋口彈射板或撳右下角「🔨飛躍鑲嵌」！`, `對準橋面缺口壓扁小水怪修好條橋啦！`);
+    setPromptUI(`🙌 舉起「${meta.badgeSymbol}${meta.title}」喇！請直接篤發光橋窿（或撳右下角🔨大槌掣）打樁！`, ``);
 }
 
+// 觸發小兵飛入橋窿 + 馬利奧揮動「🔨 黃金大魔槌」打樁彈飛水怪動畫！
 function triggerPlugMinionIntoBridgeSlot(slot) {
     const carried = shapeBridgeState.carryingMinion;
     if (!carried || slot.filled || shapeBridgeState.phase !== 'repair') return;
 
     const carriedMeta = getCognitiveItemMeta(carried.itemKey, 'shape');
-    if (carried.itemKey !== slot.shapeId) {
+    if (carried.itemKey !== slot.requiredShapeId) {
         playGentleNudge();
         slot.group.position.y = 0.55;
         setTimeout(() => { slot.group.position.y = 0.36; }, 220);
-        shapeBridgeState.targetX = null;
-        shapeBridgeState.targetZ = null;
-        setPromptUI(`哎呀！頭頂嘅「${carriedMeta.title}」塞唔入呢個缺口喎！`, `請帶去隔離形狀一樣嘅橋面缺口！`);
+        shapeBridgeState.autoPlugSlot = null;
+        setPromptUI(`哎呀！「${carriedMeta.title}」唔啱呢個橋窿喎！請篤隔離發緊光嘅橋窿！`, ``);
         return;
     }
 
@@ -1089,6 +956,7 @@ function triggerPlugMinionIntoBridgeSlot(slot) {
     playMarioJumpSound();
     shapeBridgeState.phase = 'jumping';
     shapeBridgeState.carryingMinion = null;
+    shapeBridgeState.autoPlugSlot = null;
     shapeBridgeState.moveDirX = 0;
     shapeBridgeState.moveDirZ = 0;
     shapeBridgeState.targetX = null;
@@ -1096,14 +964,19 @@ function triggerPlugMinionIntoBridgeSlot(slot) {
     shapeBridgeState.slots.forEach(s => { if (s.arrowMesh) s.arrowMesh.visible = false; });
 
     shapeBridgeState.jumpingAnim = {
-        minion: carried, slot: slot, progress: 0,
+        minion: carried,
+        slot: slot,
+        progress: 0,
+        hammerPhase: 0,
+        slamCount: 0,
         startPos: carried.group.position.clone(),
-        endPos: new THREE.Vector3(slot.x, 0.55, slot.z)
+        endPos: new THREE.Vector3(slot.x, 0.85, slot.z)
     };
 }
+// ==================== 上半部完，請回覆「下半部」繼續貼埋下半部 ====================
 /********************************************************************
  * [FILE: main.js - PART 2 OF 2 (下半部)]
- * 包含：加減法競技場(Mode 6)、觸控判定、獎勵玩具櫃、設定與 60FPS 主迴圈
+ * 包含：加減法競技場(Mode 6)、一篤即飛與拖曳操控、黃金大魔槌打樁動畫、三線過橋狂食金幣與 60FPS 主迴圈
  ********************************************************************/
 if (typeof window.additionArenaGroup === 'undefined') {
     window.additionArenaGroup = new THREE.Group();
@@ -1407,23 +1280,20 @@ function setupAdditionRound() {
     if (tier === 'sum5' || tier === 'sum10' || tier === 'sum12') {
         const candidates = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].filter(n => n !== sum && Math.abs(n - sum) <= 4).sort(() => Math.random() - 0.5);
         roamList = [sum, candidates[0], candidates[1], candidates[2]].sort(() => Math.random() - 0.5);
-        setPromptUI(
-            isSub ? `➖ 減法算式【 ${a} - ${b} = ? 】：${a} 拿走 ${b} 仲剩返幾多？請去捉答案小兵！` : `➕ 加法算式【 ${a} + ${b} = ? 】：請捉住正確答案小兵企上右邊金色「？」台！`,
-            isSub ? `數下左台頭頂仲有幾多粒發光紅球（灰球代表拿走咗），捉正確小兵企上右邊答案台！` : `左台係 ${a}、中間台係 ${b}，合共係幾多？控制馬利奧去捉正確數字小兵啦！`
-        );
+        setPromptUI(isSub ? `➖ 減法【 ${a} - ${b} = ? 】：請捉答案小兵！` : `➕ 加法【 ${a} + ${b} = ? 】：請捉答案小兵！`, ``);
     } else if (tier === 'missing') {
         const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => n !== b).sort(() => Math.random() - 0.5);
         roamList = [b, pool[0], pool[1], pool[2]].sort(() => Math.random() - 0.5);
-        setPromptUI(`🕵️ 補數挑戰【 ${a} ${opChar} ? = ${sum} 】：左台係 ${a}，右台係 ${sum}，中間缺咗邊個？`, `請控制馬利奧捉住正確嘅柱方形小兵，填上中間天藍台嘅「？」位啦！`);
+        setPromptUI(`🕵️ 補數【 ${a} ${opChar} ? = ${sum} 】：中間缺咗邊個？`, ``);
     } else if (tier === 'free2') {
         if (!isSub) {
             const p1 = Math.max(1, Math.floor(sum / 2)), p2 = sum - p1;
             roamList = [p1, p2, 1, sum - 1, Math.max(1, (sum + 2) % 9)].sort(() => Math.random() - 0.5);
-            setPromptUI(`🔥 自由加法【 ? + ? = ${sum} 】：請捉 2 隻加埋等於 ${sum} 嘅小兵！`, `先捉第 1 隻企左台，再捉第 2 隻企中台！`);
+            setPromptUI(`🔥 自由加法【 ? + ? = ${sum} 】：請捉 2 隻加埋等於 ${sum} 嘅小兵！`, ``);
         } else {
             const p1 = sum + 2, p3 = Math.min(10, sum + 4);
             roamList = [p1, 2, p3, p3 - sum, sum + 1].sort(() => Math.random() - 0.5);
-            setPromptUI(`🔥 自由減法【 ? - ? = ${sum} 】：請捉 2 隻相減等於 ${sum} 嘅小兵！`, `先捉大過 ${sum} 嘅小兵企左台，再捉減數小兵企中台！`);
+            setPromptUI(`🔥 自由減法【 ? - ? = ${sum} 】：請捉 2 隻相減等於 ${sum} 嘅小兵！`, ``);
         }
     }
 
@@ -1448,7 +1318,7 @@ function handleAdditionMinionCaught(minion) {
         if (additionState.caughtA === null) {
             if ((!isSub && num >= sum) || (isSub && num <= sum)) {
                 playGentleNudge(); minion.state = 'wrong'; minion.wrongTimer = 0.6;
-                setPromptUI(isSub ? `減法左台第一個數要大過 ${sum} 先夠減㗎！` : `呢隻係 ${num} 號，已經大過或等於 ${sum} 喇！`, `目標算式：? ${opChar} ? = ${sum}`);
+                setPromptUI(isSub ? `減法左台第一個數要大過 ${sum} 先夠減㗎！` : `呢隻係 ${num} 號，已經大過或等於 ${sum} 喇！`, ``);
                 return;
             }
             playCoinSound();
@@ -1456,7 +1326,7 @@ function handleAdditionMinionCaught(minion) {
             refreshAdditionStagePods(); syncAdditionBottomCard();
             const needed = isSub ? (num - sum) : (sum - num);
             gameState.targetKey = needed;
-            setPromptUI(`👍 左台企好「${num}」號喇！【 ${num} ${opChar} ? = ${sum} 】中間台應該填幾多？`, `快啲去捉「數字 ${needed}」小兵企上中間天藍台啦！`);
+            setPromptUI(`👍 左台企好「${num}」號喇！【 ${num} ${opChar} ? = ${sum} 】請捉「${needed}」號！`, ``);
             if (!interactiveBlocks.some(b => b.isArenaMinion && b.group.visible && b.itemKey === needed)) {
                 const newM = create3DNumberCharacter(needed, 0, 2.2, 0.72);
                 newM.isArenaMinion = true; newM.vx = 1.4; newM.vz = 1.1;
@@ -1472,7 +1342,7 @@ function handleAdditionMinionCaught(minion) {
                 const needed = isSub ? (additionState.caughtA - sum) : (sum - additionState.caughtA);
                 playGentleNudge(); minion.state = 'wrong'; minion.wrongTimer = 0.6;
                 additionState.targetX = null; additionState.targetZ = null;
-                setPromptUI(`${additionState.caughtA} ${opChar} ${num} 唔等於 ${sum} 喎！`, `算式提示：${additionState.caughtA} ${opChar} ${needed} = ${sum}，請捉「數字 ${needed}」小兵！`);
+                setPromptUI(`${additionState.caughtA} ${opChar} ${num} 唔等於 ${sum} 喎！請捉「${needed}」號！`, ``);
             }
             return;
         }
@@ -1487,7 +1357,7 @@ function handleAdditionMinionCaught(minion) {
     } else {
         playGentleNudge(); minion.state = 'wrong'; minion.wrongTimer = 0.6;
         additionState.targetX = null; additionState.targetZ = null;
-        setPromptUI(`呢隻係「數字 ${num}」小兵，未啱喎！請睇下頂部算式板再數一次！`, `你可以數下台上面嘅彩色能量球，或者撳右上角「💡提示」！`);
+        setPromptUI(`呢隻係「數字 ${num}」小兵，未啱喎！再數一次！`, ``);
     }
 }
 
@@ -1498,7 +1368,7 @@ function startMinionFusionSequence() {
     const a = additionState.caughtA, b = additionState.caughtB, sum = additionState.targetSum, opChar = additionState.opChar || '+';
     playChestOpenSound();
     emitStarParticles(new THREE.Vector3(3.7, 1.8, -1.8));
-    setPromptUI(`🎉 算式完成！【 ${a} ${opChar} ${b} = ${sum} 】三隻小兵齊齊整整企晒喺度喇！`, `快啲撳中間「🔥 點火發射答案小兵！」按鈕射向飛碟啦！`);
+    setPromptUI(`🎉 算式完成！【 ${a} ${opChar} ${b} = ${sum} 】快啲撳右下角「🔥 點火發射」！`, ``);
 }
 
 function fireAdditionCannon() {
@@ -1522,7 +1392,7 @@ function setupExploreMode() {
     });
 
     const subjLabel = gameState.subject === 'number' ? `數字 ${gameState.explorePage}` : (gameState.subject === 'color' ? '6 種基礎顏色' : '6 種立體形狀');
-    setPromptUI(`自由探索（${subjLabel}）：隨便撳下任何一個立體公仔啦！`, `探索模式：輕觸公仔即會彈出對應嘅 3D 實物與悅耳音階`);
+    setPromptUI(`自由探索（${subjLabel}）：隨便撳下任何一個立體公仔啦！`, ``);
 }
 
 function marioMoveStep(dir) {
@@ -1594,14 +1464,52 @@ function triggerVisualHint(manualClick = false) {
 
 function setPromptUI(mainText, subText) {
     document.getElementById('prompt-text').textContent = mainText;
-    document.getElementById('sub-prompt-text').textContent = subText;
+    const subEl = document.getElementById('sub-prompt-text');
+    if (subEl) subEl.textContent = subText || '';
 }
 
 /********************************************************************
- * 8. SINGLE-FINGER TOUCH & CLICK INTERACTION (RAYCASTER)
+ * 8. ONE-TAP SMART ACTION & TOUCH-DRAG INTERACTION (RAYCASTER)
  ********************************************************************/
+function onCanvasPointerMove(event) {
+    if (!shapeBridgeState.isPointerDragging || gameState.inLobby) return;
+    if (gameState.mode !== 'shapebridge' && gameState.mode !== 'addition') return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+    const hitPt = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, hitPt)) {
+        if (gameState.mode === 'shapebridge') {
+            if (shapeBridgeState.phase === 'crossing') {
+                shapeBridgeState.targetX = THREE.MathUtils.clamp(hitPt.x, -2.8, 2.8);
+            } else if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
+                shapeBridgeState.targetX = THREE.MathUtils.clamp(hitPt.x, -6.2, 6.2);
+                shapeBridgeState.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.4, 5.5);
+            }
+        } else if (gameState.mode === 'addition' && additionState.phase === 'catch' && !gameState.isBusy) {
+            additionState.targetX = THREE.MathUtils.clamp(hitPt.x, -5.8, 5.8);
+            additionState.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.8, 5.6);
+        }
+    }
+}
+
+function onCanvasPointerUp() {
+    shapeBridgeState.isPointerDragging = false;
+}
+
 function onCanvasPointerDown(event) {
-    if (gameState.isBusy || gameState.inLobby) return;
+    if (gameState.inLobby) return;
+    // 過橋狂食金幣階段：允許玩家直接篤或拖曳畫面左右控制馬利奧食金幣！
+    if (gameState.mode === 'shapebridge' && shapeBridgeState.phase === 'crossing') {
+        shapeBridgeState.isPointerDragging = true;
+        onCanvasPointerMove(event);
+        return;
+    }
+    if (gameState.isBusy) return;
     ensureAudioCtx();
 
     const rect = renderer.domElement.getBoundingClientRect();
@@ -1609,13 +1517,25 @@ function onCanvasPointerDown(event) {
     pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);
 
-    if (gameState.mode === 'shapebridge' && shapeBridgeState.phase === 'repair' && shapeBridgeState.carryingMinion) {
+    // 🌉 形狀修橋「一篤即飛」：直接篤橋窿，即刻飛過去用黃金大槌打樁！
+    if (gameState.mode === 'shapebridge' && shapeBridgeState.phase === 'repair') {
         const slotMeshes = shapeBridgeState.slots.filter(s => !s.filled && s.hitMesh).map(s => s.hitMesh);
         const slotHits = raycaster.intersectObjects(slotMeshes, false);
         if (slotHits.length > 0 && slotHits[0].object.userData.slotObj) {
             const targetSlot = slotHits[0].object.userData.slotObj;
-            playPopSound(560);
-            triggerPlugMinionIntoBridgeSlot(targetSlot);
+            if (shapeBridgeState.carryingMinion) {
+                playPopSound(600);
+                triggerPlugMinionIntoBridgeSlot(targetSlot);
+            } else {
+                // 如果未舉起小兵就篤橋窿：自動幫小朋友搵蘑菇台上對應嘅小兵衝過去舉起！
+                const matchM = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.itemKey === targetSlot.requiredShapeId);
+                if (matchM) {
+                    playPopSound(540);
+                    shapeBridgeState.autoPickMinion = matchM;
+                    shapeBridgeState.targetX = matchM.homeX;
+                    shapeBridgeState.targetZ = matchM.homeZ;
+                }
+            }
             return;
         }
     }
@@ -1638,11 +1558,13 @@ function onCanvasPointerDown(event) {
                 if (Math.abs(marioHero.currentX - tappedWrapper.baseX) < 0.25) startHeroJump(tappedWrapper);
                 else { playPopSound(500); marioHero.autoJumpOnArrive = true; }
             } else if (gameState.mode === 'shapebridge') {
+                // 🍄 篤蘑菇台上嘅形狀小兵：馬利奧即刻極速衝過去舉起佢！
                 if (gameState.isBusy || shapeBridgeState.phase !== 'repair' || !tappedWrapper.isArenaMinion) return;
-                playPopSound(540);
+                playPopSound(560);
                 shapeBridgeState.moveDirX = 0; shapeBridgeState.moveDirZ = 0;
-                shapeBridgeState.targetX = tappedWrapper.group.position.x;
-                shapeBridgeState.targetZ = tappedWrapper.group.position.z;
+                shapeBridgeState.autoPickMinion = tappedWrapper;
+                shapeBridgeState.targetX = tappedWrapper.homeX;
+                shapeBridgeState.targetZ = tappedWrapper.homeZ;
             } else if (gameState.mode === 'addition') {
                 if (additionState.phase === 'readyToFire') { fireAdditionCannon(); return; }
                 if (gameState.isBusy || additionState.phase !== 'catch' || !tappedWrapper.isArenaMinion) return;
@@ -1670,6 +1592,7 @@ function onCanvasPointerDown(event) {
 
     if ((gameState.mode === 'addition' || gameState.mode === 'shapebridge') && !gameState.isBusy) {
         if (gameState.mode === 'addition' && additionState.phase === 'readyToFire') { fireAdditionCannon(); return; }
+        shapeBridgeState.isPointerDragging = true;
         const st = (gameState.mode === 'addition') ? additionState : shapeBridgeState;
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
         const hitPt = new THREE.Vector3();
@@ -1677,7 +1600,7 @@ function onCanvasPointerDown(event) {
             playPopSound(460);
             st.moveDirX = 0; st.moveDirZ = 0;
             st.targetX = THREE.MathUtils.clamp(hitPt.x, -5.8, 5.8);
-            st.targetZ = THREE.MathUtils.clamp(hitPt.z, -6.0, 8.2);
+            st.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.4, 5.6);
             if (st.clickMarker) {
                 st.clickMarker.position.set(st.targetX, 0.38, st.targetZ);
                 st.clickMarker.visible = true;
@@ -1718,7 +1641,7 @@ function handleBlockTapped(block) {
         playSuccessChime();
         block.state = 'celebrate'; block.celebrateTimer = 1.2;
         emitStarParticles(block.group.position);
-        setPromptUI(`呢個係「${tappedMeta.title}」！一齊睇下 ${tappedMeta.itemEmoji} ${tappedMeta.itemName}！`, `再撳其他立體公仔探索下啦！`);
+        setPromptUI(`呢個係「${tappedMeta.title}」！一齊睇下 ${tappedMeta.itemEmoji} ${tappedMeta.itemName}！`, ``);
         runQuantityCountingSequence(tappedKey, false, false);
         return;
     }
@@ -1748,13 +1671,13 @@ function handleBlockTapped(block) {
                 updateParadeProgressBanner(); refreshMazeGuideDots(); syncMazeTargetCardDisplay();
                 const nextMeta = getCognitiveItemMeta(nextTarget);
                 const nextTitle = treasureHero.blindMode ? '下一個失蹤數字（？）' : nextMeta.title;
-                setPromptUI(`🎉 好叻呀！「${tappedMeta.title}」成功歸隊！接住請搵「${nextTitle}」！`, `睇下身後嘅數字小隊同進度條，繼續喺迷宮搵出下一位朋友啦！`);
+                setPromptUI(`🎉「${tappedMeta.title}」成功歸隊！接住請搵「${nextTitle}」！`, ``);
             } else {
                 treasureHero.allRescued = true;
                 interactiveBlocks.forEach(b => { if (!b.rescued) b.group.visible = false; });
                 playChestOpenSound();
                 updateParadeProgressBanner(); refreshMazeGuideDots(); updateTargetBadgeUI(tappedKey, false);
-                setPromptUI(`🏰 全隊集結完畢（${seq.join(' ➔ ')}）！北面「皇冠城堡大門」已經打開！`, `快啲帶住身後整齊嘅數字巡遊隊伍，衝入最北面嘅城堡大門放煙花啦！`);
+                setPromptUI(`🏰 全隊集結（${seq.join('➔')}）！快啲帶隊衝入北面城堡大門啦！`, ``);
                 const heroCell = mazeWorldToGrid(treasureHero.currentX, treasureHero.currentZ);
                 treasureHero.pathQueue = findMazePathBFS(heroCell.col, heroCell.row, 4, 0);
             }
@@ -1763,7 +1686,7 @@ function handleBlockTapped(block) {
             treasureHero.pathQueue = []; treasureHero.moveDirX = 0; treasureHero.moveDirZ = 0;
             const targetMeta = getCognitiveItemMeta(gameState.targetKey);
             const hintName = (treasureHero.blindMode && !treasureHero.hintRevealedThisStep) ? '正確嘅下一個數字（可撳💡提示）' : `「${targetMeta.title}」`;
-            setPromptUI(`呢個係「${tappedMeta.title}」，未輪到佢住喎！我哋先去救${hintName}啦！`, `小提示：請對照下方進度條順序，搵出正確嘅數字朋友`);
+            setPromptUI(`呢個係「${tappedMeta.title}」，未輪到佢住喎！請先救${hintName}！`, ``);
         }
         return;
     }
@@ -1781,10 +1704,10 @@ function handleBlockTapped(block) {
         awardStarProgress();
 
         if (gameState.settings.countObjects) {
-            setPromptUI(`答啱喇！係「${tappedMeta.title}」！一齊數下彈出嚟嘅 3D 寶物！`, `認知強化：${tappedMeta.title}`);
+            setPromptUI(`答啱喇！係「${tappedMeta.title}」！一齊數下 3D 寶物！`, ``);
             runQuantityCountingSequence(tappedKey, true, isMario);
         } else {
-            setPromptUI(`好叻呀！答啱喇，呢個係「${tappedMeta.title}」！`, `準備進入下一關...`);
+            setPromptUI(`好叻呀！答啱喇，呢個係「${tappedMeta.title}」！`, ``);
             if (isMario) triggerMarioGoalRun();
             else setTimeout(() => { if (!isToyModalOpen()) startNewRound(); }, 2200);
         }
@@ -1795,7 +1718,7 @@ function handleBlockTapped(block) {
             block.bodyMesh.material.forEach(m => { m.transparent = true; m.opacity = 0.6; });
         }
         const targetMeta = getCognitiveItemMeta(gameState.targetKey);
-        setPromptUI(`呢個係「${tappedMeta.title}」，唔緊要，我哋再搵下「${targetMeta.title}」啦！`, `無挫敗感提示：請再試一次`);
+        setPromptUI(`呢個係「${tappedMeta.title}」，我哋再搵下「${targetMeta.title}」啦！`, ``);
         setTimeout(() => triggerVisualHint(false), 900);
     }
 }
@@ -1807,7 +1730,7 @@ function triggerMazeCastleVictory() {
     playStageClearFanfare(); awardStarProgress();
 
     const seqStr = (treasureHero.sequence || [1, 2, 3, 4, 5]).join(' ➔ ');
-    setPromptUI(`👑 巡遊大成功！你已經帶齊 ${seqStr} 進入奇幻皇冠城堡喇！`, `準備前往下一座全新迷宮島... 🎉`);
+    setPromptUI(`👑 巡遊大成功！已帶齊 ${seqStr} 進入皇冠城堡！`, ``);
 
     [[-2.4, 3.5, -7.8], [2.4, 3.5, -7.8], [0, 4.2, -8.2], [-3.2, 3.0, -6.8], [3.2, 3.0, -6.8]].forEach(([fx, fy, fz], idx) => {
         activeCountingTimeouts.push(setTimeout(() => { playCoinSound(); emitStarParticles(new THREE.Vector3(fx, fy, fz)); }, idx * 320));
@@ -1845,17 +1768,17 @@ function runQuantityCountingSequence(itemKey, autoAdvanceAfter, isCoin = false) 
             createSingleCounting3DItem(i, count, startX + (i - 1) * spacing, zPos, isCoin, itemKey);
             if (isCoin) playCoinSound(); else playCountingNote(i);
             const badge = document.createElement('span');
-            badge.className = 'inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2.5 py-0.5 rounded-xl text-base sm:text-xl font-black star-earned';
-            badge.textContent = meta.subject === 'number' ? String(i) : `${meta.title} ×${i}`;
+            badge.className = 'inline-flex items-center justify-center bg-orange-100 text-orange-600 px-2 py-0.5 rounded-xl text-xs sm:text-base font-black star-earned';
+            badge.textContent = meta.subject === 'number' ? String(i) : `${meta.title}×${i}`;
             dotsContainer.appendChild(badge);
         }, 400 + (i - 1) * 460));
     }
 
     activeCountingTimeouts.push(setTimeout(() => {
         if (meta.subject === 'number') {
-            setPromptUI(`好叻呀！總共有 ${count}（${NUMBER_WORDS_HK[count]}）${isCoin ? '粒金幣' : '個紅蘋果'}！`, autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`);
+            setPromptUI(`好叻呀！總共有 ${count}（${NUMBER_WORDS_HK[count]}）${isCoin ? '粒金幣' : '個紅蘋果'}！`, ``);
         } else {
-            setPromptUI(`好叻呀！呢個就係「${meta.title}」！（${meta.itemEmoji} ${meta.itemName}）`, autoAdvanceAfter ? `準備進入下一關...` : `繼續點擊其他立體公仔探索啦！`);
+            setPromptUI(`好叻呀！呢個就係「${meta.title}」！（${meta.itemEmoji} ${meta.itemName}）`, ``);
         }
         if (autoAdvanceAfter) {
             if (gameState.mode === 'mario') triggerMarioGoalRun();
@@ -2244,7 +2167,7 @@ function animate() {
             if (fp >= 1) {
                 ansMinion.visible = false; additionState.phase = 'celebrate'; additionState.ufoHitTimer = 1.8; gameState.isBusy = true;
                 playStageClearFanfare(); emitStarParticles(ufoPos.clone()); awardStarProgress();
-                setPromptUI(`💥 轟隆！正中目標！【 ${additionState.caughtA} ${additionState.opChar || '+'} ${additionState.caughtB} = ${additionState.targetSum} 】成功擊退飛碟！`, `準備進入下一題挑戰... 🎉`);
+                setPromptUI(`💥 轟隆！正中目標！【 ${additionState.caughtA} ${additionState.opChar || '+'} ${additionState.caughtB} = ${additionState.targetSum} 】成功擊退飛碟！`, ``);
                 activeCountingTimeouts.push(setTimeout(() => { if (!isToyModalOpen()) startNewRound(); }, 2200));
             }
         }
@@ -2255,133 +2178,112 @@ function animate() {
         camera.lookAt(additionState.heroX * 0.15, 1.3, -1.2);
     }
 
-// 4E. Animate 【🌉 馬利奧形狀修橋大作戰 3.0：跨海三島大冒險】
+    // 4E. Animate 【🌉 馬利奧形狀修橋大作戰 (蘑菇台定點 + 黃金大魔槌打樁 + 過橋三線狂食金幣)】
     if (typeof shapeBridgeGroup !== 'undefined' && shapeBridgeGroup.visible && shapeBridgeState.heroMesh) {
-        const curRiver = shapeBridgeState.currentRiver || 1;
-
-        // 1. 橋面缺口箭咀與河底小水怪動畫
+        // 1. 海龜浮島呼吸浮沉、大風車旋轉橋窿與調皮水怪動畫
         shapeBridgeState.slots.forEach((s, idx) => {
+            if (s.turtleGroup) {
+                s.turtleGroup.position.y = -0.18 + Math.sin(elapsed * 2.5 + idx) * 0.05;
+            }
             if (!s.filled) {
-                if (s.arrowMesh && s.arrowMesh.visible) s.arrowMesh.position.y = 1.55 + Math.sin(elapsed * 6) * 0.22;
+                if (s.arrowMesh && s.arrowMesh.visible) {
+                    s.arrowMesh.position.y = 1.6 + Math.sin(elapsed * 7) * 0.24;
+                }
                 if (s.monsterGroup) {
-                    s.monsterGroup.position.y = 0.2 + Math.sin(elapsed * 4 + idx * 1.5) * 0.14;
-                    s.monsterGroup.rotation.y = Math.sin(elapsed * 2 + idx) * 0.35;
+                    s.monsterGroup.position.y = 0.22 + Math.sin(elapsed * 4.5 + idx * 1.5) * 0.14;
+                    s.monsterGroup.rotation.y = Math.sin(elapsed * 2.5 + idx) * 0.4;
+                }
+                if (shapeBridgeState.tier === 'windmill' && s.holeBoard) {
+                    s.holeBoard.rotation.z = Math.sin(elapsed * 1.5 + idx) * 0.65;
                 }
             }
         });
 
-        // 2. 島上「📦 神秘問號木箱」彈跳與馬利奧撞箱判定
-        if (shapeBridgeState.mysteryCrates) {
-            shapeBridgeState.mysteryCrates.forEach(crate => {
-                if (!crate.opened) {
-                    crate.boxMesh.position.y = 0.78 + Math.abs(Math.sin(elapsed * 4 + crate.animPhase)) * 0.18;
-                    crate.boxMesh.rotation.y = Math.sin(elapsed * 2 + crate.animPhase) * 0.15;
-                    if (Math.hypot(shapeBridgeState.heroX - crate.x, shapeBridgeState.heroZ - crate.z) < 1.35) {
-                        openBridgeMysteryCrate(crate);
-                    }
-                }
-            });
-        }
-
-        // 3. 島上「⚡ 閃電星星加速板」旋轉與踩中衝刺
-        if (shapeBridgeState.speedBoostTimer > 0) {
-            shapeBridgeState.speedBoostTimer = Math.max(0, shapeBridgeState.speedBoostTimer - dt);
-        }
-        if (shapeBridgeState.speedPads) {
-            shapeBridgeState.speedPads.forEach(pad => {
-                if (pad.userData.starCore) pad.userData.starCore.rotation.y += dt * 5;
-                if (shapeBridgeState.speedBoostTimer <= 0.2 && Math.hypot(shapeBridgeState.heroX - pad.userData.x, shapeBridgeState.heroZ - pad.userData.z) < 1.0) {
-                    shapeBridgeState.speedBoostTimer = 1.2;
-                    playPopSound(820);
-                    emitStarParticles(pad.position);
-                }
-            });
-        }
-
-        // 4. 當前島嶼上嘅散步形狀小兵（防重疊物理）
-        const activeMinions = interactiveBlocks.filter(b => b.isArenaMinion && b.group.visible && b.islandId === curRiver);
-        const zMinBound = (curRiver === 1) ? 3.5 : -4.8;
-        const zMaxBound = (curRiver === 1) ? 7.8 : -1.4;
-
-        activeMinions.forEach((b, i) => {
-            if (shapeBridgeState.phase === 'repair') {
-                for (let j = i + 1; j < activeMinions.length; j++) {
-                    const other = activeMinions[j];
-                    const dx = b.baseX - other.baseX, dz = b.baseZ - other.baseZ, dist = Math.hypot(dx, dz);
-                    if (dist < 1.85 && dist > 0.01) {
-                        const push = (1.85 - dist) * 2.5 * dt;
-                        b.baseX += (dx / dist) * push; b.baseZ += (dz / dist) * push;
-                        other.baseX -= (dx / dist) * push; other.baseZ -= (dz / dist) * push;
-                    }
-                }
-                b.baseX += (b.vx || 1.3) * dt; b.baseZ += (b.vz || 1.0) * dt;
-                if (b.baseX < -6.2 || b.baseX > 6.2) b.vx = -(b.vx || 1.3);
-                if (b.baseZ < zMinBound || b.baseZ > zMaxBound) b.vz = -(b.vz || 1.0);
-                b.baseX = Math.max(-6.3, Math.min(6.3, b.baseX));
-                b.baseZ = Math.max(zMinBound, Math.min(zMaxBound, b.baseZ));
+        // 2. 被黃金大槌彈飛上天嘅水怪動畫
+        for (let i = shapeBridgeState.flyingMonsters.length - 1; i >= 0; i--) {
+            const fm = shapeBridgeState.flyingMonsters[i];
+            fm.life -= dt;
+            fm.mesh.position.x += fm.vx * dt;
+            fm.mesh.position.y += fm.vy * dt;
+            fm.mesh.position.z += fm.vz * dt;
+            fm.mesh.rotation.x += dt * 15;
+            fm.mesh.rotation.y += dt * 12;
+            if (fm.life <= 0) {
+                fm.mesh.visible = false;
+                shapeBridgeState.flyingMonsters.splice(i, 1);
             }
-            if (b.state === 'wrong') {
-                b.wrongTimer -= dt; b.group.rotation.z = Math.sin(elapsed * 28) * 0.15;
-                if (b.wrongTimer <= 0) { b.state = 'idle'; b.group.rotation.z = 0; }
-            } else b.group.rotation.z = 0;
+        }
 
-            b.group.position.set(b.baseX, 0.95 + Math.abs(Math.sin(elapsed * 6.5 + b.animTime)) * 0.2, b.baseZ);
-            b.group.rotation.y = Math.atan2(b.vx || 0, b.vz || 1) * 0.25;
-            b.group.scale.setScalar(b.state === 'hint' ? 0.78 + Math.sin(elapsed * 6) * 0.05 : 0.72);
+        // 3. 🍄 蘑菇台上嘅形狀小兵（原地開心彈跳揮手，100% 唔會亂行撞人！）
+        interactiveBlocks.forEach((b, idx) => {
+            if (b.isShapeBridgeMinion && b.isArenaMinion && b.group.visible) {
+                if (b.state === 'wrong') {
+                    b.wrongTimer -= dt;
+                    b.group.rotation.z = Math.sin(elapsed * 28) * 0.16;
+                    if (b.wrongTimer <= 0) { b.state = 'idle'; b.group.rotation.z = 0; }
+                } else {
+                    b.group.rotation.z = Math.sin(elapsed * 3 + idx) * 0.04;
+                }
+                const bounce = Math.abs(Math.sin(elapsed * 5 + idx)) * 0.18;
+                b.group.position.set(b.homeX, 1.32 + bounce, b.homeZ);
+                b.group.rotation.y = Math.sin(elapsed * 2 + idx) * 0.22;
+                b.group.scale.setScalar(b.state === 'hint' ? 0.82 + Math.sin(elapsed * 7) * 0.06 : 0.74);
+            }
         });
 
-        // 5. 馬利奧移動與「跨海過橋推進」動畫
+        // 4. 控制馬利奧移動（修橋階段 & 過橋三線狂食金幣階段）
         let vx = 0, vz = 0;
-        const baseSpeed = 7.0;
-        const speed = shapeBridgeState.speedBoostTimer > 0 ? baseSpeed * 1.48 : baseSpeed;
+        const moveSpeed = shapeBridgeState.autoPickMinion ? 9.5 : 7.5;
 
         if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
             if (shapeBridgeState.moveDirX !== 0 || shapeBridgeState.moveDirZ !== 0) {
-                vx = shapeBridgeState.moveDirX * speed; vz = shapeBridgeState.moveDirZ * speed;
+                vx = shapeBridgeState.moveDirX * moveSpeed;
+                vz = shapeBridgeState.moveDirZ * moveSpeed;
             } else if (shapeBridgeState.targetX !== null && shapeBridgeState.targetZ !== null) {
-                const dx = shapeBridgeState.targetX - shapeBridgeState.heroX, dz = shapeBridgeState.targetZ - shapeBridgeState.heroZ, dist = Math.hypot(dx, dz);
-                if (dist > 0.15) { vx = (dx / dist) * speed; vz = (dz / dist) * speed; }
-                else { shapeBridgeState.targetX = null; shapeBridgeState.targetZ = null; if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false; }
+                const dx = shapeBridgeState.targetX - shapeBridgeState.heroX;
+                const dz = shapeBridgeState.targetZ - shapeBridgeState.heroZ;
+                const dist = Math.hypot(dx, dz);
+                if (dist > 0.15) {
+                    vx = (dx / dist) * moveSpeed;
+                    vz = (dz / dist) * moveSpeed;
+                } else {
+                    shapeBridgeState.targetX = null;
+                    shapeBridgeState.targetZ = null;
+                    if (shapeBridgeState.clickMarker) shapeBridgeState.clickMarker.visible = false;
+                    if (shapeBridgeState.autoPickMinion) {
+                        handleShapeBridgeMinionCaught(shapeBridgeState.autoPickMinion);
+                    }
+                }
             }
         } else if (shapeBridgeState.phase === 'crossing') {
-            if (shapeBridgeState.crossingWaypoints && shapeBridgeState.crossingWaypoints.length > 0) {
-                const wp = shapeBridgeState.crossingWaypoints[0];
-                const dx = wp.x - shapeBridgeState.heroX, dz = wp.z - shapeBridgeState.heroZ, dist = Math.hypot(dx, dz);
-                if (dist > 0.22) { vx = (dx / dist) * 8.0; vz = (dz / dist) * 8.0; }
-                else { shapeBridgeState.heroX = wp.x; shapeBridgeState.heroZ = wp.z; shapeBridgeState.crossingWaypoints.shift(); }
-            } else if (curRiver === 1) {
-                // 成功跨過第 1 條橋抵達「第 2 島：黃金機關島」！
-                shapeBridgeState.currentRiver = 2;
-                shapeBridgeState.phase = 'repair';
-                gameState.isBusy = false;
-                spawnIslandMinionsAndCrates(2);
-                const nextSlot = shapeBridgeState.slots.find(s => !s.filled && s.riverId === 2);
-                if (nextSlot && shapeBridgeState.tier !== 'fusion') {
-                    gameState.targetKey = nextSlot.shapeId;
-                    updateTargetBadgeUI(nextSlot.shapeId, false);
-                    const nm = getCognitiveItemMeta(nextSlot.shapeId, 'shape');
-                    setPromptUI(`🏜️ 抵達第 2 島【黃金機關島】！請捉「${nm.badgeSymbol}${nm.title}小兵」修築第 2 條彩虹大橋！`, `修好前面兩格大橋缺口就可以衝入皇冠大城堡！`);
-                }
-                updateShapeBridgeBanner();
-            } else {
-                // 成功跨過第 2 條橋抵達終點「第 3 島：皇冠形狀大城堡」！
+            // 🎢 過橋大獎賞：馬利奧自動向前衝過彩虹大橋，小朋友可以左右操控狂食 3 排金幣！
+            vz = -2.65;
+            if (shapeBridgeState.moveDirX !== 0) {
+                vx = shapeBridgeState.moveDirX * 7.5;
+            } else if (shapeBridgeState.targetX !== null) {
+                const dx = shapeBridgeState.targetX - shapeBridgeState.heroX;
+                if (Math.abs(dx) > 0.1) vx = Math.sign(dx) * Math.min(Math.abs(dx) * 10, 7.8);
+            }
+
+            if (shapeBridgeState.heroZ <= -5.1) {
                 shapeBridgeState.phase = 'celebrate';
-                playStageClearFanfare(); awardStarProgress();
-                setPromptUI(`👑 三島長征大成功！馬利奧成功連過兩條大橋抵達奇幻形狀大城堡！`, `一齊欣賞城堡上空嘅勝利煙花啦！🎉`);
-                [[-2.6, 3.8, -13.2], [2.6, 3.8, -13.2], [0, 4.5, -13.6], [-3.4, 3.2, -12.0], [3.4, 3.2, -12.0]].forEach(([fx, fy, fz], idx) => {
-                    activeCountingTimeouts.push(setTimeout(() => { playCoinSound(); emitStarParticles(new THREE.Vector3(fx, fy, fz)); }, idx * 300));
+                playStageClearFanfare();
+                awardStarProgress();
+                setPromptUI(`👑 彩虹大橋衝線成功！馬利奧食晒金幣抵達奇幻形狀大城堡喇！`, ``);
+                [[-2.5, 3.8, -6.8], [2.5, 3.8, -6.8], [0, 4.4, -7.2], [-3.2, 3.2, -5.8], [3.2, 3.2, -5.8]].forEach(([fx, fy, fz], idx) => {
+                    activeCountingTimeouts.push(setTimeout(() => { playCoinSound(); emitStarParticles(new THREE.Vector3(fx, fy, fz)); }, idx * 280));
                 });
-                activeCountingTimeouts.push(setTimeout(() => { if (!isToyModalOpen()) startNewRound(); }, 2700));
+                activeCountingTimeouts.push(setTimeout(() => { if (!isToyModalOpen()) startNewRound(); }, 2500));
             }
         }
 
         const isWalking = Math.hypot(vx, vz) > 0.05;
         if (isWalking) {
-            const minZ = (shapeBridgeState.phase === 'crossing') ? -12.0 : (curRiver === 1 ? 2.75 : -5.65);
-            const maxZ = (shapeBridgeState.phase === 'crossing') ? 8.5 : (curRiver === 1 ? 8.4 : -0.7);
-            shapeBridgeState.heroX = Math.max(-7.2, Math.min(7.2, shapeBridgeState.heroX + vx * dt));
-            shapeBridgeState.heroZ = Math.max(minZ, Math.min(maxZ, shapeBridgeState.heroZ + vz * dt));
-            shapeBridgeState.walkCycle += dt * (shapeBridgeState.speedBoostTimer > 0 ? 22 : 16);
+            const maxX = (shapeBridgeState.phase === 'crossing') ? 3.2 : 6.2;
+            const minZ = (shapeBridgeState.phase === 'crossing') ? -5.3 : 0.45;
+            shapeBridgeState.heroX = Math.max(-maxX, Math.min(maxX, shapeBridgeState.heroX + vx * dt));
+            shapeBridgeState.heroZ = Math.max(minZ, Math.min(5.6, shapeBridgeState.heroZ + vz * dt));
+            shapeBridgeState.walkCycle += dt * 18;
             shapeBridgeState.facingAngle = Math.atan2(vx, vz);
         }
 
@@ -2396,120 +2298,178 @@ function animate() {
             cm.group.scale.setScalar(0.6);
         }
 
+        // 過橋磁吸食金幣判定
         if (shapeBridgeState.bridgeCoins && shapeBridgeState.bridgeCoins.length > 0) {
             shapeBridgeState.bridgeCoins.forEach((coin, idx) => {
                 if (!coin.userData.collected) {
-                    coin.rotation.z += dt * 4;
-                    if (Math.hypot(shapeBridgeState.heroX - coin.position.x, shapeBridgeState.heroZ - coin.position.z) < 1.15) {
-                        coin.userData.collected = true; playCountingNote((idx % 8) + 1); emitStarParticles(coin.position);
+                    coin.rotation.z += dt * 4.5;
+                    if (Math.hypot(shapeBridgeState.heroX - coin.position.x, shapeBridgeState.heroZ - coin.position.z) < 1.35) {
+                        coin.userData.collected = true;
+                        playCountingNote((idx % 8) + 1);
+                        emitStarParticles(coin.position);
                     }
-                } else coin.visible = false;
+                } else {
+                    coin.visible = false;
+                }
             });
         }
 
         if (shapeBridgeState.compassRing) {
             shapeBridgeState.compassRing.position.set(shapeBridgeState.heroX, 0.38, shapeBridgeState.heroZ);
-            let aimX = 0, aimZ = (curRiver === 1) ? 1.0 : -7.5;
+            let aimX = 0, aimZ = -1.3;
             if (shapeBridgeState.carryingMinion) {
-                if (shapeBridgeState.tier === 'fusion' && curRiver === 2 && shapeBridgeState.fusionParts.length < 2 && shapeBridgeState.carryingMinion.itemKey === shapeBridgeState.fusionPartShape) {
-                    aimX = 0; aimZ = -3.2;
-                } else {
-                    const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.riverId === curRiver && s.shapeId === shapeBridgeState.carryingMinion.itemKey);
-                    if (matchSlot) { aimX = matchSlot.x; aimZ = matchSlot.z; }
-                }
+                const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.requiredShapeId === shapeBridgeState.carryingMinion.itemKey);
+                if (matchSlot) { aimX = matchSlot.x; aimZ = matchSlot.z; }
             } else {
-                const nextSlot = shapeBridgeState.slots.find(s => !s.filled && s.riverId === curRiver);
+                const nextSlot = shapeBridgeState.slots.find(s => !s.filled);
                 if (nextSlot) {
-                    const wantShape = (shapeBridgeState.tier === 'fusion' && curRiver === 2 && shapeBridgeState.fusionParts.length < 2) ? shapeBridgeState.fusionPartShape : nextSlot.shapeId;
-                    const matchMinion = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.islandId === curRiver && b.itemKey === wantShape);
-                    if (matchMinion) { aimX = matchMinion.group.position.x; aimZ = matchMinion.group.position.z; }
+                    const matchMinion = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.itemKey === nextSlot.requiredShapeId);
+                    if (matchMinion) { aimX = matchMinion.homeX; aimZ = matchMinion.homeZ; }
                 }
             }
             shapeBridgeState.compassRing.rotation.y = Math.atan2(aimX - shapeBridgeState.heroX, aimZ - shapeBridgeState.heroZ);
         }
 
-        // 6. 判定：捉散步小兵 / 送入合成台 / 踏上橋口彈射板修橋！
+        // 5. 磁吸判定：行近蘑菇台即舉起小兵 / 舉住小兵行近河邊即刻磁吸飛入橋窿！
         if (shapeBridgeState.phase === 'repair' && !gameState.isBusy) {
             if (!shapeBridgeState.carryingMinion) {
                 for (let i = 0; i < interactiveBlocks.length; i++) {
                     const m = interactiveBlocks[i];
-                    if (m.isArenaMinion && m.group.visible && m.islandId === curRiver && m.state !== 'wrong' && Math.hypot(shapeBridgeState.heroX - m.group.position.x, shapeBridgeState.heroZ - m.group.position.z) < 1.25) {
-                        handleShapeBridgeMinionCaught(m); break;
+                    if (m.isArenaMinion && m.group.visible && m.state !== 'wrong' && Math.hypot(shapeBridgeState.heroX - m.homeX, shapeBridgeState.heroZ - m.homeZ) < 1.25) {
+                        handleShapeBridgeMinionCaught(m);
+                        break;
                     }
                 }
-            } else {
-                // 如果喺「🧩 幾何合成工坊」舉住組件小兵行近中央紫色合成台 (0, -3.2)，自動放入合成台！
-                if (shapeBridgeState.tier === 'fusion' && curRiver === 2 && shapeBridgeState.fusionAltar && shapeBridgeState.carryingMinion.itemKey === shapeBridgeState.fusionPartShape && shapeBridgeState.fusionParts.length < 2) {
-                    if (Math.hypot(shapeBridgeState.heroX - 0, shapeBridgeState.heroZ - (-3.2)) < 2.1) {
-                        depositMinionIntoFusionAltar();
-                    }
-                }
-                const triggerZ = (curRiver === 1) ? 3.35 : -5.1;
-                if (shapeBridgeState.carryingMinion && shapeBridgeState.heroZ < triggerZ) {
-                    for (let i = 0; i < shapeBridgeState.slots.length; i++) {
-                        const slot = shapeBridgeState.slots[i];
-                        if (!slot.filled && slot.riverId === curRiver && Math.abs(shapeBridgeState.heroX - slot.x) < 1.65) {
-                            triggerPlugMinionIntoBridgeSlot(slot); break;
-                        }
-                    }
+            } else if (shapeBridgeState.heroZ < 1.3) {
+                // 🧲 超強河邊磁吸：只要舉住小兵行近河邊，自動吸去對應形狀嘅橋窿！
+                const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.requiredShapeId === shapeBridgeState.carryingMinion.itemKey && Math.abs(shapeBridgeState.heroX - s.x) < 2.2);
+                if (matchSlot) {
+                    triggerPlugMinionIntoBridgeSlot(matchSlot);
                 }
             }
         }
 
-        // 7. 小兵凌空 360 度翻筋斗壓扁水怪變身橋磚，並檢查當前河流係咪已經全通！
+        // 6. 階段 A：小兵凌空飛入橋窿，馬利奧同步跳去橋邊準備揮動「🔨 黃金大魔槌」！
         if (shapeBridgeState.phase === 'jumping' && shapeBridgeState.jumpingAnim) {
             const ja = shapeBridgeState.jumpingAnim;
-            ja.progress = Math.min(1, ja.progress + dt * 2.1);
+            ja.progress = Math.min(1, ja.progress + dt * 2.5);
             const p = ja.progress;
             ja.minion.group.position.lerpVectors(ja.startPos, ja.endPos, p);
-            ja.minion.group.position.y += Math.sin(p * Math.PI) * 2.8;
+            ja.minion.group.position.y += Math.sin(p * Math.PI) * 2.5;
             ja.minion.group.rotation.x = p * Math.PI * 2;
-            ja.minion.group.scale.setScalar(THREE.MathUtils.lerp(0.6, 0.85, p));
+
+            // 馬利奧同步跑去橋口正前方準備扑槌
+            shapeBridgeState.heroX = THREE.MathUtils.lerp(shapeBridgeState.heroX, ja.slot.x, dt * 10);
+            shapeBridgeState.heroZ = THREE.MathUtils.lerp(shapeBridgeState.heroZ, 0.45, dt * 10);
+            shapeBridgeState.facingAngle = Math.PI;
 
             if (p >= 1) {
-                ja.slot.filled = true; ja.slot.cavityGroup.visible = false; ja.slot.repairedGroup.visible = true;
-                ja.minion.group.visible = false;
-                playChestOpenSound(); emitStarParticles(ja.endPos); updateShapeBridgeBanner();
-
-                const nextInThisRiver = shapeBridgeState.slots.find(s => !s.filled && s.riverId === curRiver);
-                if (nextInThisRiver) {
-                    shapeBridgeState.phase = 'repair'; shapeBridgeState.jumpingAnim = null;
-                    gameState.targetKey = nextInThisRiver.shapeId; updateTargetBadgeUI(nextInThisRiver.shapeId, false);
-                    const nextMeta = getCognitiveItemMeta(nextInThisRiver.shapeId, 'shape');
-                    setPromptUI(`💥 咚—啪！修好一格橋板！第 ${curRiver} 條橋仲有一個「${nextMeta.title}缺口」未修好！`, `快啲捉埋「${nextMeta.badgeSymbol}${nextMeta.title}小兵」修通條橋啦！`);
-                } else {
-                    // 當前河流嘅大橋全部修通！生成過橋金幣並自動帶馬利奧跑過橋去下一座島！
-                    shapeBridgeState.phase = 'crossing'; shapeBridgeState.jumpingAnim = null; gameState.isBusy = true;
-                    const bridgeX = ja.slot.x;
-                    const coinZs = (curRiver === 1) ? [2.2, 1.0, -0.2, -1.4] : [-6.2, -7.5, -8.8, -10.2];
-                    coinZs.forEach(cz => {
-                        const coin = new THREE.Mesh(
-                            new THREE.CylinderGeometry(0.36, 0.36, 0.12, 20),
-                            new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.2, metalness: 0.65 })
-                        );
-                        coin.rotation.x = Math.PI / 2; coin.position.set(bridgeX, 0.85, cz); coin.userData = { collected: false };
-                        shapeBridgeState.slotsContainer.add(coin); shapeBridgeState.bridgeCoins.push(coin);
-                    });
-
-                    if (curRiver === 1) {
-                        shapeBridgeState.crossingWaypoints = [{ x: bridgeX, z: 2.5 }, { x: bridgeX, z: -1.8 }, { x: 0, z: -2.4 }];
-                    } else {
-                        shapeBridgeState.crossingWaypoints = [{ x: bridgeX, z: -6.0 }, { x: bridgeX, z: -9.8 }, { x: 0, z: -11.4 }];
-                    }
-                    playSuccessChime();
+                shapeBridgeState.phase = 'hammering';
+                ja.hammerPhase = 0;
+                ja.slamCount = 0;
+                if (shapeBridgeState.hammerMesh) {
+                    shapeBridgeState.hammerMesh.visible = true;
+                    shapeBridgeState.hammerMesh.rotation.x = 0;
                 }
             }
         }
 
-        // 8. 動態大地图跟隨鏡頭（隨住馬利奧由南島 Z:+7 推進去北岸城堡 Z:-12 平滑移動！）
-        const camX = shapeBridgeState.heroX * 0.35;
-        const camY = (shapeBridgeState.phase === 'celebrate') ? 8.5 : 10.4;
-        const camZ = (shapeBridgeState.phase === 'celebrate') ? -4.2 : (shapeBridgeState.heroZ + 8.6);
-        const lookZ = (shapeBridgeState.phase === 'celebrate') ? -12.5 : (shapeBridgeState.heroZ - 2.6);
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, camX, dt * 4);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, dt * 4);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, dt * 4);
-        camera.lookAt(shapeBridgeState.heroX * 0.25, 0.6, lookZ);
+        // 7. 階段 B：🔨 馬利奧揮動「巨型黃金大魔槌」咚！咚！兩下打樁，將水怪彈飛上天！
+        if (shapeBridgeState.phase === 'hammering' && shapeBridgeState.jumpingAnim) {
+            const ja = shapeBridgeState.jumpingAnim;
+            ja.hammerPhase += dt * 2.6;
+
+            // 大魔槌揮動角度 (連扑兩下)
+            const swing = Math.sin(ja.hammerPhase * Math.PI * 4);
+            if (shapeBridgeState.hammerMesh) {
+                shapeBridgeState.hammerMesh.rotation.x = Math.max(-0.4, swing * 1.45);
+            }
+
+            // 第 1 下扑落去 & 第 2 下扑落去嘅震撼回饋
+            if ((ja.hammerPhase >= 0.25 && ja.slamCount === 0) || (ja.hammerPhase >= 0.75 && ja.slamCount === 1)) {
+                ja.slamCount += 1;
+                playChestOpenSound();
+                emitStarParticles(ja.endPos);
+                ja.minion.group.position.y = 0.85 - ja.slamCount * 0.28;
+                ja.slot.group.position.y = 0.22;
+                setTimeout(() => { if (ja.slot && ja.slot.group) ja.slot.group.position.y = 0.36; }, 120);
+            }
+
+            if (ja.hammerPhase >= 1.0) {
+                if (shapeBridgeState.hammerMesh) shapeBridgeState.hammerMesh.visible = false;
+                ja.minion.group.visible = false;
+                ja.slot.currentCount += 1;
+
+                if (ja.slot.currentCount < ja.slot.neededCount) {
+                    // 雙拼合體橋：已完成左半邊 (1/2)，提示再篤多一隻細形狀小兵完成右半邊！
+                    if (ja.slot.halfFilledMesh) ja.slot.halfFilledMesh.visible = true;
+                    shapeBridgeState.phase = 'repair';
+                    shapeBridgeState.jumpingAnim = null;
+                    updateShapeBridgeBanner();
+                    const reqMeta = getCognitiveItemMeta(ja.slot.requiredShapeId, 'shape');
+                    setPromptUI(`🔨 已拼好左半邊（1/2）！請再篤多 1 隻「${reqMeta.badgeSymbol}${reqMeta.title}」拼成完整大形狀！`, ``);
+                } else {
+                    // 橋窿完全修好！將河底小水怪「Biang！」一聲彈飛上天！
+                    ja.slot.filled = true;
+                    if (ja.slot.monsterGroup) {
+                        const mon = ja.slot.monsterGroup;
+                        shapeBridgeGroup.attach(mon);
+                        shapeBridgeState.flyingMonsters.push({
+                            mesh: mon,
+                            vx: (Math.random() - 0.5) * 6,
+                            vy: 11.5,
+                            vz: -7.5,
+                            life: 1.2
+                        });
+                    }
+                    ja.slot.cavityGroup.visible = false;
+                    ja.slot.repairedGroup.visible = true;
+                    updateShapeBridgeBanner();
+
+                    const nextUnfilled = shapeBridgeState.slots.find(s => !s.filled);
+                    if (nextUnfilled) {
+                        shapeBridgeState.phase = 'repair';
+                        shapeBridgeState.jumpingAnim = null;
+                        gameState.targetKey = nextUnfilled.requiredShapeId;
+                        updateTargetBadgeUI(nextUnfilled.requiredShapeId, false);
+                        const nextMeta = getCognitiveItemMeta(nextUnfilled.requiredShapeId, 'shape');
+                        setPromptUI(`💥 咚咚！成功彈飛水怪修好橋板！接住請篤蘑菇台上嘅「${nextMeta.badgeSymbol}${nextMeta.title}」！`, ``);
+                    } else {
+                        // 🎢 所有橋窿修好晒！展開「三線彩虹加速跑道」+ 15 粒閃亮金幣俾玩家左右狂食！
+                        shapeBridgeState.phase = 'crossing';
+                        shapeBridgeState.jumpingAnim = null;
+                        shapeBridgeState.heroX = 0;
+                        shapeBridgeState.heroZ = 1.3;
+                        shapeBridgeState.targetX = 0;
+                        if (shapeBridgeState.rainbowTrackMesh) shapeBridgeState.rainbowTrackMesh.visible = true;
+                        interactiveBlocks.forEach(b => { if (b.isArenaMinion) b.group.visible = false; });
+
+                        [-2.2, 0, 2.2].forEach(laneX => {
+                            [0.4, -0.5, -1.4, -2.3, -3.2].forEach(cz => {
+                                const coin = new THREE.Mesh(
+                                    new THREE.CylinderGeometry(0.38, 0.38, 0.12, 20),
+                                    new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.2, metalness: 0.65 })
+                                );
+                                coin.rotation.x = Math.PI / 2;
+                                coin.position.set(laneX, 0.88, cz);
+                                coin.userData = { collected: false };
+                                shapeBridgeState.slotsContainer.add(coin);
+                                shapeBridgeState.bridgeCoins.push(coin);
+                            });
+                        });
+
+                        playSuccessChime();
+                        setPromptUI(`🎢 大橋打通喇！快啲用手指左右掃（或撳◀▶掣）控制馬利奧食晒橋上嘅金幣！`, ``);
+                    }
+                }
+            }
+        }
+
+        const isEnd = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate');
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, shapeBridgeState.heroX * 0.22, dt * 4);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, isEnd ? 8.2 : 9.6, dt * 4);
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, isEnd ? 5.6 : 11.4, dt * 4);
+        camera.lookAt(shapeBridgeState.heroX * 0.16, 0.8, isEnd ? -4.2 : -0.8);
     }
 
     // 4B. Animate Mario 3D Hero Character Movement, Jump & Flagpole Victory
