@@ -2085,20 +2085,32 @@ function create3DNumberCharacter(itemKey, x, z, scale = 1.0) {
         ctx.textBaseline = 'middle';
         ctx.fillText(meta.title, 256, 405);
     } else {
-        const num = meta.key;
+        const num = Number(meta.key) || 1;
+        const isDouble = num >= 10;
         ctx.fillStyle = '#1E293B';
-        ctx.font = '900 285px "Fredoka", "Noto Sans TC", sans-serif';
+        ctx.font = isDouble
+            ? '900 195px "Fredoka", "Noto Sans TC", sans-serif'
+            : '900 280px "Fredoka", "Noto Sans TC", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(num), 256, 245);
+        ctx.fillText(String(num), 256, isDouble ? 205 : 240);
 
-        ctx.fillStyle = colorHex;
-        const dotRadius = 13;
-        const spacing = 34;
-        const startX = 256 - ((num - 1) * spacing) / 2;
-        for (let i = 0; i < num; i++) {
+        // 1-10 單行顯示；11-20 自動排成「上 10 點 + 下餘數（金色）」雙行十格陣
+        const maxPerRow = 10;
+        const dotRadius = isDouble ? 10.5 : 13;
+        const spacing = isDouble ? 33 : 35;
+        const totalDots = Math.min(num, 20);
+
+        for (let i = 0; i < totalDots; i++) {
+            const row = Math.floor(i / maxPerRow);
+            const col = i % maxPerRow;
+            const countInRow = (row === 0) ? Math.min(totalDots, maxPerRow) : (totalDots - maxPerRow);
+            const startX = 256 - ((countInRow - 1) * spacing) / 2;
+            const cy = (totalDots > 10) ? (388 + row * 42) : 432;
+
+            ctx.fillStyle = (row === 1) ? '#F59E0B' : (colorHex || '#EF4444');
             ctx.beginPath();
-            ctx.arc(startX + i * spacing, 435, dotRadius, 0, Math.PI * 2);
+            ctx.arc(startX + col * spacing, cy, dotRadius, 0, Math.PI * 2);
             ctx.fill();
         }
     }
