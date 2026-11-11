@@ -2297,3 +2297,382 @@ function emitStarParticles(originPos) {
         });
     }
 }
+/********************************************************************
+ * Mode 8: 💦 魔法水槍染色大作戰 (高飽和度3D實物雕塑 + 透明水槍背囊 + 拋物線水柱)
+ ********************************************************************/
+let colorSplashGroup = new THREE.Group();
+let colorSplashState = {
+    built: false,
+    tier: 'match', // 'match' | 'object' | 'mix' | 'memory'
+    sculptures: [],
+    bridgeGems: [],
+    streamBalls: [],
+    tankColors: [],
+    loadedColor: null,
+    activeStream: null,
+    memoryTimer: 0,
+    memoryHidden: false,
+    phase: 'paint', // 'paint' | 'spraying' | 'crossing' | 'celebrate'
+    heroX: 0,
+    heroZ: 2.2,
+    targetX: null,
+    targetZ: null,
+    autoPickMinion: null,
+    moveDirX: 0,
+    moveDirZ: 0,
+    walkCycle: 0,
+    facingAngle: 0,
+    heroMesh: null,
+    tankLiquidMesh: null,
+    nozzleTipMesh: null,
+    rainbowSlideMesh: null,
+    compassRing: null,
+    clickMarker: null,
+    stageContainer: null
+};
+
+const VIVID_COLOR_SPECS = {
+    red:    { hex: '#FF1744', numHex: 0xFF1744, emissive: 0xD50000, title: '紅色', short: '紅', objName: '🚒 消防車' },
+    yellow: { hex: '#FFD600', numHex: 0xFFD600, emissive: 0xFFAB00, title: '黃色', short: '黃', objName: '🐥 小鴨仔' },
+    blue:   { hex: '#00B0FF', numHex: 0x00B0FF, emissive: 0x0091EA, title: '藍色', short: '藍', objName: '🐳 噴水鯨魚' },
+    green:  { hex: '#00E676', numHex: 0x00E676, emissive: 0x00C853, title: '綠色', short: '綠', objName: '🐸 小青蛙' },
+    orange: { hex: '#FF6D00', numHex: 0xFF6D00, emissive: 0xFF3D00, title: '橙色', short: '橙', objName: '🍊 大柑桔' },
+    purple: { hex: '#D500F9', numHex: 0xD500F9, emissive: 0xAA00FF, title: '紫色', short: '紫', objName: '🍇 紫提子' }
+};
+
+function getVividSpec(colorId) {
+    if (VIVID_COLOR_SPECS[colorId]) return VIVID_COLOR_SPECS[colorId];
+    const meta = getCognitiveItemMeta(colorId);
+    const c = new THREE.Color(meta.hex || '#FF4081');
+    return {
+        hex: meta.hex || '#FF4081',
+        numHex: c.getHex(),
+        emissive: c.getHex(),
+        title: meta.title || String(colorId),
+        short: meta.shortLabel || '彩',
+        objName: `${meta.itemEmoji || '🎁'} ${meta.itemName || '禮物'}`
+    };
+}
+
+function ensure3DColorSplashBuilt() {
+    if (colorSplashState.built) return;
+    colorSplashState.built = true;
+    colorSplashGroup.clear();
+    colorSplashGroup.visible = false;
+    if (scene) scene.add(colorSplashGroup);
+
+    const waterMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(32, 32, 0.25, 48),
+        new THREE.MeshStandardMaterial({ color: 0x00B4D8, roughness: 0.2 })
+    );
+    waterMesh.position.set(0, -0.05, -0.5);
+    colorSplashGroup.add(waterMesh);
+
+    const southSand = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.3, 6.4), new THREE.MeshStandardMaterial({ color: 0xFFE082, roughness: 0.8 }));
+    southSand.position.set(0, 0.1, 3.6);
+    colorSplashGroup.add(southSand);
+
+    const southGrass = new THREE.Mesh(new THREE.BoxGeometry(17.6, 0.36, 6.0), new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.65 }));
+    southGrass.position.set(0, 0.18, 3.6);
+    southGrass.receiveShadow = true;
+    colorSplashGroup.add(southGrass);
+
+    const northSand = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.3, 6.6), new THREE.MeshStandardMaterial({ color: 0xFFE082, roughness: 0.8 }));
+    northSand.position.set(0, 0.1, -4.4);
+    colorSplashGroup.add(northSand);
+
+    const northPlaza = new THREE.Mesh(new THREE.BoxGeometry(17.6, 0.36, 6.2), new THREE.MeshStandardMaterial({ color: 0xFFFBEB, roughness: 0.6 }));
+    northPlaza.position.set(0, 0.18, -4.4);
+    northPlaza.receiveShadow = true;
+    colorSplashGroup.add(northPlaza);
+
+    const rainbowSlide = new THREE.Mesh(
+        new THREE.BoxGeometry(8.2, 0.26, 3.6),
+        new THREE.MeshStandardMaterial({ color: 0xFFEA00, roughness: 0.25, emissive: 0xF59E0B, emissiveIntensity: 0.2 })
+    );
+    rainbowSlide.position.set(0, 0.3, -0.4);
+    rainbowSlide.visible = false;
+    colorSplashState.rainbowSlideMesh = rainbowSlide;
+    colorSplashGroup.add(rainbowSlide);
+
+    // 北岸終點【🎨 彩虹顏料大城堡】
+    const castleGroup = new THREE.Group();
+    castleGroup.position.set(0, 0.36, -6.4);
+    const keep = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.6, 1.6), new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.35 }));
+    keep.position.y = 1.3;
+    castleGroup.add(keep);
+    [[-2.8, 0xFF1744], [0, 0xFFD600], [2.8, 0x00B0FF]].forEach(([tx, col], i) => {
+        const h = i === 1 ? 3.5 : 3.0;
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, h, 20), new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.4 }));
+        tower.position.set(tx, h / 2, 0.1);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.1, 1.35, 20), new THREE.MeshStandardMaterial({ color: col, roughness: 0.25, emissive: col, emissiveIntensity: 0.25 }));
+        roof.position.set(tx, h + 0.65, 0.1);
+        castleGroup.add(tower, roof);
+    });
+    colorSplashGroup.add(castleGroup);
+
+    colorSplashState.stageContainer = new THREE.Group();
+    colorSplashGroup.add(colorSplashState.stageContainer);
+
+    // 預建 18 粒高飽和度拋物線水柱水珠
+    colorSplashState.streamBalls = [];
+    for (let i = 0; i < 18; i++) {
+        const drop = new THREE.Mesh(
+            new THREE.SphereGeometry(0.24 - (i % 3) * 0.03, 14, 14),
+            new THREE.MeshStandardMaterial({ color: 0x00B0FF, roughness: 0.1, emissive: 0x00B0FF, emissiveIntensity: 0.45 })
+        );
+        drop.visible = false;
+        colorSplashGroup.add(drop);
+        colorSplashState.streamBalls.push(drop);
+    }
+
+    const clickRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.4, 0.65, 24),
+        new THREE.MeshBasicMaterial({ color: 0xFFEA00, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+    );
+    clickRing.rotation.x = -Math.PI / 2;
+    clickRing.visible = false;
+    colorSplashState.clickMarker = clickRing;
+    colorSplashGroup.add(clickRing);
+
+    const compassRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.55, 0.78, 32),
+        new THREE.MeshBasicMaterial({ color: 0xFFEA00, side: THREE.DoubleSide, transparent: true, opacity: 0.92 })
+    );
+    compassRing.rotation.x = -Math.PI / 2;
+    colorSplashState.compassRing = compassRing;
+    colorSplashGroup.add(compassRing);
+
+    // 馬利奧 + 背脊透明水箱 + 右手高壓魔法水槍
+    const hero = marioHero.group.clone();
+    hero.scale.setScalar(0.92);
+    hero.position.set(0, 0.36, 2.2);
+
+    const tankGlass = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.42, 0.95, 20),
+        new THREE.MeshPhysicalMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.42, roughness: 0.1 })
+    );
+    tankGlass.position.set(0, 0.85, -0.45);
+    hero.add(tankGlass);
+
+    const tankLiquid = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.36, 0.36, 0.82, 18),
+        new THREE.MeshStandardMaterial({ color: 0x00B0FF, roughness: 0.15, emissive: 0x00B0FF, emissiveIntensity: 0.4 })
+    );
+    tankLiquid.position.set(0, 0.82, -0.45);
+    tankLiquid.visible = false;
+    hero.add(tankLiquid);
+    colorSplashState.tankLiquidMesh = tankLiquid;
+
+    const blasterGroup = new THREE.Group();
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.95, 16), new THREE.MeshStandardMaterial({ color: 0xF8FAFC, roughness: 0.3 }));
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.z = 0.45;
+    const nozzleTip = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.15, 0.28, 16), new THREE.MeshStandardMaterial({ color: 0xFFD600, roughness: 0.2, emissive: 0xFFAB00, emissiveIntensity: 0.25 }));
+    nozzleTip.rotation.x = Math.PI / 2;
+    nozzleTip.position.z = 0.95;
+    blasterGroup.add(barrel, nozzleTip);
+    blasterGroup.position.set(0.52, 0.72, 0.15);
+    hero.add(blasterGroup);
+
+    colorSplashState.nozzleTipMesh = nozzleTip;
+    colorSplashState.heroMesh = hero;
+    colorSplashGroup.add(hero);
+}
+
+// 建立北岸待染色嘅 3D 立體實物雕塑（未染色前為純白灰泥雕塑，射中後變超高飽和度鮮色！）
+function createColorToySculpture(index, x, colorId, tier) {
+    const spec = getVividSpec(colorId);
+    const z = -2.35;
+    const root = new THREE.Group();
+    root.position.set(x, 0.36, z);
+
+    const pedBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.45, 1.6, 0.32, 32),
+        new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.4 })
+    );
+    pedBase.position.y = 0.16;
+    root.add(pedBase);
+
+    const rimMat = new THREE.MeshStandardMaterial({
+        color: (tier === 'object') ? 0x94A3B8 : spec.numHex,
+        roughness: 0.25,
+        emissive: (tier === 'object') ? 0x000000 : spec.emissive,
+        emissiveIntensity: (tier === 'object') ? 0 : 0.32
+    });
+    const pedRim = new THREE.Mesh(new THREE.TorusGeometry(1.48, 0.12, 12, 32), rimMat);
+    pedRim.rotation.x = Math.PI / 2;
+    pedRim.position.y = 0.3;
+    root.add(pedRim);
+
+    const toyGroup = new THREE.Group();
+    toyGroup.position.y = 0.34;
+    const paintMeshes = [];
+    const accentMeshes = [];
+
+    const addPart = (geo, px, py, pz, sx = 1, sy = 1, sz = 1, accentHex = null) => {
+        const mat = new THREE.MeshStandardMaterial({
+            color: accentHex !== null ? 0x64748B : 0xF1F5F9,
+            roughness: 0.55
+        });
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(px, py, pz);
+        m.scale.set(sx, sy, sz);
+        m.castShadow = true;
+        toyGroup.add(m);
+        if (accentHex !== null) accentMeshes.push({ mesh: m, hex: accentHex });
+        else paintMeshes.push(m);
+        return m;
+    };
+
+    const addEyes = (ey, ez, gap = 0.28) => {
+        [-gap, gap].forEach(ex => {
+            const w = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color: 0xFFFFFF }));
+            w.position.set(ex, ey, ez);
+            const p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshBasicMaterial({ color: 0x0F172A }));
+            p.position.set(ex, ey, ez + 0.12);
+            toyGroup.add(w, p);
+        });
+    };
+
+    if (colorId === 'red') {
+        // 🚒 3D 消防車
+        addPart(new THREE.BoxGeometry(1.85, 0.85, 1.3), 0, 0.62, 0);
+        addPart(new THREE.BoxGeometry(1.2, 0.72, 0.95), 0, 1.25, 0.15);
+        addPart(new THREE.BoxGeometry(1.02, 0.38, 0.08), 0, 1.28, 0.64, 1, 1, 1, 0x38BDF8);
+        addPart(new THREE.BoxGeometry(0.32, 0.24, 0.24), 0, 1.72, 0.2, 1, 1, 1, 0xFFEA00);
+        addPart(new THREE.BoxGeometry(0.7, 0.12, 1.5), 0, 1.68, -0.15, 1, 1, 1, 0xFFFFFF);
+        [[-0.75, 0.55], [0.75, 0.55], [-0.75, -0.55], [0.75, -0.55]].forEach(([wx, wz]) => {
+            const wh = addPart(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 16), wx, 0.34, wz, 1, 1, 1, 0x1E293B);
+            wh.rotation.z = Math.PI / 2;
+        });
+    } else if (colorId === 'yellow') {
+        // 🐥 3D 小鴨仔
+        addPart(new THREE.SphereGeometry(0.88, 24, 20), 0, 0.75, -0.05, 1.05, 0.85, 1.15);
+        addPart(new THREE.SphereGeometry(0.66, 24, 20), 0, 1.58, 0.25);
+        addPart(new THREE.ConeGeometry(0.28, 0.5, 16), 0, 1.5, 0.95, 1.2, 0.65, 1, 0xFF6D00).rotation.x = Math.PI / 2;
+        [-0.85, 0.85].forEach(wx => addPart(new THREE.SphereGeometry(0.38, 16, 12), wx, 0.82, 0, 0.45, 0.75, 1.1));
+        addEyes(1.72, 0.76, 0.24);
+    } else if (colorId === 'blue') {
+        // 🐳 3D 噴水鯨魚
+        addPart(new THREE.SphereGeometry(0.98, 24, 20), 0, 0.85, 0.1, 1.05, 0.88, 1.25);
+        addPart(new THREE.ConeGeometry(0.55, 0.9, 16), 0, 0.95, -1.15, 1.3, 0.5, 1).rotation.x = -Math.PI / 3;
+        [-0.95, 0.95].forEach(fx => addPart(new THREE.BoxGeometry(0.55, 0.14, 0.42), fx, 0.55, 0.2));
+        addPart(new THREE.CylinderGeometry(0.32, 0.08, 0.65, 16), 0, 1.92, 0.15, 1, 1, 1, 0xE0F7FA);
+        addEyes(0.95, 1.12, 0.36);
+    } else if (colorId === 'green') {
+        // 🐸 3D 小青蛙
+        addPart(new THREE.SphereGeometry(0.92, 24, 20), 0, 0.78, 0, 1.15, 0.88, 1.0);
+        [-0.42, 0.42].forEach(ex => addPart(new THREE.SphereGeometry(0.34, 16, 16), ex, 1.58, 0.22));
+        [-0.78, 0.78].forEach(lx => addPart(new THREE.SphereGeometry(0.36, 16, 12), lx, 0.32, 0.35, 0.8, 0.6, 1.3));
+        addPart(new THREE.TorusGeometry(0.36, 0.06, 10, 20, Math.PI), 0, 0.78, 0.86, 1, 1, 1, 0xFF1744).rotation.x = Math.PI;
+        addEyes(1.62, 0.44, 0.42);
+    } else if (colorId === 'orange') {
+        // 🍊 3D 陽光大柑桔
+        addPart(new THREE.SphereGeometry(1.02, 28, 24), 0, 1.0, 0, 1.08, 0.94, 1.08);
+        addPart(new THREE.CylinderGeometry(0.1, 0.12, 0.42, 12), 0, 1.98, 0, 1, 1, 1, 0x78350F);
+        const leaf = addPart(new THREE.SphereGeometry(0.36, 16, 12), 0.38, 1.98, 0, 1.4, 0.35, 0.8, 0x00E676);
+        leaf.rotation.z = -0.35;
+        addEyes(1.12, 0.95, 0.3);
+    } else {
+        // 🍇 3D 串串紫提子 (或通用可愛果實)
+        const grapeCoords = [
+            [-0.45, 1.45, 0.15], [0, 1.48, 0.22], [0.45, 1.45, 0.15],
+            [-0.26, 1.02, 0.25], [0.26, 1.02, 0.25], [0, 1.15, -0.22],
+            [-0.42, 1.12, -0.15], [0.42, 1.12, -0.15], [0, 0.62, 0.22]
+        ];
+        grapeCoords.forEach(([gx, gy, gz]) => addPart(new THREE.SphereGeometry(0.38, 18, 18), gx, gy, gz));
+        addPart(new THREE.CylinderGeometry(0.09, 0.11, 0.5, 12), 0, 1.92, 0, 1, 1, 1, 0x78350F);
+        addPart(new THREE.SphereGeometry(0.35, 14, 12), 0.35, 1.92, 0, 1.35, 0.35, 0.8, 0x00E676);
+        addEyes(1.32, 0.52, 0.24);
+    }
+
+    root.add(toyGroup);
+
+    // 前方提示名牌
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 256; signCanvas.height = 96;
+    const signTex = new THREE.CanvasTexture(signCanvas);
+    const signMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(2.3, 0.82, 0.12),
+        new THREE.MeshBasicMaterial({ map: signTex })
+    );
+    signMesh.position.set(0, 0.52, 1.55);
+    signMesh.rotation.x = -0.35;
+    root.add(signMesh);
+
+    // 隱形大點擊框（方便幼兒一篤即射水柱！）
+    const hitBox = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.55, 1.55, 2.7, 16),
+        new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hitBox.position.y = 1.35;
+    root.add(hitBox);
+
+    colorSplashState.stageContainer.add(root);
+
+    const sculpObj = {
+        index, x, z, colorId, spec, painted: false,
+        root, toyGroup, pedRim, paintMeshes, accentMeshes,
+        signCanvas, signTex, signMesh, hitBox, bounceTimer: 0
+    };
+    hitBox.userData = { isColorSculpture: true, sculpObj };
+    signMesh.userData = { isColorSculpture: true, sculpObj };
+    updateSculptureSign(sculpObj, tier, false);
+    return sculpObj;
+}
+
+function updateSculptureSign(sculp, tier, hideMemory) {
+    const ctx = sculp.signCanvas.getContext('2d');
+    const spec = sculp.spec;
+    const showColor = sculp.painted || (tier !== 'object' && !(tier === 'memory' && hideMemory));
+
+    ctx.fillStyle = showColor ? spec.hex : '#1E293B';
+    ctx.fillRect(0, 0, 256, 96);
+    ctx.fillStyle = '#FFFFFF';
+    roundRectCanvas(ctx, 8, 8, 240, 80, 20);
+    ctx.fill();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (sculp.painted) {
+        ctx.fillStyle = '#15803D';
+        ctx.font = '900 38px "Noto Sans TC", sans-serif';
+        ctx.fillText(`✓ ${spec.title}`, 128, 50);
+    } else if (!showColor) {
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '900 34px "Noto Sans TC", sans-serif';
+        ctx.fillText(tier === 'memory' ? '❓ 記住顏色' : spec.objName, 128, 50);
+        sculp.pedRim.material.color.setHex(0x94A3B8);
+        sculp.pedRim.material.emissiveIntensity = 0;
+    } else {
+        ctx.fillStyle = spec.hex;
+        ctx.beginPath(); ctx.arc(54, 48, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#0F172A'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '900 38px "Noto Sans TC", sans-serif';
+        ctx.fillText(`篤我噴${spec.short}`, 152, 50);
+        sculp.pedRim.material.color.setHex(spec.numHex);
+        sculp.pedRim.material.emissive.setHex(spec.emissive);
+        sculp.pedRim.material.emissiveIntensity = 0.35;
+    }
+    sculp.signTex.needsUpdate = true;
+}
+
+function emitColorSplashParticles(originPos, numHex) {
+    for (let i = 0; i < 22; i++) {
+        const mat = new THREE.MeshStandardMaterial({ color: numHex, roughness: 0.15, emissive: numHex, emissiveIntensity: 0.45 });
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 10), mat);
+        mesh.position.copy(originPos);
+        particlesGroup.add(mesh);
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2.5 + Math.random() * 4.2;
+        activeParticles.push({
+            mesh,
+            vx: Math.cos(angle) * speed,
+            vy: 3.0 + Math.random() * 4.5,
+            vz: Math.sin(angle) * speed,
+            life: 1.05
+        });
+    }
+}
