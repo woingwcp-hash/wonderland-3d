@@ -3563,3 +3563,343 @@ function updateColorSplashFrame(dt, elapsed) {
     if (document.readyState === 'complete') initPatchUI();
     else window.addEventListener('load', initPatchUI);
 })();
+/********************************************************************
+ * Patch Step 5: iPad 粵語解鎖與讀音字典 + 直向螢幕智能鏡頭 + WebGL 記憶體自動清理
+ * (直接貼於 main.js 最底端最後一行之後，無需刪改舊代碼)
+ ********************************************************************/
+(function applyStabilityVoicePortraitMemoryPatch() {
+    if (window.__wonderlandStabilityPatchApplied) return;
+    window.__wonderlandStabilityPatchApplied = true;
+
+    // ==================== 1. iPad Safari 語音解鎖 + 廣東話精準讀音引擎 ====================
+    let cachedCantoneseVoice = null;
+    let iosSpeechUnlocked = false;
+    let pendingUtterText = '';
+    let speechSeqToken = 0;
+
+    function pickBestCantoneseVoice() {
+        if (!('speechSynthesis' in window)) return null;
+        const voices = window.speechSynthesis.getVoices() || [];
+        if (!voices.length) return null;
+
+        // 優先次序：香港粵語原生聲線 (zh-HK / yue-HK) -> 名稱含粵語/HK -> 其他中文聲線
+        return (
+            voices.find(v => /^(zh-hk|yue-hk|yue)/i.test(v.lang) && /sin-?ji|premium|enhanced|natural/i.test(v.name)) ||
+            voices.find(v => /^(zh-hk|yue-hk|yue)/i.test(v.lang)) ||
+            voices.find(v => /hk|hong\s*kong|cantonese|粵|廣東/i.test(`${v.lang} ${v.name}`)) ||
+            null
+        );
+    }
+
+    if ('speechSynthesis' in window) {
+        cachedCantoneseVoice = pickBestCantoneseVoice();
+        window.speechSynthesis.addEventListener?.('voiceschanged', () => {
+            cachedCantoneseVoice = pickBestCantoneseVoice();
+        });
+    }
+
+    // 將畫面文字轉換為自然準確嘅廣東話口語讀音（只影響語音，唔影響畫面顯示文字）
+    function formatCantoneseReadText(rawText) {
+        if (!rawText) return '';
+        let txt = String(rawText);
+
+        // A. 先處理關卡編號與範圍（防止 1-1、1-5 被誤讀成「一減一」、「一減五」）
+        txt = txt.replace(/關卡\s*1\s*-\s*(\d+)/g, '第 $1 關，');
+        txt = txt.replace(/(\d+)\s*-\s*(\d+)/g, (match, a, b) => {
+            return Number(a) < Number(b) ? `${a} 至 ${b}` : `${a} 減 ${b}`;
+        });
+
+        // B. 處理箭咀、分數進度與問號語境
+        txt = txt.replace(/[（(](\d+)\s*➔\s*(\d+)[）)]/g, '，由 $1 數到 $2，');
+        txt = txt.replace(/[（(]1\/2[）)]/g, '一半');
+        txt = txt.replace(/[（(]2\/2[）)]/g, '全部');
+        txt = txt.replace(/「[?？]」台/g, '問號台');
+        txt = txt.replace(/「[?？]」位/g, '問號位');
+        txt = txt.replace(/[?？]\s*木箱/g, '問號木箱');
+        txt = txt.replace(/[（(][?？][）)]/g, '');
+
+        // C. 移除幾何徽章符號與 Emoji（防止「▲三角形」被重覆讀成「黑色三角形 三角形」）
+        txt = txt.replace(/[●■▲★♥▬◆▼▮◀▶➕➖✖➗✓🎯🔨🔥💦🌈🐢🧩🕵️🔄⚡🚀🌱👑🏰🎉💥🙌👍🐣🌉🛸🔮🚂🍄🎨🔢🔺💡🗣️🔇]/gu, '');
+        txt = txt.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}【】\[\]]/gu, ' ');
+
+        // D. 處理算式符號
+        txt = txt
+            .replace(/\+/g, ' 加 ')
+            .replace(/−/g, ' 減 ')
+            .replace(/=/g, ' 等於 ')
+            .replace(/[?？]/g, ' 幾多 ')
+            .replace(/➔/g, '，跟住 ');
+
+        // E. 廣東話多音字與幼兒口語微調
+        txt = txt
+            .replace(/長方形/g, '場方形')
+            .replace(/正中目標/g, '正眾目標')
+            .replace(/調皮/g, '條皮')
+            .replace(/彈(飛|跳|射|出|開|床|板)/g, '但$1')
+            .replace(/行(去|近|過)/g, '跑$1')
+            .replace(/數下/g, '數一數')
+            .replace(/(睇|試|撳|望)下/g, '$1吓')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return txt;
+    }
+
+    window.speakCantoneseSmart = function (rawText, forceReplay = false) {
+        if ((!window.voiceReadEnabled && !forceReplay) || !('speechSynthesis' in window)) return;
+        if (gameState.inLobby && !forceReplay) return;
+
+        const clean = formatCantoneseReadText(rawText);
+        if (!clean) return;
+
+        if (!iosSpeechUnlocked) {
+            pendingUtterText = clean;
+        }
+
+        const myToken = ++speechSeqToken;
+        window.speechSynthesis.cancel();
+
+        // iPad Safari 修正：cancel() 後延遲 40ms 先 speak()，防止 iOS 食字靜音
+        setTimeout(() => {
+            if (myToken !== speechSeqToken) return;
+            if (!window.voiceReadEnabled && !forceReplay) return;
+
+            const utter = new SpeechSynthesisUtterance(clean);
+            if (!cachedCantoneseVoice) cachedCantoneseVoice = pickBestCantoneseVoice();
+            if (cachedCantoneseVoice) utter.voice = cachedCantoneseVoice;
+            utter.lang = cachedCantoneseVoice ? cachedCantoneseVoice.lang : 'zh-HK';
+            utter.rate = 0.94;
+            utter.pitch = 1.08;
+            window.speechSynthesis.speak(utter);
+        }, 40);
+    };
+
+    // 首次觸控螢幕即時解鎖 iPad WebAudio 與 SpeechSynthesis
+    function unlockIOSAudioAndSpeech() {
+        if (typeof ensureAudioCtx === 'function') ensureAudioCtx();
+        if (!iosSpeechUnlocked && 'speechSynthesis' in window) {
+            iosSpeechUnlocked = true;
+            const silentUtter = new SpeechSynthesisUtterance('');
+            silentUtter.volume = 0;
+            window.speechSynthesis.speak(silentUtter);
+            if (pendingUtterText && !gameState.inLobby && window.voiceReadEnabled) {
+                const toRead = pendingUtterText;
+                pendingUtterText = '';
+                setTimeout(() => window.speakCantoneseSmart(toRead), 80);
+            }
+        }
+    }
+    ['touchstart', 'pointerdown', 'click'].forEach(evt => {
+        window.addEventListener(evt, unlockIOSAudioAndSpeech, { capture: true, passive: true });
+    });
+
+    // 接管 setPromptUI 與「讀題」按鈕，並支援輕觸左下角目標章重聽題目
+    setPromptUI = function (mainText, subText) {
+        const mainEl = document.getElementById('prompt-text');
+        if (mainEl) mainEl.textContent = mainText;
+        const subEl = document.getElementById('sub-prompt-text');
+        if (subEl) subEl.textContent = subText || '';
+        window.speakCantoneseSmart(mainText);
+    };
+
+    function upgradeVoiceButtons() {
+        const vBtn = document.getElementById('btn-voice-toggle');
+        if (vBtn) {
+            vBtn.onclick = () => {
+                playPopSound(540);
+                window.voiceReadEnabled = !window.voiceReadEnabled;
+                if (!window.voiceReadEnabled && 'speechSynthesis' in window) {
+                    speechSeqToken++;
+                    window.speechSynthesis.cancel();
+                }
+                vBtn.className = `btn-toy-sm font-black px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border-2 shadow text-xs sm:text-sm flex items-center gap-1 ${window.voiceReadEnabled ? 'bg-amber-400 text-slate-950 border-amber-500' : 'bg-slate-200 text-slate-600 border-slate-300'}`;
+                vBtn.innerHTML = window.voiceReadEnabled ? '<span>🗣️</span><span class="hidden sm:inline">讀題：開</span>' : '<span>🔇</span><span class="hidden sm:inline">讀題：關</span>';
+                if (window.voiceReadEnabled) {
+                    window.speakCantoneseSmart(document.getElementById('prompt-text')?.textContent || '', true);
+                }
+            };
+        }
+
+        // 輕觸左下角目標數字章可隨時重讀當前題目（唔影響草地觸控穿透）
+        const targetCard = document.getElementById('target-number-card');
+        if (targetCard && !targetCard.dataset.replayBound) {
+            targetCard.dataset.replayBound = 'true';
+            targetCard.style.pointerEvents = 'auto';
+            targetCard.style.cursor = 'pointer';
+            targetCard.title = '撳我重聽廣東話讀題';
+            targetCard.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playPopSound(600);
+                window.speakCantoneseSmart(document.getElementById('prompt-text')?.textContent || '', true);
+            });
+        }
+    }
+
+    // ==================== 2. 直向螢幕（Portrait）智能鏡頭縮放與窄屏防撞位 ====================
+    let baseLandscapeFov = null;
+
+    function syncPortraitCameraAndNarrowHUD() {
+        if (!camera) return;
+        if (baseLandscapeFov === null) {
+            baseLandscapeFov = (camera.fov >= 35 && camera.fov <= 60) ? camera.fov : 45;
+        }
+
+        const w = Math.max(1, window.innerWidth);
+        const h = Math.max(1, window.innerHeight);
+        const aspect = w / h;
+
+        const isWideCustomStage = ['treasure', 'addition', 'shapebridge', 'colorsplash'].includes(gameState.mode);
+        const refAspect = isWideCustomStage ? 1.12 : 0.92;
+
+        let targetFov = baseLandscapeFov;
+        if (aspect < refAspect) {
+            const baseRad = (baseLandscapeFov * Math.PI) / 180;
+            const portraitRad = 2 * Math.atan(Math.tan(baseRad / 2) * (refAspect / Math.max(0.42, aspect)));
+            targetFov = Math.min(85, (portraitRad * 180) / Math.PI);
+        }
+
+        if (Math.abs(camera.fov - targetFov) > 0.15) {
+            camera.fov = targetFov;
+            camera.updateProjectionMatrix();
+        }
+
+        // 直向窄手機螢幕防撞：自動收窄左下提示框並微縮右下方向盤，避免左右重疊
+        const dpad = document.getElementById('treasure-dpad-bar');
+        const targetBadge = document.getElementById('target-number-card');
+        const promptCard = targetBadge ? targetBadge.parentElement : null;
+        if (dpad && promptCard && promptCard.dataset.movedToCorner) {
+            if (w < 500 && isWideCustomStage) {
+                dpad.style.transformOrigin = 'bottom right';
+                dpad.style.transform = 'scale(0.88)';
+                promptCard.style.maxWidth = `${Math.max(195, w - 165)}px`;
+            } else {
+                dpad.style.transform = '';
+                promptCard.style.maxWidth = '';
+            }
+        }
+    }
+
+    if (typeof updateCameraForAspect === 'function') {
+        const _origUpdateCam = updateCameraForAspect;
+        updateCameraForAspect = function () {
+            _origUpdateCam();
+            syncPortraitCameraAndNarrowHUD();
+        };
+    }
+
+    const _prevSwitchModeForCam = switchMode;
+    switchMode = function (newMode) {
+        _prevSwitchModeForCam(newMode);
+        syncPortraitCameraAndNarrowHUD();
+    };
+
+    window.addEventListener('resize', syncPortraitCameraAndNarrowHUD);
+    window.addEventListener('orientationchange', () => setTimeout(syncPortraitCameraAndNarrowHUD, 150));
+
+    // ==================== 3. WebGL 3D 貼圖與幾何體記憶體自動釋放（防平板閃退） ====================
+    const pendingRemovedObjects = new Set();
+    let disposeTimer = null;
+
+    const TEX_PROPS = ['map', 'alphaMap', 'emissiveMap', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap'];
+
+    function flushWebGLDisposalQueue() {
+        disposeTimer = null;
+        if (!pendingRemovedObjects.size || !scene) return;
+
+        // 先掃描目前所有仍在場景與各模式舞台內使用緊嘅資源 UUID，確保共用模型/材質絕對唔會被誤刪
+        const liveGeoms = new Set();
+        const liveMats = new Set();
+        const liveTexs = new Set();
+        const liveNodes = new Set();
+
+        const rootsToProtect = [
+            scene,
+            typeof gachaMachineGroup !== 'undefined' ? gachaMachineGroup : null,
+            typeof trainGroup !== 'undefined' ? trainGroup : null,
+            typeof marioStageGroup !== 'undefined' ? marioStageGroup : null,
+            typeof treasureIslandGroup !== 'undefined' ? treasureIslandGroup : null,
+            typeof additionArenaGroup !== 'undefined' ? additionArenaGroup : null,
+            typeof shapeBridgeGroup !== 'undefined' ? shapeBridgeGroup : null,
+            typeof colorSplashGroup !== 'undefined' ? colorSplashGroup : null,
+            typeof environmentGroup !== 'undefined' ? environmentGroup : null
+        ];
+
+        rootsToProtect.forEach(root => {
+            if (!root || typeof root.traverse !== 'function') return;
+            root.traverse(node => {
+                liveNodes.add(node);
+                if (node.geometry) liveGeoms.add(node.geometry.uuid);
+                const mats = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+                mats.forEach(m => {
+                    liveMats.add(m.uuid);
+                    TEX_PROPS.forEach(p => {
+                        if (m[p] && m[p].isTexture) liveTexs.add(m[p].uuid);
+                    });
+                });
+            });
+        });
+
+        // 安全釋放已經離開場景嘅舊題目 CanvasTexture、材質與幾何體
+        pendingRemovedObjects.forEach(removedRoot => {
+            if (!removedRoot || typeof removedRoot.traverse !== 'function') return;
+            removedRoot.traverse(node => {
+                if (liveNodes.has(node)) return;
+                if (node.geometry && !liveGeoms.has(node.geometry.uuid)) {
+                    node.geometry.dispose();
+                }
+                const mats = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+                mats.forEach(m => {
+                    TEX_PROPS.forEach(p => {
+                        if (m[p] && m[p].isTexture && !liveTexs.has(m[p].uuid)) {
+                            m[p].dispose();
+                        }
+                    });
+                    if (!liveMats.has(m.uuid)) {
+                        m.dispose();
+                    }
+                });
+            });
+        });
+
+        pendingRemovedObjects.clear();
+    }
+
+    function scheduleDisposal(objs) {
+        for (let i = 0; i < objs.length; i++) {
+            if (objs[i]) pendingRemovedObjects.add(objs[i]);
+        }
+        if (!disposeTimer && pendingRemovedObjects.size > 0) {
+            disposeTimer = setTimeout(flushWebGLDisposalQueue, 300);
+        }
+    }
+
+    if (typeof THREE !== 'undefined' && THREE.Object3D) {
+        const _origClear = THREE.Object3D.prototype.clear;
+        THREE.Object3D.prototype.clear = function () {
+            if (this.children && this.children.length > 0) {
+                scheduleDisposal([...this.children]);
+            }
+            return _origClear.apply(this, arguments);
+        };
+
+        const _origRemove = THREE.Object3D.prototype.remove;
+        THREE.Object3D.prototype.remove = function () {
+            if (arguments.length > 0) {
+                scheduleDisposal(arguments);
+            }
+            return _origRemove.apply(this, arguments);
+        };
+    }
+
+    // 方便喺 Console 輸入 checkWonderlandMemory() 隨時檢查貼圖與幾何體數量
+    window.checkWonderlandMemory = function () {
+        return renderer ? renderer.info.memory : null;
+    };
+
+    const bootStabilityPatch = () => {
+        upgradeVoiceButtons();
+        syncPortraitCameraAndNarrowHUD();
+    };
+    if (document.readyState === 'complete') setTimeout(bootStabilityPatch, 220);
+    else window.addEventListener('load', () => setTimeout(bootStabilityPatch, 220));
+})();
