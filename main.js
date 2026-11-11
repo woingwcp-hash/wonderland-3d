@@ -2540,3 +2540,735 @@ window.onload = function () {
     openLobby('subject');
     animate();
 };
+/********************************************************************
+ * Mode 8 Plugin: 💦 魔法水槍染色大作戰 (一篤裝彈 + 三原色混色 + 噴射水柱 + 彩虹滑浪)
+ ********************************************************************/
+MODE_DISPLAY_META.colorsplash = '💦 魔法水槍染色';
+
+const COLOR_SPLASH_TIERS = [
+    { id: 'match',  label: '🌱 1.鮮色配對 (有色牌)' },
+    { id: 'object', label: '🕵️ 2.常識聯想 (純白實物)' },
+    { id: 'mix',    label: '🧪 3.三原色混色 (紅+黃=橙)' },
+    { id: 'memory', label: '⚡ 4.記憶閃視挑戰' }
+];
+
+const COLOR_MIX_TABLE = {
+    'red+yellow': 'orange', 'yellow+red': 'orange',
+    'blue+yellow': 'green', 'yellow+blue': 'green',
+    'red+blue': 'purple',   'blue+red': 'purple'
+};
+
+function ensureColorSplashLobbyCard() {
+    const treasureCard = document.getElementById('lobby-card-treasure');
+    if (!treasureCard || document.getElementById('lobby-card-colorsplash')) return;
+
+    const csCard = document.createElement('button');
+    csCard.id = 'lobby-card-colorsplash';
+    csCard.onclick = () => startGameFromLobby('colorsplash');
+    csCard.className = 'btn-toy group sm:col-span-2 bg-gradient-to-r from-pink-100 via-amber-50 to-sky-100 hover:from-pink-200 hover:to-sky-200 p-5 rounded-3xl border-4 border-pink-400 items-center gap-4 text-left shadow-lg hidden';
+    csCard.innerHTML = `
+        <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-pink-500 via-amber-400 to-sky-500 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">💦</div>
+        <div class="flex-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-lg sm:text-2xl font-black text-slate-800">魔法水槍染色大作戰（高飽和度噴漆＋三原色混色）</span>
+                <span class="text-xs font-black bg-gradient-to-r from-pink-500 to-sky-500 text-white px-3 py-1 rounded-full shadow-sm">🎨 顏色樂園王牌新玩法</span>
+            </div>
+            <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">篤蘑菇台顏色小兵注入背囊水槍，射出鮮豔高壓水柱幫純白消防車、小青蛙同提子染返靚色！</p>
+        </div>`;
+    treasureCard.parentNode.appendChild(csCard);
+}
+
+function ensureColorSplashActionBtn() {
+    let btn = document.getElementById('color-splash-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'color-splash-btn';
+        btn.onclick = () => autoFireColorWaterGun();
+        btn.className = 'fixed right-2.5 sm:right-5 bottom-32 sm:bottom-36 z-40 pointer-events-auto btn-toy bg-gradient-to-r from-pink-500 via-amber-400 to-sky-500 text-slate-950 font-black px-4 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-white shadow-2xl flex items-center gap-2 text-base sm:text-xl animate-bounce hidden';
+        btn.innerHTML = `<span>💦</span><span id="color-splash-btn-text">噴射染色！</span><span>✨</span>`;
+        document.body.appendChild(btn);
+    }
+    return btn;
+}
+
+function renderColorSplashTierBarUI() {
+    const tierBar = document.getElementById('maze-tier-bar');
+    if (!tierBar) return;
+    const cur = colorSplashState.tier || 'match';
+    let html = `<div class="pointer-events-auto flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-pink-400 shadow-lg">`;
+    COLOR_SPLASH_TIERS.forEach(t => {
+        const active = (cur === t.id);
+        const cls = active ? 'bg-gradient-to-r from-pink-500 to-orange-500 text-white border-pink-600 shadow-sm scale-105' : 'bg-slate-100 hover:bg-pink-50 text-slate-600 border-slate-200';
+        html += `<button onclick="selectColorSplashTier('${t.id}')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm border ${cls}">${t.label}</button>`;
+    });
+    html += `</div>`;
+    tierBar.innerHTML = html;
+}
+
+function selectColorSplashTier(tierId) {
+    playPopSound(580);
+    colorSplashState.tier = tierId;
+    renderColorSplashTierBarUI();
+    startNewRound();
+}
+
+function updateColorSplashBanner() {
+    const banner = document.getElementById('counting-banner');
+    const dotsContainer = document.getElementById('counting-dots');
+    const emojiEl = document.getElementById('counting-emoji');
+    if (!banner || !dotsContainer) return;
+
+    banner.classList.remove('hidden');
+    if (dotsContainer.previousElementSibling) dotsContainer.previousElementSibling.style.display = 'none';
+    emojiEl.textContent = '💦';
+    emojiEl.className = 'text-xl sm:text-2xl';
+    dotsContainer.innerHTML = '';
+
+    // 三原色混色模式：即時顯示水箱混色公式 [ 🔴紅 + 🟡黃 = 🟠橙 ]
+    if (colorSplashState.tier === 'mix') {
+        const tc = colorSplashState.tankColors;
+        const s1 = tc[0] ? getVividSpec(tc[0]).title : '？';
+        const s2 = tc[1] ? getVividSpec(tc[1]).title : '？';
+        const res = colorSplashState.loadedColor ? getVividSpec(colorSplashState.loadedColor).title : '？';
+        const mixPill = document.createElement('span');
+        mixPill.className = 'inline-flex items-center gap-1 bg-purple-600 text-white px-2.5 py-0.5 rounded-xl text-xs sm:text-sm font-black shadow';
+        mixPill.textContent = `🧪水箱：${s1} + ${s2} = ${res}`;
+        dotsContainer.appendChild(mixPill);
+    }
+
+    colorSplashState.sculptures.forEach(sc => {
+        const pill = document.createElement('span');
+        if (sc.painted) {
+            pill.className = 'inline-flex items-center bg-emerald-500 text-white px-2 py-0.5 rounded-xl text-xs sm:text-sm font-black star-earned';
+            pill.textContent = `✓${sc.spec.title}`;
+        } else {
+            pill.className = 'inline-flex items-center bg-slate-100 text-slate-700 px-2 py-0.5 rounded-xl text-xs font-bold border border-slate-300';
+            pill.textContent = sc.spec.objName;
+        }
+        dotsContainer.appendChild(pill);
+    });
+}
+
+function syncMarioWaterTankVisual() {
+    const cId = colorSplashState.loadedColor || colorSplashState.tankColors[0] || null;
+    if (!colorSplashState.tankLiquidMesh) return;
+    if (!cId) {
+        colorSplashState.tankLiquidMesh.visible = false;
+        ensureColorSplashActionBtn().classList.add('hidden');
+        return;
+    }
+    const spec = getVividSpec(cId);
+    colorSplashState.tankLiquidMesh.visible = true;
+    colorSplashState.tankLiquidMesh.material.color.setHex(spec.numHex);
+    colorSplashState.tankLiquidMesh.material.emissive.setHex(spec.emissive);
+    const isHalf = (colorSplashState.tier === 'mix' && !colorSplashState.loadedColor);
+    colorSplashState.tankLiquidMesh.scale.y = isHalf ? 0.5 : 1.0;
+
+    if (colorSplashState.nozzleTipMesh) {
+        colorSplashState.nozzleTipMesh.material.color.setHex(spec.numHex);
+        colorSplashState.nozzleTipMesh.material.emissive.setHex(spec.emissive);
+    }
+
+    if (colorSplashState.loadedColor) {
+        updateTargetBadgeUI(colorSplashState.loadedColor, false);
+        const btn = ensureColorSplashActionBtn();
+        const txt = document.getElementById('color-splash-btn-text');
+        if (txt) txt.textContent = `噴射「${spec.title}」水柱！`;
+        btn.classList.remove('hidden');
+    } else {
+        ensureColorSplashActionBtn().classList.add('hidden');
+    }
+}
+
+function setupColorSplashRound() {
+    gameState.subject = 'color';
+    ensure3DColorSplashBuilt();
+    ensureMazeCompactHUD();
+    ensureColorSplashActionBtn().classList.add('hidden');
+    renderColorSplashTierBarUI();
+
+    colorSplashState.stageContainer.clear();
+    if (colorSplashState.rainbowSlideMesh) colorSplashState.rainbowSlideMesh.visible = false;
+    colorSplashState.streamBalls.forEach(b => { b.visible = false; });
+
+    colorSplashState.sculptures = [];
+    colorSplashState.bridgeGems = [];
+    colorSplashState.tankColors = [];
+    colorSplashState.loadedColor = null;
+    colorSplashState.activeStream = null;
+    colorSplashState.autoPickMinion = null;
+    colorSplashState.phase = 'paint';
+    syncMarioWaterTankVisual();
+
+    const tier = colorSplashState.tier || 'match';
+    const availIds = COLOR_CURRICULUM.map(c => c.id);
+    let targetColors = [];
+    let pedestalColors = [];
+
+    if (tier === 'mix') {
+        targetColors = ['orange', 'green', 'purple'].filter(c => availIds.includes(c) || VIVID_COLOR_SPECS[c]);
+        pedestalColors = ['red', 'yellow', 'blue'];
+    } else {
+        const shuffled = [...availIds].sort(() => Math.random() - 0.5);
+        targetColors = shuffled.slice(0, 3);
+        pedestalColors = [...targetColors, shuffled[3]].sort(() => Math.random() - 0.5);
+    }
+
+    colorSplashState.memoryHidden = false;
+    colorSplashState.memoryTimer = (tier === 'memory') ? 4.2 : 0;
+
+    [-3.4, 0, 3.4].forEach((sx, idx) => {
+        colorSplashState.sculptures.push(createColorToySculpture(idx, sx, targetColors[idx], tier));
+    });
+
+    // 南岸蘑菇台定點擺放高飽和度顏色小兵
+    const pedCoords = pedestalColors.length === 3
+        ? [[-3.6, 3.8], [0, 4.2], [3.6, 3.8]]
+        : [[-4.5, 3.4], [-1.5, 4.1], [1.5, 4.1], [4.5, 3.4]];
+
+    pedestalColors.forEach((cId, idx) => {
+        const [px, pz] = pedCoords[idx];
+        const spec = getVividSpec(cId);
+        const ped = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.95, 1.05, 0.28, 26),
+            new THREE.MeshStandardMaterial({ color: spec.numHex, roughness: 0.25, emissive: spec.emissive, emissiveIntensity: 0.25 })
+        );
+        ped.position.set(px, 0.5, pz);
+        colorSplashState.stageContainer.add(ped);
+
+        const minion = create3DNumberCharacter(cId, px, pz, 0.74);
+        minion.isArenaMinion = true;
+        minion.isShapeBridgeMinion = true;
+        minion.homeX = px;
+        minion.homeZ = pz;
+        if (minion.bodyMesh && Array.isArray(minion.bodyMesh.material)) {
+            minion.bodyMesh.material.forEach((m, mi) => {
+                if (mi !== 4) { m.color.setHex(spec.numHex); m.emissive = new THREE.Color(spec.emissive); m.emissiveIntensity = 0.22; }
+            });
+        }
+        interactiveBlocks.push(minion);
+    });
+
+    gameState.targetKey = pedestalColors[0];
+    updateTargetBadgeUI(targetColors[0], false);
+    updateColorSplashBanner();
+
+    colorSplashState.heroX = 0; colorSplashState.heroZ = 2.1;
+    colorSplashState.targetX = null; colorSplashState.targetZ = null;
+    colorSplashState.moveDirX = 0; colorSplashState.moveDirZ = 0; colorSplashState.facingAngle = Math.PI;
+    if (colorSplashState.heroMesh) { colorSplashState.heroMesh.position.set(0, 0.36, 2.1); colorSplashState.heroMesh.rotation.y = Math.PI; }
+
+    if (tier === 'mix') {
+        setPromptUI(`🧪 三原色混色：請篤 2 隻原色小兵（如紅+黃）溝出新顏色噴向玩具！`, ``);
+    } else if (tier === 'object') {
+        setPromptUI(`🕵️ 常識聯想：睇下白色玩具係咩嚟？篤啱顏色小兵幫佢染返靚色！`, ``);
+    } else if (tier === 'memory') {
+        setPromptUI(`⚡ 快啲記住 3 件玩具嘅目標顏色！（4 秒後收起色牌提示）`, ``);
+    } else {
+        setPromptUI(`💦 篤蘑菇台顏色小兵裝滿水槍，再篤對岸白色玩具噴射染色！`, ``);
+    }
+}
+
+function handleColorMinionLoaded(minion) {
+    if (gameState.isBusy || colorSplashState.phase !== 'paint') return;
+    const cId = minion.itemKey;
+    const spec = getVividSpec(cId);
+    colorSplashState.autoPickMinion = null;
+
+    if (colorSplashState.tier === 'mix') {
+        if (colorSplashState.loadedColor) {
+            colorSplashState.tankColors = [];
+            colorSplashState.loadedColor = null;
+        }
+        if (colorSplashState.tankColors.length === 0) {
+            playCoinSound();
+            colorSplashState.tankColors.push(cId);
+            emitColorSplashParticles(new THREE.Vector3(minion.homeX, 1.5, minion.homeZ), spec.numHex);
+            syncMarioWaterTankVisual();
+            updateColorSplashBanner();
+            setPromptUI(`🧪 水箱已裝入「${spec.title}」！再篤另一隻原色小兵溝出新顏色啦！`, ``);
+            return;
+        } else {
+            const first = colorSplashState.tankColors[0];
+            if (first === cId) {
+                playGentleNudge();
+                setPromptUI(`已經有「${spec.title}」喇！試下溝另一隻唔同嘅原色小兵啦！`, ``);
+                return;
+            }
+            const mixed = COLOR_MIX_TABLE[`${first}+${cId}`];
+            colorSplashState.tankColors.push(cId);
+            colorSplashState.loadedColor = mixed;
+            const mixSpec = getVividSpec(mixed);
+            playSuccessChime();
+            emitColorSplashParticles(new THREE.Vector3(colorSplashState.heroX, 1.8, colorSplashState.heroZ), mixSpec.numHex);
+            syncMarioWaterTankVisual();
+            updateColorSplashBanner();
+            setPromptUI(`✨ 混色成功！${getVividSpec(first).short}+${spec.short} 變成「${mixSpec.title}」！快啲篤對岸玩具噴射！`, ``);
+            return;
+        }
+    }
+
+    const needed = colorSplashState.sculptures.some(s => !s.painted && s.colorId === cId);
+    if (!needed) {
+        playGentleNudge();
+        minion.state = 'wrong'; minion.wrongTimer = 0.6;
+        setPromptUI(`對岸無玩具需要「${spec.title}」喎！請揀另一隻顏色小兵！`, ``);
+        return;
+    }
+
+    playCoinSound();
+    colorSplashState.loadedColor = cId;
+    emitColorSplashParticles(new THREE.Vector3(minion.homeX, 1.5, minion.homeZ), spec.numHex);
+    syncMarioWaterTankVisual();
+    updateColorSplashBanner();
+    setPromptUI(`💦 水槍已裝滿「${spec.title}」！快啲篤對岸對應玩具（或撳右下角💦大掣）噴射！`, ``);
+}
+
+function fireColorWaterGunAt(sculp) {
+    if (!colorSplashState.loadedColor || sculp.painted || colorSplashState.phase !== 'paint') return;
+    const loaded = colorSplashState.loadedColor;
+    const loadedSpec = getVividSpec(loaded);
+
+    if (sculp.colorId !== loaded) {
+        playGentleNudge();
+        sculp.toyGroup.position.y = 0.6;
+        setTimeout(() => { sculp.toyGroup.position.y = 0.34; }, 220);
+        setPromptUI(`哎呀！${sculp.spec.objName}唔係「${loadedSpec.title}」㗎！試下射去隔離啱顏色嘅玩具啦！`, ``);
+        return;
+    }
+
+    ensureColorSplashActionBtn().classList.add('hidden');
+    playMarioJumpSound();
+    colorSplashState.phase = 'spraying';
+    colorSplashState.moveDirX = 0; colorSplashState.moveDirZ = 0;
+    colorSplashState.targetX = null; colorSplashState.targetZ = null;
+    colorSplashState.facingAngle = Math.atan2(sculp.x - colorSplashState.heroX, sculp.z - colorSplashState.heroZ);
+
+    colorSplashState.activeStream = {
+        sculp,
+        spec: loadedSpec,
+        progress: 0,
+        startPos: new THREE.Vector3(colorSplashState.heroX, 1.25, colorSplashState.heroZ),
+        endPos: new THREE.Vector3(sculp.x, 1.35, sculp.z)
+    };
+}
+
+function autoFireColorWaterGun() {
+    if (gameState.mode !== 'colorsplash' || colorSplashState.phase !== 'paint' || !colorSplashState.loadedColor) return;
+    const match = colorSplashState.sculptures.find(s => !s.painted && s.colorId === colorSplashState.loadedColor);
+    if (match) fireColorWaterGunAt(match);
+}
+
+function updateColorSplashFrame(dt, elapsed) {
+    environmentGroup.visible = false;
+
+    // 記憶閃視倒數自動收埋色牌
+    if (colorSplashState.tier === 'memory' && !colorSplashState.memoryHidden && colorSplashState.memoryTimer > 0) {
+        colorSplashState.memoryTimer -= dt;
+        if (colorSplashState.memoryTimer <= 0) {
+            colorSplashState.memoryHidden = true;
+            colorSplashState.sculptures.forEach(sc => { if (!sc.painted) updateSculptureSign(sc, 'memory', true); });
+            setPromptUI(`⚡ 色牌收埋喇！憑記憶篤啱顏色小兵幫玩具染色啦！（忘記可撳💡提示）`, ``);
+        }
+    }
+
+    // 雕塑呼吸與染色後開心旋轉彈跳
+    colorSplashState.sculptures.forEach((sc, idx) => {
+        if (sc.painted) {
+            sc.toyGroup.rotation.y += dt * 2.2;
+            sc.toyGroup.position.y = 0.38 + Math.abs(Math.sin(elapsed * 5.5 + idx)) * 0.22;
+            if (sc.bounceTimer > 0) {
+                sc.bounceTimer = Math.max(0, sc.bounceTimer - dt * 2.5);
+                sc.toyGroup.scale.setScalar(1.0 + Math.sin(sc.bounceTimer * Math.PI) * 0.28);
+            }
+        } else {
+            sc.toyGroup.rotation.y = Math.sin(elapsed * 1.4 + idx) * 0.22;
+        }
+    });
+
+    // 蘑菇台顏色小兵原地彈跳
+    interactiveBlocks.forEach((b, idx) => {
+        if (b.isShapeBridgeMinion && b.isArenaMinion && b.group.visible) {
+            if (b.state === 'wrong') {
+                b.wrongTimer -= dt; b.group.rotation.z = Math.sin(elapsed * 28) * 0.16;
+                if (b.wrongTimer <= 0) { b.state = 'idle'; b.group.rotation.z = 0; }
+            } else b.group.rotation.z = Math.sin(elapsed * 3 + idx) * 0.04;
+            b.group.position.set(b.homeX, 1.32 + Math.abs(Math.sin(elapsed * 5 + idx)) * 0.18, b.homeZ);
+            b.group.rotation.y = Math.sin(elapsed * 2 + idx) * 0.22;
+            b.group.scale.setScalar(0.74);
+        }
+    });
+
+    // 馬利奧移動與彩虹滑浪過河
+    let vx = 0, vz = 0;
+    const spd = colorSplashState.autoPickMinion ? 9.8 : 7.6;
+    if (colorSplashState.phase === 'paint' && !gameState.isBusy) {
+        if (colorSplashState.moveDirX !== 0 || colorSplashState.moveDirZ !== 0) {
+            vx = colorSplashState.moveDirX * spd; vz = colorSplashState.moveDirZ * spd;
+        } else if (colorSplashState.targetX !== null && colorSplashState.targetZ !== null) {
+            const dx = colorSplashState.targetX - colorSplashState.heroX, dz = colorSplashState.targetZ - colorSplashState.heroZ;
+            const dist = Math.hypot(dx, dz);
+            if (dist > 0.15) { vx = (dx / dist) * spd; vz = (dz / dist) * spd; }
+            else {
+                colorSplashState.targetX = null; colorSplashState.targetZ = null;
+                if (colorSplashState.clickMarker) colorSplashState.clickMarker.visible = false;
+                if (colorSplashState.autoPickMinion) handleColorMinionLoaded(colorSplashState.autoPickMinion);
+            }
+        }
+    } else if (colorSplashState.phase === 'crossing') {
+        vz = -2.6;
+        if (colorSplashState.moveDirX !== 0) vx = colorSplashState.moveDirX * 7.5;
+        else if (colorSplashState.targetX !== null) {
+            const dx = colorSplashState.targetX - colorSplashState.heroX;
+            if (Math.abs(dx) > 0.1) vx = Math.sign(dx) * Math.min(Math.abs(dx) * 10, 7.8);
+        }
+        if (colorSplashState.heroZ <= -4.6) {
+            colorSplashState.phase = 'celebrate';
+            playStageClearFanfare(); awardStarProgress();
+            setPromptUI(`🌈 染色大成功！馬利奧衝入彩虹顏料大城堡喇！`, ``);
+            [[-2.5, 3.6, -6.0, 0xFF1744], [0, 4.2, -6.2, 0xFFD600], [2.5, 3.6, -6.0, 0x00B0FF]].forEach(([fx, fy, fz, col], idx) => {
+                activeCountingTimeouts.push(setTimeout(() => { playCoinSound(); emitColorSplashParticles(new THREE.Vector3(fx, fy, fz), col); }, idx * 320));
+            });
+            activeCountingTimeouts.push(setTimeout(() => { if (!isToyModalOpen()) startNewRound(); }, 2500));
+        }
+    }
+
+    const walking = Math.hypot(vx, vz) > 0.05;
+    if (walking) {
+        const maxX = (colorSplashState.phase === 'crossing') ? 3.2 : 6.0;
+        const minZ = (colorSplashState.phase === 'crossing') ? -4.8 : 0.9;
+        colorSplashState.heroX = Math.max(-maxX, Math.min(maxX, colorSplashState.heroX + vx * dt));
+        colorSplashState.heroZ = Math.max(minZ, Math.min(5.5, colorSplashState.heroZ + vz * dt));
+        colorSplashState.walkCycle += dt * 18;
+        colorSplashState.facingAngle = Math.atan2(vx, vz);
+    }
+
+    const hop = walking ? Math.abs(Math.sin(colorSplashState.walkCycle)) * 0.18 : Math.sin(elapsed * 3) * 0.03;
+    colorSplashState.heroMesh.position.set(colorSplashState.heroX, 0.36 + hop, colorSplashState.heroZ);
+    colorSplashState.heroMesh.rotation.y = THREE.MathUtils.lerp(colorSplashState.heroMesh.rotation.y, colorSplashState.facingAngle, dt * 12);
+    if (colorSplashState.compassRing) colorSplashState.compassRing.position.set(colorSplashState.heroX, 0.38, colorSplashState.heroZ);
+
+    // 過橋執取七彩寶石
+    colorSplashState.bridgeGems.forEach((gem, idx) => {
+        if (!gem.userData.collected) {
+            gem.rotation.y += dt * 4;
+            if (Math.hypot(colorSplashState.heroX - gem.position.x, colorSplashState.heroZ - gem.position.z) < 1.35) {
+                gem.userData.collected = true; playCountingNote((idx % 8) + 1);
+                emitColorSplashParticles(gem.position, gem.userData.hex);
+            }
+        } else gem.visible = false;
+    });
+
+    // 行近蘑菇台自動裝彈 / 行近岸邊自動對準噴水
+    if (colorSplashState.phase === 'paint' && !gameState.isBusy) {
+        for (let i = 0; i < interactiveBlocks.length; i++) {
+            const m = interactiveBlocks[i];
+            if (m.isArenaMinion && m.group.visible && m.state !== 'wrong' && Math.hypot(colorSplashState.heroX - m.homeX, colorSplashState.heroZ - m.homeZ) < 1.15) {
+                if (colorSplashState.loadedColor !== m.itemKey && !(colorSplashState.tier === 'mix' && colorSplashState.tankColors.includes(m.itemKey))) {
+                    handleColorMinionLoaded(m); break;
+                }
+            }
+        }
+        if (colorSplashState.loadedColor && colorSplashState.heroZ < 1.25) {
+            const match = colorSplashState.sculptures.find(s => !s.painted && s.colorId === colorSplashState.loadedColor && Math.abs(colorSplashState.heroX - s.x) < 2.2);
+            if (match) fireColorWaterGunAt(match);
+        }
+    }
+
+    // 💦 高壓拋物線彩色水柱噴射動畫
+    if (colorSplashState.phase === 'spraying' && colorSplashState.activeStream) {
+        const st = colorSplashState.activeStream;
+        st.progress = Math.min(1, st.progress + dt * 1.9);
+        colorSplashState.streamBalls.forEach((drop, i) => {
+            const t = st.progress * 1.25 - (i / 18) * 0.45;
+            if (t >= 0 && t <= 1) {
+                drop.visible = true;
+                drop.material.color.setHex(st.spec.numHex);
+                drop.material.emissive.setHex(st.spec.emissive);
+                drop.position.lerpVectors(st.startPos, st.endPos, t);
+                drop.position.y += Math.sin(t * Math.PI) * 2.1;
+            } else drop.visible = false;
+        });
+
+        if (st.progress >= 1) {
+            colorSplashState.streamBalls.forEach(d => { d.visible = false; });
+            const sc = st.sculp;
+            sc.painted = true;
+            sc.bounceTimer = 1.0;
+            // 將灰白雕塑瞬間染成超高飽和度發光鮮色！
+            sc.paintMeshes.forEach(m => {
+                m.material.color.setHex(st.spec.numHex);
+                m.material.roughness = 0.22;
+                m.material.emissive.setHex(st.spec.emissive);
+                m.material.emissiveIntensity = 0.28;
+            });
+            sc.accentMeshes.forEach(a => {
+                a.mesh.material.color.setHex(a.hex);
+                a.mesh.material.roughness = 0.25;
+            });
+            updateSculptureSign(sc, colorSplashState.tier, false);
+            emitColorSplashParticles(st.endPos, st.spec.numHex);
+            playChestOpenSound();
+
+            colorSplashState.loadedColor = null;
+            colorSplashState.tankColors = [];
+            colorSplashState.activeStream = null;
+            syncMarioWaterTankVisual();
+            updateColorSplashBanner();
+
+            const remaining = colorSplashState.sculptures.find(s => !s.painted);
+            if (remaining) {
+                colorSplashState.phase = 'paint';
+                setPromptUI(`🎉 好靚呀！${sc.spec.objName}染返「${st.spec.title}」喇！繼續幫下一件玩具染色啦！`, ``);
+            } else {
+                colorSplashState.phase = 'crossing';
+                colorSplashState.heroX = 0; colorSplashState.heroZ = 1.3; colorSplashState.targetX = 0;
+                if (colorSplashState.rainbowSlideMesh) colorSplashState.rainbowSlideMesh.visible = true;
+                interactiveBlocks.forEach(b => { if (b.isArenaMinion) b.group.visible = false; });
+
+                const gemColors = [0xFF1744, 0xFFD600, 0x00B0FF, 0x00E676, 0xFF6D00, 0xD500F9];
+                [-2.2, 0, 2.2].forEach((lx, li) => {
+                    [0.6, -0.2, -1.0, -1.8, -2.6].forEach((gz, gi) => {
+                        const gHex = gemColors[(li * 2 + gi) % gemColors.length];
+                        const gem = new THREE.Mesh(
+                            new THREE.OctahedronGeometry(0.36, 0),
+                            new THREE.MeshStandardMaterial({ color: gHex, roughness: 0.15, emissive: gHex, emissiveIntensity: 0.35 })
+                        );
+                        gem.position.set(lx, 0.9, gz);
+                        gem.userData = { collected: false, hex: gHex };
+                        colorSplashState.stageContainer.add(gem);
+                        colorSplashState.bridgeGems.push(gem);
+                    });
+                });
+                playSuccessChime();
+                setPromptUI(`🌈 全部玩具恢復彩色喇！左右掃動控制馬利奧食晒彩虹橋上嘅寶石！`, ``);
+            }
+        }
+    }
+
+    const isEnd = (colorSplashState.phase === 'crossing' || colorSplashState.phase === 'celebrate');
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, colorSplashState.heroX * 0.22, dt * 4);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, isEnd ? 8.0 : 9.4, dt * 4);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, isEnd ? 4.8 : 11.2, dt * 4);
+    camera.lookAt(colorSplashState.heroX * 0.16, 1.0, isEnd ? -4.2 : -1.2);
+}
+
+// 接駁原有主系統 Hooks（免修改原有函式內部）
+(function bindColorSplashHooks() {
+    const _origOpenLobby = openLobby;
+    openLobby = function (step = 'subject') {
+        ensureColorSplashLobbyCard();
+        const csBtn = document.getElementById('color-splash-btn');
+        if (csBtn) csBtn.classList.add('hidden');
+        _origOpenLobby(step);
+        const csCard = document.getElementById('lobby-card-colorsplash');
+        if (csCard && step !== 'subject') {
+            csCard.classList.toggle('hidden', gameState.subject !== 'color');
+            csCard.classList.toggle('flex', gameState.subject === 'color');
+        }
+    };
+
+    const _origSwitchSubject = switchSubject;
+    switchSubject = function (newSubject) {
+        if (newSubject !== 'color' && gameState.mode === 'colorsplash') gameState.mode = 'gacha';
+        _origSwitchSubject(newSubject);
+    };
+
+    const _origUpdateRightBtn = updateRightButtonForMode;
+    updateRightButtonForMode = function () {
+        _origUpdateRightBtn();
+        if (gameState.mode === 'colorsplash') {
+            document.getElementById('right-btn-label').textContent = '換新玩具';
+            document.getElementById('right-btn-icon').className = 'fa-solid fa-wand-magic-sparkles';
+        }
+    };
+
+    const _origEnsureHUD = ensureMazeCompactHUD;
+    ensureMazeCompactHUD = function () {
+        _origEnsureHUD();
+        if (gameState.mode === 'colorsplash') renderColorSplashTierBarUI();
+    };
+
+    const _origStartNewRound = startNewRound;
+    startNewRound = function () {
+        const csBtn = document.getElementById('color-splash-btn');
+        if (csBtn) csBtn.classList.add('hidden');
+        if (gameState.mode === 'colorsplash') {
+            clearTimeout(autoPromptTimer);
+            clearCountingObjects();
+            numberBlocksGroup.clear();
+            interactiveBlocks = [];
+            gameState.isBusy = false;
+            setupColorSplashRound();
+            return;
+        }
+        if (typeof colorSplashGroup !== 'undefined') colorSplashGroup.visible = false;
+        _origStartNewRound();
+    };
+
+    const _origSwitchMode = switchMode;
+    switchMode = function (newMode) {
+        if (newMode === 'colorsplash') {
+            gameState.subject = 'color';
+            ensure3DColorSplashBuilt();
+        }
+        _origSwitchMode(newMode);
+        const isCS = (newMode === 'colorsplash');
+        if (typeof colorSplashGroup !== 'undefined') colorSplashGroup.visible = isCS;
+        if (isCS) {
+            environmentGroup.visible = false;
+            const mainFloor = scene ? scene.getObjectByName('mainFloor') : null;
+            if (mainFloor) mainFloor.visible = false;
+            const dpad = document.getElementById('treasure-dpad-bar');
+            if (dpad) { dpad.classList.remove('hidden'); dpad.classList.add('flex'); }
+            renderColorSplashTierBarUI();
+        }
+    };
+
+    const _origSetDir = setTreasureMoveDir;
+    setTreasureMoveDir = function (dx, dz) {
+        if (gameState.mode === 'colorsplash') {
+            if (colorSplashState.phase !== 'paint' && colorSplashState.phase !== 'crossing') {
+                colorSplashState.moveDirX = 0; colorSplashState.moveDirZ = 0; return;
+            }
+            colorSplashState.moveDirX = dx; colorSplashState.moveDirZ = dz;
+            if (dx !== 0 || dz !== 0) { colorSplashState.targetX = null; colorSplashState.targetZ = null; colorSplashState.autoPickMinion = null; }
+            return;
+        }
+        _origSetDir(dx, dz);
+    };
+
+    const _origNudge = nudgeTreasureHero;
+    nudgeTreasureHero = function (dx, dz) {
+        if (gameState.mode === 'colorsplash') {
+            if (colorSplashState.phase === 'crossing') {
+                colorSplashState.targetX = Math.max(-2.6, Math.min(2.6, colorSplashState.heroX + dx * 2.2)); return;
+            }
+            if (colorSplashState.phase === 'paint' && !gameState.isBusy) {
+                playPopSound(440);
+                colorSplashState.targetX = Math.max(-5.8, Math.min(5.8, colorSplashState.heroX + dx * 1.6));
+                colorSplashState.targetZ = Math.max(0.9, Math.min(5.4, colorSplashState.heroZ + dz * 1.6));
+            }
+            return;
+        }
+        _origNudge(dx, dz);
+    };
+
+    const _origHint = triggerVisualHint;
+    triggerVisualHint = function (manualClick = false) {
+        if (gameState.mode === 'colorsplash') {
+            if (manualClick) playPopSound(660);
+            if (colorSplashState.tier === 'memory') {
+                colorSplashState.memoryHidden = false;
+                colorSplashState.memoryTimer = 3.5;
+                colorSplashState.sculptures.forEach(sc => { if (!sc.painted) updateSculptureSign(sc, 'memory', false); });
+            }
+            return;
+        }
+        _origHint(manualClick);
+    };
+
+    const _origKeyDown = onWindowKeyDown;
+    onWindowKeyDown = function (e) {
+        if (gameState.mode === 'colorsplash') {
+            if (colorSplashState.loadedColor && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); autoFireColorWaterGun(); return; }
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') setTreasureMoveDir(-1, colorSplashState.moveDirZ);
+            else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setTreasureMoveDir(1, colorSplashState.moveDirZ);
+            else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { e.preventDefault(); setTreasureMoveDir(colorSplashState.moveDirX, -1); }
+            else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { e.preventDefault(); setTreasureMoveDir(colorSplashState.moveDirX, 1); }
+            return;
+        }
+        _origKeyDown(e);
+    };
+
+    const _origKeyUp = onWindowKeyUp;
+    onWindowKeyUp = function (e) {
+        if (gameState.mode === 'colorsplash') {
+            if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) setTreasureMoveDir(0, colorSplashState.moveDirZ);
+            if (['ArrowUp', 'w', 'W', 'ArrowDown', 's', 'S'].includes(e.key)) setTreasureMoveDir(colorSplashState.moveDirX, 0);
+            return;
+        }
+        _origKeyUp(e);
+    };
+
+    const _origPtrMove = onCanvasPointerMove;
+    onCanvasPointerMove = function (event) {
+        if (gameState.mode === 'colorsplash' && shapeBridgeState.isPointerDragging && !gameState.inLobby) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hitPt = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35), hitPt)) {
+                if (colorSplashState.phase === 'crossing') colorSplashState.targetX = THREE.MathUtils.clamp(hitPt.x, -2.8, 2.8);
+                else if (colorSplashState.phase === 'paint') {
+                    colorSplashState.targetX = THREE.MathUtils.clamp(hitPt.x, -5.8, 5.8);
+                    colorSplashState.targetZ = THREE.MathUtils.clamp(hitPt.z, 0.9, 5.4);
+                }
+            }
+            return;
+        }
+        _origPtrMove(event);
+    };
+
+    const _origPtrDown = onCanvasPointerDown;
+    onCanvasPointerDown = function (event) {
+        if (gameState.mode === 'colorsplash' && !gameState.inLobby) {
+            if (colorSplashState.phase === 'crossing') { shapeBridgeState.isPointerDragging = true; onCanvasPointerMove(event); return; }
+            if (gameState.isBusy || colorSplashState.phase !== 'paint') return;
+            ensureAudioCtx();
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            // 1. 檢查係咪篤咗對岸待染色雕塑
+            const scHits = raycaster.intersectObjects(colorSplashState.sculptures.filter(s => !s.painted).flatMap(s => [s.hitBox, s.signMesh]), false);
+            if (scHits.length > 0 && scHits[0].object.userData.sculpObj) {
+                const targetSc = scHits[0].object.userData.sculpObj;
+                if (colorSplashState.loadedColor) {
+                    playPopSound(600);
+                    fireColorWaterGunAt(targetSc);
+                } else {
+                    playGentleNudge();
+                    setPromptUI(`請先篤下面蘑菇台嘅「顏色小兵」裝滿水槍先啦！`, ``);
+                }
+                return;
+            }
+
+            // 2. 檢查係咪篤咗蘑菇台顏色小兵
+            const mHits = raycaster.intersectObjects(interactiveBlocks.filter(b => b.bodyMesh).map(b => b.bodyMesh), false);
+            if (mHits.length > 0 && mHits[0].object.userData.parentWrapper) {
+                const m = mHits[0].object.userData.parentWrapper;
+                playPopSound(560);
+                colorSplashState.moveDirX = 0; colorSplashState.moveDirZ = 0;
+                colorSplashState.autoPickMinion = m;
+                colorSplashState.targetX = m.homeX; colorSplashState.targetZ = m.homeZ;
+                return;
+            }
+
+            // 3. 篤草地自由移動或拖曳
+            shapeBridgeState.isPointerDragging = true;
+            onCanvasPointerMove(event);
+            return;
+        }
+        _origPtrDown(event);
+    };
+
+    const _origAnimate = animate;
+    let _csLast = performance.now();
+    animate = function () {
+        const now = performance.now();
+        const csDt = Math.min((now - _csLast) / 1000, 0.1);
+        _csLast = now;
+        if (typeof colorSplashGroup !== 'undefined' && colorSplashGroup.visible && colorSplashState.heroMesh) {
+            updateColorSplashFrame(csDt, now / 1000);
+        }
+        _origAnimate();
+        if (!gameState.inLobby && gameState.mode === 'colorsplash') {
+            const tb = document.getElementById('maze-tier-bar');
+            if (tb) tb.style.display = 'flex';
+        }
+    };
+})();
