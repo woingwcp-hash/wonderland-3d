@@ -3903,3 +3903,823 @@ function updateColorSplashFrame(dt, elapsed) {
     if (document.readyState === 'complete') setTimeout(bootStabilityPatch, 220);
     else window.addEventListener('load', () => setTimeout(bootStabilityPatch, 220));
 })();
+/********************************************************************
+ * Patch Step 6: 1-2-3 視覺步驟流程條 + 指定練習目標鎖定 (支援全模式均衡抽題)
+ * (直接貼於 main.js 最底端最後一行之後，無需刪改舊代碼)
+ ********************************************************************/
+(function applyFlowchartAndTargetLockPatch() {
+    if (window.__wonderlandPatch6Applied) return;
+    window.__wonderlandPatch6Applied = true;
+
+    const SAVE_KEY = 'wonderland3d_save_v1';
+
+    // 初始化設定結構
+    if (!gameState.settings.lockedTargets) {
+        gameState.settings.lockedTargets = { number: [], color: [], shape: [] };
+    }
+    if (typeof gameState.settings.showStepFlow !== 'boolean') {
+        gameState.settings.showStepFlow = true;
+    }
+
+    let activeSettingsLockTab = 'number';
+    const roundRobinQueues = { number: [], color: [], shape: [] };
+
+    function persistPatch6Settings() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            const base = raw ? JSON.parse(raw) : {};
+            base.stars = gameState.stars;
+            base.unlockedToys = gameState.unlockedToys;
+            base.settings = gameState.settings;
+            base.voiceReadEnabled = window.voiceReadEnabled;
+            localStorage.setItem(SAVE_KEY, JSON.stringify(base));
+        } catch (e) {}
+    }
+
+    function loadPatch6Settings() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data.settings) {
+                if (data.settings.lockedTargets) {
+                    gameState.settings.lockedTargets = {
+                        number: Array.isArray(data.settings.lockedTargets.number) ? data.settings.lockedTargets.number.map(Number) : [],
+                        color: Array.isArray(data.settings.lockedTargets.color) ? data.settings.lockedTargets.color : [],
+                        shape: Array.isArray(data.settings.lockedTargets.shape) ? data.settings.lockedTargets.shape : []
+                    };
+                }
+                if (typeof data.settings.showStepFlow === 'boolean') {
+                    gameState.settings.showStepFlow = data.settings.showStepFlow;
+                }
+            }
+        } catch (e) {}
+    }
+
+    function getFullCatalogForSubject(subj) {
+        if (subj === 'color') return COLOR_CURRICULUM.map(c => c.id);
+        if (subj === 'shape') return SHAPE_CURRICULUM.map(s => s.id);
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    }
+
+    function getLockedList(subj) {
+        const lt = gameState.settings.lockedTargets || {};
+        const arr = Array.isArray(lt[subj]) ? lt[subj] : [];
+        const validSet = new Set(getFullCatalogForSubject(subj));
+        return arr.filter(item => validSet.has(subj === 'number' ? Number(item) : item));
+    }
+
+    // 均衡輪抽器：若鎖定咗 [6, 7]，確保 6 同 7 平均輪流出現，唔會偏埋一邊
+    function pickNextLockedItem(subj) {
+        const locked = getLockedList(subj);
+        if (!locked.length) return null;
+        if (locked.length === 1) return locked[0];
+
+        let q = roundRobinQueues[subj] || [];
+        q = q.filter(item => locked.includes(item));
+        if (!q.length) {
+            q = [...locked].sort(() => Math.random() - 0.5);
+        }
+        const picked = q.shift();
+        roundRobinQueues[subj] = q;
+        return picked;
+    }
+
+    function speakStepHint(text) {
+        playPopSound(620);
+        if (typeof window.speakCantoneseSmart === 'function') {
+            window.speakCantoneseSmart(text, true);
+        } else if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'zh-HK';
+            window.speechSynthesis.speak(u);
+        }
+    }
+
+    // ==================== 1. 1-2-3 視覺步驟流程條 ====================
+    let lastFlowSig = '';
+
+    function computeCurrentFlowSteps() {
+        const mode = gameState.mode;
+
+        if (mode === 'shapebridge' && typeof shapeBridgeState !== 'undefined') {
+            const ph = shapeBridgeState.phase;
+            let activeIdx = 0;
+            if (ph === 'celebrate') activeIdx = 3;
+            else if (ph === 'crossing') activeIdx = 2;
+            else if (ph === 'jumping' || ph === 'hammering' || Boolean(shapeBridgeState.carryingMinion)) activeIdx = 1;
+            return {
+                activeIdx,
+                steps: [
+                    { icon: '🍄', label: '揀形狀小兵', speak: '第一步，篤蘑菇台上嘅形狀小兵' },
+                    { icon: '🔨', label: '大槌打樁修橋', speak: '第二步，篤橋面缺口用黃金大槌打樁修橋' },
+                    { icon: '🎢', label: '過橋食金幣', speak: '第三步，左右控制馬利奧過橋食金幣' }
+                ]
+            };
+        }
+
+        if (mode === 'colorsplash' && typeof colorSplashState !== 'undefined') {
+            const ph = colorSplashState.phase;
+            const isMix = (colorSplashState.tier === 'mix');
+            const cnt = colorSplashState.tankColors ? Math.min(2, colorSplashState.tankColors.length) : 0;
+            let activeIdx = 0;
+            if (ph === 'celebrate') activeIdx = 3;
+            else if (ph === 'crossing') activeIdx = 2;
+            else if (ph === 'spraying' || Boolean(colorSplashState.loadedColor)) activeIdx = 1;
+            return {
+                activeIdx,
+                steps: [
+                    {
+                        icon: isMix ? '🧪' : '🍄',
+                        label: isMix ? `揀原色(${cnt}/2)` : '篤小兵裝顏料',
+                        speak: isMix ? '第一步，篤兩隻原色小兵溝出新顏色' : '第一步，篤蘑菇台顏色小兵裝滿水槍'
+                    },
+                    { icon: '💦', label: '噴水染靚色', speak: '第二步，篤對岸白色玩具噴射染色' },
+                    { icon: '🌈', label: '彩虹橋食寶石', speak: '第三步，左右控制馬利奧食晒彩虹橋上嘅寶石' }
+                ]
+            };
+        }
+
+        if (mode === 'addition' && typeof additionState !== 'undefined') {
+            const ph = additionState.phase;
+            const needSecond = (additionState.tier === 'free2' && additionState.caughtA !== null && additionState.caughtB === null);
+            let activeIdx = 0;
+            if (ph === 'celebrate') activeIdx = 3;
+            else if (ph === 'fusing' || ph === 'readyToFire' || ph === 'firing') activeIdx = 1;
+            return {
+                activeIdx,
+                steps: [
+                    { icon: '🏃', label: needSecond ? '捉第2隻小兵' : '捉答案小兵', speak: '第一步，睇清楚算式，捉正確數字小兵' },
+                    { icon: '🔥', label: '點火射飛碟', speak: '第二步，撳右下角點火發射大掣' },
+                    { icon: '🎉', label: '擊退飛碟過關', speak: '第三步，成功擊退飛碟贏取星星' }
+                ]
+            };
+        }
+
+        if (mode === 'treasure' && typeof treasureHero !== 'undefined') {
+            const total = (treasureHero.sequence || [1, 2, 3, 4, 5]).length;
+            const rescued = treasureHero.rescuedSet ? treasureHero.rescuedSet.size : 0;
+            let activeIdx = 0;
+            if (treasureHero.castleVictoryTriggered) activeIdx = 3;
+            else if (treasureHero.allRescued) activeIdx = 2;
+            else if (rescued > 0) activeIdx = 1;
+            return {
+                activeIdx,
+                steps: [
+                    { icon: '🔍', label: '搵首個數字', speak: '第一步，喺迷宮搵出第一個目標數字' },
+                    { icon: '🐣', label: `救齊小隊(${rescued}/${total})`, speak: '第二步，按順序救齊數字小隊排隊跟尾' },
+                    { icon: '🏰', label: '衝入皇冠城堡', speak: '第三步，帶住小隊衝入北面皇冠城堡' }
+                ]
+            };
+        }
+
+        if (mode === 'mario' && typeof marioHero !== 'undefined') {
+            let activeIdx = 0;
+            if (marioHero.runningToFlag) activeIdx = 2;
+            else if (marioHero.isJumping || gameState.isBusy) activeIdx = 1;
+            return {
+                activeIdx,
+                steps: [
+                    { icon: '🎯', label: '對準目標金磚', speak: '第一步，睇清楚目標牌，移去正確金磚下面' },
+                    { icon: '🍄', label: '跳起頂開金磚', speak: '第二步，跳起頂開目標金磚塊' },
+                    { icon: '🚩', label: '拉旗衝線過關', speak: '第三步，跑去終點旗杆過關' }
+                ]
+            };
+        }
+
+        if (mode === 'explore') {
+            const isCelebrating = (typeof spawnedCountingItems !== 'undefined' && spawnedCountingItems.length > 0) ||
+                interactiveBlocks.some(b => b.state === 'celebrate');
+            return {
+                activeIdx: isCelebrating ? 1 : 0,
+                steps: [
+                    { icon: '👆', label: '隨意篤公仔', speak: '第一步，隨便篤一個立體公仔探索' },
+                    { icon: '🎵', label: '聽聲音睇寶物', speak: '第二步，聽聲音同觀察彈出嚟嘅寶物' }
+                ]
+            };
+        }
+
+        // 🔮 扭蛋尋寶 & 🚂 認知小火車
+        let activeIdx = 0;
+        if (gameState.isBusy) {
+            activeIdx = (typeof spawnedCountingItems !== 'undefined' && spawnedCountingItems.length > 0) ? 1 : 2;
+        }
+        return {
+            activeIdx,
+            steps: [
+                { icon: mode === 'train' ? '🚂' : '🔮', label: '搵出目標公仔', speak: '第一步，睇清楚目標提示，篤一樣嘅立體公仔' },
+                { icon: gameState.settings.countObjects ? '🍎' : '✨', label: gameState.settings.countObjects ? '一齊數寶物' : '配對成功', speak: '第二步，一齊數一數彈出嚟嘅寶物' },
+                { icon: '⭐', label: '贏取星星', speak: '第三步，完成任務贏取獎勵星星' }
+            ]
+        };
+    }
+
+    function ensureFlowchartRowElement() {
+        let row = document.getElementById('visual-flowchart-row');
+        if (!row) {
+            row = document.createElement('div');
+            row.id = 'visual-flowchart-row';
+            row.className = 'w-full flex flex-wrap items-center justify-center gap-1.5 pointer-events-none';
+            const stack = document.getElementById('top-hud-stack') || document.body;
+            stack.appendChild(row);
+        }
+        return row;
+    }
+
+    window.refreshVisualStepFlowchart = function (forceRender = false) {
+        const row = ensureFlowchartRowElement();
+        if (gameState.inLobby) {
+            row.style.display = 'none';
+            return;
+        }
+
+        const showFlow = Boolean(gameState.settings.showStepFlow);
+        const locked = getLockedList(gameState.subject);
+        if (!showFlow && locked.length === 0) {
+            row.style.display = 'none';
+            return;
+        }
+        row.style.display = 'flex';
+
+        const flowData = computeCurrentFlowSteps();
+        const lockKeyStr = locked.join(',');
+        const sig = `${gameState.subject}|${gameState.mode}|${showFlow}|${lockKeyStr}|${flowData.activeIdx}|${flowData.steps.map(s => s.label).join('/')}`;
+        if (!forceRender && sig === lastFlowSig) return;
+        lastFlowSig = sig;
+
+        let html = '';
+
+        // A. 1-2-3 視覺步驟流程條
+        if (showFlow) {
+            html += `<div class="pointer-events-auto inline-flex items-center gap-1 sm:gap-1.5 bg-white/92 backdrop-blur-md px-2.5 py-1 rounded-full border-2 border-teal-300 shadow-md">`;
+            flowData.steps.forEach((st, idx) => {
+                const isDone = idx < flowData.activeIdx;
+                const isActive = idx === flowData.activeIdx;
+                let pillCls = 'bg-slate-100 text-slate-400 border border-slate-200';
+                let numBadge = `<span class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-200 text-slate-500 text-[10px] sm:text-xs inline-flex items-center justify-center font-black">${idx + 1}</span>`;
+
+                if (isDone) {
+                    pillCls = 'bg-emerald-500 text-white border border-emerald-600 shadow-sm';
+                    numBadge = `<span class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white text-emerald-600 text-[10px] sm:text-xs inline-flex items-center justify-center font-black">✓</span>`;
+                } else if (isActive) {
+                    pillCls = 'bg-amber-400 text-slate-950 border-2 border-orange-500 shadow font-black scale-105';
+                    numBadge = `<span class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-orange-600 text-white text-[10px] sm:text-xs inline-flex items-center justify-center font-black">${idx + 1}</span>`;
+                }
+
+                const safeSpeak = st.speak.replace(/'/g, '');
+                html += `<button type="button" onclick="window.__speakFlowStep('${safeSpeak}')" class="px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold inline-flex items-center gap-1 transition-all ${pillCls}" title="撳我聽步驟語音提示">${numBadge}<span>${st.icon}${st.label}</span></button>`;
+                if (idx < flowData.steps.length - 1) {
+                    html += `<span class="text-[10px] sm:text-xs font-black ${isDone ? 'text-emerald-500' : 'text-slate-300'}">➔</span>`;
+                }
+            });
+            html += `</div>`;
+        }
+
+        // B. 目標鎖定提示小章（方便老師一眼睇到目前專練緊邊幾個目標，一撳即開設定修改）
+        if (locked.length > 0) {
+            const labels = locked.map(k => {
+                const m = getCognitiveItemMeta(k, gameState.subject);
+                return gameState.subject === 'number' ? String(k) : (m.badgeSymbol ? `${m.badgeSymbol}${m.title}` : m.title);
+            }).join('、');
+            html += `<button type="button" onclick="openTargetLockSettings()" class="pointer-events-auto btn-toy-sm bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-full border-2 border-indigo-300 shadow text-[11px] sm:text-xs font-black inline-flex items-center gap-1" title="點擊修改或解鎖練習目標"><span>🔒專練：${labels}</span></button>`;
+        }
+
+        row.innerHTML = html;
+    };
+
+    window.__speakFlowStep = speakStepHint;
+
+    // 確保頂部容器順序整齊：[難度欄] -> [1-2-3 流程條 + 鎖定章] -> [加減算式板]
+    if (typeof window.dockTopFloatingBars === 'function') {
+        const _prevDock = window.dockTopFloatingBars;
+        window.dockTopFloatingBars = function () {
+            _prevDock();
+            const stack = document.getElementById('top-hud-stack');
+            const row = ensureFlowchartRowElement();
+            const eqHud = document.getElementById('addition-equation-hud');
+            if (stack && row) {
+                if (eqHud && eqHud.parentElement === stack) {
+                    stack.insertBefore(row, eqHud);
+                } else if (row.parentElement !== stack) {
+                    stack.appendChild(row);
+                }
+            }
+        };
+    }
+
+    // ==================== 2. 設定面板：指定練習目標鎖定 UI ====================
+    window.openTargetLockSettings = function () {
+        activeSettingsLockTab = gameState.subject || 'number';
+        toggleSettingsModal(true);
+        renderTargetLockPanelUI();
+    };
+
+    window.switchTargetLockTab = function (subj) {
+        playPopSound(520);
+        activeSettingsLockTab = subj;
+        renderTargetLockPanelUI();
+    };
+
+    window.toggleTargetLockItem = function (subj, rawKey) {
+        playPopSound(560);
+        const key = (subj === 'number') ? Number(rawKey) : String(rawKey);
+        const list = getLockedList(subj);
+        const idx = list.indexOf(key);
+        if (idx >= 0) list.splice(idx, 1);
+        else list.push(key);
+
+        if (subj === 'number') list.sort((a, b) => a - b);
+        gameState.settings.lockedTargets[subj] = list;
+        roundRobinQueues[subj] = [];
+        persistPatch6Settings();
+        renderTargetLockPanelUI();
+        refreshVisualStepFlowchart(true);
+
+        if (gameState.subject === subj && !gameState.inLobby) {
+            startNewRound();
+        }
+    };
+
+    window.clearLockedTargetsFor = function (subj) {
+        playPopSound(480);
+        gameState.settings.lockedTargets[subj] = [];
+        roundRobinQueues[subj] = [];
+        persistPatch6Settings();
+        renderTargetLockPanelUI();
+        refreshVisualStepFlowchart(true);
+        if (gameState.subject === subj && !gameState.inLobby) {
+            startNewRound();
+        }
+    };
+
+    window.toggleShowStepFlowSetting = function () {
+        playPopSound(540);
+        gameState.settings.showStepFlow = !gameState.settings.showStepFlow;
+        persistPatch6Settings();
+        renderTargetLockPanelUI();
+        refreshVisualStepFlowchart(true);
+    };
+
+    function mountTargetLockPanelIntoSettings() {
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsCard = settingsModal ? settingsModal.firstElementChild : null;
+        if (!settingsCard) return;
+
+        // 確保設定視窗喺 iPad 橫向或手機細螢幕可以順暢上下捲動
+        settingsCard.style.maxHeight = '88vh';
+        settingsCard.style.overflowY = 'auto';
+
+        if (!document.getElementById('target-lock-settings-box')) {
+            const box = document.createElement('div');
+            box.id = 'target-lock-settings-box';
+            box.className = 'mt-4 pt-4 border-t-2 border-slate-100 space-y-3';
+
+            const resetBtn = document.getElementById('btn-reset-save');
+            if (resetBtn && resetBtn.parentElement && resetBtn.parentElement.parentElement === settingsCard) {
+                settingsCard.insertBefore(box, resetBtn.parentElement);
+            } else {
+                settingsCard.appendChild(box);
+            }
+        }
+        renderTargetLockPanelUI();
+    }
+
+    function renderTargetLockPanelUI() {
+        const box = document.getElementById('target-lock-settings-box');
+        if (!box) return;
+
+        const tab = activeSettingsLockTab || gameState.subject || 'number';
+        const locked = getLockedList(tab);
+        const catalog = getFullCatalogForSubject(tab);
+        const flowOn = Boolean(gameState.settings.showStepFlow);
+
+        const tabBtn = (id, label) => {
+            const cnt = getLockedList(id).length;
+            const active = (tab === id);
+            const cls = active
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+            return `<button type="button" onclick="switchTargetLockTab('${id}')" class="flex-1 py-1.5 px-2 rounded-xl font-black text-xs sm:text-sm border-2 transition-all ${cls}">${label}${cnt > 0 ? ` (${cnt})` : ''}</button>`;
+        };
+
+        let itemsHtml = '';
+        catalog.forEach(itemKey => {
+            const isLocked = locked.includes(itemKey);
+            const meta = getCognitiveItemMeta(itemKey, tab);
+            const argStr = (tab === 'number') ? itemKey : `'${itemKey}'`;
+
+            let labelHtml = '';
+            if (tab === 'number') {
+                labelHtml = `<span class="text-base sm:text-lg font-black">${itemKey}</span>`;
+            } else if (tab === 'color') {
+                labelHtml = `<span class="w-4 h-4 rounded-full border border-black/20 inline-block flex-shrink-0" style="background:${meta.hex}"></span><span>${meta.title}</span>`;
+            } else {
+                labelHtml = `<span style="color:${meta.hex}">${meta.badgeSymbol}</span><span>${meta.title}</span>`;
+            }
+
+            const pillCls = isLocked
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-amber-300 scale-105'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300';
+
+            itemsHtml += `<button type="button" onclick="toggleTargetLockItem('${tab}', ${argStr})" class="py-2 px-2.5 rounded-xl border-2 font-bold text-xs sm:text-sm flex items-center justify-center gap-1 transition-all ${pillCls}">${isLocked ? '<span>🔒</span>' : ''}${labelHtml}</button>`;
+        });
+
+        box.innerHTML = `
+            <div class="flex items-center justify-between bg-teal-50/80 px-3 py-2.5 rounded-2xl border border-teal-200">
+                <div>
+                    <div class="font-black text-slate-800 text-sm sm:text-base">📋 1-2-3 視覺步驟流程條</div>
+                    <div class="text-xs font-bold text-slate-500">頂部顯示圖象化任務步驟，撳步驟格可發聲提示</div>
+                </div>
+                <button type="button" onclick="toggleShowStepFlowSetting()" class="w-14 h-8 rounded-full transition-colors p-1 flex items-center flex-shrink-0 ${flowOn ? 'bg-emerald-500' : 'bg-slate-300'}">
+                    <span class="w-6 h-6 rounded-full bg-white shadow transform transition-transform ${flowOn ? 'translate-x-6' : 'translate-x-0'}"></span>
+                </button>
+            </div>
+
+            <div class="bg-indigo-50/70 p-3 rounded-2xl border-2 border-indigo-200 space-y-2.5">
+                <div class="flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                        <span class="font-black text-slate-800 text-sm sm:text-base">🎯 指定練習目標鎖定（個別重點訓練）</span>
+                        <p class="text-[11px] sm:text-xs font-bold text-slate-500">可勾選 1 個或多個重點目標集中抽問；唔勾選則全部隨機</p>
+                    </div>
+                    ${locked.length > 0
+                        ? `<button type="button" onclick="clearLockedTargetsFor('${tab}')" class="btn-toy-sm bg-white hover:bg-rose-50 text-rose-600 border border-rose-300 px-2.5 py-1 rounded-xl text-xs font-black">🔓 恢復全部隨機</button>`
+                        : `<span class="text-xs font-black text-slate-400 bg-white px-2.5 py-1 rounded-xl border border-slate-200">🎲 目前：全部隨機</span>`
+                    }
+                </div>
+
+                <div class="flex items-center gap-1.5">${tabBtn('number', '🔢 數字')}${tabBtn('color', '🎨 顏色')}${tabBtn('shape', '🔺 形狀')}</div>
+
+                <div class="grid ${tab === 'number' ? 'grid-cols-5' : 'grid-cols-3'} gap-1.5 pt-1">${itemsHtml}</div>
+            </div>
+        `;
+    }
+
+    const _prevToggleSettings = toggleSettingsModal;
+    toggleSettingsModal = function (show) {
+        if (show) {
+            activeSettingsLockTab = gameState.subject || 'number';
+            mountTargetLockPanelIntoSettings();
+        }
+        _prevToggleSettings(show);
+    };
+
+    // ==================== 3. 全模式「指定練習目標鎖定」抽題攔截器 ====================
+
+    // A. 攔截形狀修橋大作戰 (Mode 7)
+    if (typeof setupShapeBridgeRound === 'function') {
+        const _origSetupShapeBridge = setupShapeBridgeRound;
+        setupShapeBridgeRound = function () {
+            _origSetupShapeBridge();
+            const lockedShapes = getLockedList('shape');
+            if (!lockedShapes.length) return;
+
+            if (shapeBridgeState.slotsContainer) shapeBridgeState.slotsContainer.clear();
+            numberBlocksGroup.clear();
+            interactiveBlocks = [];
+            shapeBridgeState.slots = [];
+
+            const tier = shapeBridgeState.tier || 'turtle';
+            const allShapes = getFullCatalogForSubject('shape');
+            let pedestalShapes = [];
+
+            if (tier === 'split' && typeof SPLIT_BRIDGE_RECIPES !== 'undefined') {
+                const matched = SPLIT_BRIDGE_RECIPES.filter(r => lockedShapes.includes(r.target) || lockedShapes.includes(r.part));
+                const pool = matched.length > 0 ? matched : SPLIT_BRIDGE_RECIPES;
+                const pickedRecipes = [pool[0], pool[1 % pool.length]];
+                [-2.5, 2.5].forEach((xPos, idx) => {
+                    shapeBridgeState.slots.push(createBridgeSlotObject(idx, xPos, pickedRecipes[idx].target, tier, pickedRecipes[idx].part));
+                    pedestalShapes.push(pickedRecipes[idx].part, pickedRecipes[idx].part);
+                });
+            } else {
+                const chosen3 = [pickNextLockedItem('shape'), pickNextLockedItem('shape'), pickNextLockedItem('shape')];
+                [-3.3, 0, 3.3].forEach((xPos, idx) => {
+                    shapeBridgeState.slots.push(createBridgeSlotObject(idx, xPos, chosen3[idx], tier, null));
+                });
+                const nonLocked = allShapes.filter(s => !lockedShapes.includes(s)).sort(() => Math.random() - 0.5);
+                const distractor = nonLocked[0] || allShapes.find(s => s !== chosen3[0]) || allShapes[0];
+                pedestalShapes = [...chosen3, distractor].sort(() => Math.random() - 0.5);
+            }
+
+            const pedCoords = [
+                { x: -4.5, z: 3.4, color: 0xFB7185 },
+                { x: -1.5, z: 4.1, color: 0x38BDF8 },
+                { x: 1.5,  z: 4.1, color: 0xA855F7 },
+                { x: 4.5,  z: 3.4, color: 0xF59E0B }
+            ];
+            pedestalShapes.forEach((shId, idx) => {
+                const pt = pedCoords[idx % pedCoords.length];
+                createMushroomPedestal(pt.x, pt.z, pt.color);
+                const minion = create3DNumberCharacter(shId, pt.x, pt.z, 0.74);
+                minion.isArenaMinion = true;
+                minion.isShapeBridgeMinion = true;
+                minion.homeX = pt.x;
+                minion.homeZ = pt.z;
+                if (minion.haloMesh) {
+                    minion.haloMesh.rotation.x = Math.PI / 2;
+                    minion.haloMesh.position.set(0, -0.95, 0);
+                }
+                interactiveBlocks.push(minion);
+            });
+
+            const firstReq = shapeBridgeState.slots[0].requiredShapeId;
+            gameState.targetKey = firstReq;
+            updateTargetBadgeUI(firstReq, false);
+            updateShapeBridgeBanner();
+        };
+    }
+
+    // B. 攔截魔法水槍染色 (Mode 8)
+    if (typeof setupColorSplashRound === 'function') {
+        const _origSetupColorSplash = setupColorSplashRound;
+        setupColorSplashRound = function () {
+            _origSetupColorSplash();
+            const lockedColors = getLockedList('color');
+            if (!lockedColors.length) return;
+
+            colorSplashState.stageContainer.clear();
+            numberBlocksGroup.clear();
+            interactiveBlocks = [];
+            colorSplashState.sculptures = [];
+
+            const tier = colorSplashState.tier || 'match';
+            const allColors = getFullCatalogForSubject('color');
+            let targetColors = [];
+            let pedestalColors = [];
+
+            if (tier === 'mix') {
+                const mixDefs = [
+                    { id: 'orange', parts: ['red', 'yellow'] },
+                    { id: 'green',  parts: ['blue', 'yellow'] },
+                    { id: 'purple', parts: ['red', 'blue'] }
+                ];
+                const matched = mixDefs.filter(m => lockedColors.includes(m.id) || m.parts.some(p => lockedColors.includes(p)));
+                const pool = matched.length ? matched.map(m => m.id) : ['orange', 'green', 'purple'];
+                targetColors = [pool[0], pool[1 % pool.length], pool[2 % pool.length]];
+                pedestalColors = ['red', 'yellow', 'blue'];
+            } else {
+                targetColors = [pickNextLockedItem('color'), pickNextLockedItem('color'), pickNextLockedItem('color')];
+                const uniqueTargets = [...new Set(targetColors)];
+                const extraPool = allColors.filter(c => !uniqueTargets.includes(c)).sort(() => Math.random() - 0.5);
+                pedestalColors = [...uniqueTargets, ...extraPool].slice(0, 4).sort(() => Math.random() - 0.5);
+            }
+
+            [-3.4, 0, 3.4].forEach((sx, idx) => {
+                colorSplashState.sculptures.push(createColorToySculpture(idx, sx, targetColors[idx], tier));
+            });
+
+            const pedCoords = pedestalColors.length === 3
+                ? [[-3.6, 3.8], [0, 4.2], [3.6, 3.8]]
+                : [[-4.5, 3.4], [-1.5, 4.1], [1.5, 4.1], [4.5, 3.4]];
+
+            pedestalColors.forEach((cId, idx) => {
+                const [px, pz] = pedCoords[idx];
+                const spec = getVividSpec(cId);
+                const ped = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.95, 1.05, 0.28, 26),
+                    new THREE.MeshStandardMaterial({ color: spec.numHex, roughness: 0.25, emissive: spec.emissive, emissiveIntensity: 0.25 })
+                );
+                ped.position.set(px, 0.5, pz);
+                colorSplashState.stageContainer.add(ped);
+
+                const minion = create3DNumberCharacter(cId, px, pz, 0.74);
+                minion.isArenaMinion = true;
+                minion.isShapeBridgeMinion = true;
+                minion.homeX = px;
+                minion.homeZ = pz;
+                if (minion.bodyMesh && Array.isArray(minion.bodyMesh.material)) {
+                    minion.bodyMesh.material.forEach((m, mi) => {
+                        if (mi !== 4) { m.color.setHex(spec.numHex); m.emissive = new THREE.Color(spec.emissive); m.emissiveIntensity = 0.22; }
+                    });
+                }
+                interactiveBlocks.push(minion);
+            });
+
+            gameState.targetKey = targetColors[0];
+            updateTargetBadgeUI(targetColors[0], false);
+            updateColorSplashBanner();
+        };
+    }
+
+    // C. 攔截加減法競技場 (Mode 6：集中練習鎖定數字嘅合成與分解)
+    if (typeof setupAdditionRound === 'function') {
+        const _origSetupAddition = setupAdditionRound;
+        setupAdditionRound = function () {
+            _origSetupAddition();
+            const lockedNums = getLockedList('number');
+            if (!lockedNums.length) return;
+
+            const focusN = pickNextLockedItem('number');
+            const isSub = (additionState.currentOp === 'sub');
+            let tier = additionState.tier || 'sum5';
+            let a = 1, b = 1, sum = 2;
+
+            numberBlocksGroup.clear();
+            interactiveBlocks = [];
+
+            if (!isSub) {
+                if (tier === 'missing' || focusN === 1) {
+                    b = focusN;
+                    a = 1 + Math.floor(Math.random() * Math.max(1, Math.min(5, 12 - b)));
+                    sum = a + b;
+                    additionState.numA = a; additionState.numB = b; additionState.targetSum = sum;
+                    additionState.caughtA = a; additionState.caughtB = null; additionState.caughtSum = sum;
+                    gameState.targetKey = b;
+                    setPromptUI(`🕵️ 專練數字 ${b}【 ${a} + ? = ${sum} 】：請捉「${b}」號小兵填中間台！`, ``);
+                } else if (tier === 'free2') {
+                    sum = Math.max(2, focusN);
+                    additionState.numA = null; additionState.numB = null; additionState.targetSum = sum;
+                    additionState.caughtA = null; additionState.caughtB = null; additionState.caughtSum = sum;
+                    gameState.targetKey = sum;
+                    setPromptUI(`🔥 專練 ${sum} 嘅合成【 ? + ? = ${sum} 】：請捉 2 隻加埋等於 ${sum} 嘅小兵！`, ``);
+                } else {
+                    sum = Math.max(2, focusN);
+                    a = 1 + Math.floor(Math.random() * (sum - 1));
+                    b = sum - a;
+                    additionState.numA = a; additionState.numB = b; additionState.targetSum = sum;
+                    additionState.caughtA = a; additionState.caughtB = b; additionState.caughtSum = null;
+                    gameState.targetKey = sum;
+                    setPromptUI(`➕ 專練數字 ${sum}【 ${a} + ${b} = ? 】：請捉答案小兵！`, ``);
+                }
+            } else {
+                if (tier === 'missing') {
+                    b = Math.min(9, focusN);
+                    sum = 1 + Math.floor(Math.random() * Math.max(1, 11 - b));
+                    a = b + sum;
+                    additionState.numA = a; additionState.numB = b; additionState.targetSum = sum;
+                    additionState.caughtA = a; additionState.caughtB = null; additionState.caughtSum = sum;
+                    gameState.targetKey = b;
+                    setPromptUI(`🕵️ 專練數字 ${b}【 ${a} - ? = ${sum} 】：請捉「${b}」號小兵！`, ``);
+                } else if (tier === 'free2') {
+                    sum = Math.min(8, focusN);
+                    additionState.numA = null; additionState.numB = null; additionState.targetSum = sum;
+                    additionState.caughtA = null; additionState.caughtB = null; additionState.caughtSum = sum;
+                    gameState.targetKey = sum;
+                    setPromptUI(`🔥 專練減數 ${sum}【 ? - ? = ${sum} 】：請捉 2 隻相減等於 ${sum} 嘅小兵！`, ``);
+                } else {
+                    sum = focusN;
+                    b = 1 + Math.floor(Math.random() * Math.max(1, Math.min(5, 14 - sum)));
+                    a = sum + b;
+                    additionState.numA = a; additionState.numB = b; additionState.targetSum = sum;
+                    additionState.caughtA = a; additionState.caughtB = b; additionState.caughtSum = null;
+                    gameState.targetKey = sum;
+                    setPromptUI(`➖ 專練數字 ${sum}【 ${a} - ${b} = ? 】：請捉答案小兵！`, ``);
+                }
+            }
+
+            refreshAdditionStagePods();
+            syncAdditionBottomCard();
+
+            let roamList = [];
+            if (tier === 'free2' && focusN !== 1) {
+                if (!isSub) {
+                    const p1 = Math.max(1, Math.floor(sum / 2)), p2 = sum - p1;
+                    roamList = [p1, p2, 1, sum - 1, Math.max(1, (sum + 2) % 9)].sort(() => Math.random() - 0.5);
+                } else {
+                    const p1 = sum + 2, p3 = Math.min(12, sum + 4);
+                    roamList = [p1, 2, p3, p3 - sum, sum + 1].sort(() => Math.random() - 0.5);
+                }
+            } else {
+                const ans = gameState.targetKey;
+                const cands = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter(n => n !== ans).sort(() => Math.random() - 0.5);
+                roamList = [ans, cands[0], cands[1], cands[2]].sort(() => Math.random() - 0.5);
+            }
+
+            const startCoords = [{ x: -4.2, z: 1.6 }, { x: 4.2, z: 1.6 }, { x: -2.4, z: 3.6 }, { x: 2.4, z: 3.6 }, { x: 0, z: 2.2 }];
+            roamList.forEach((num, idx) => {
+                const pt = startCoords[idx % startCoords.length];
+                const minion = create3DNumberCharacter(num, pt.x, pt.z, 0.72);
+                minion.isArenaMinion = true;
+                if (num >= 10) minion.group.scale.set(0.82, 0.72, 0.72);
+                const ang = (idx / roamList.length) * Math.PI * 2 + 0.5;
+                minion.vx = Math.cos(ang) * 1.5;
+                minion.vz = Math.sin(ang) * 1.2;
+                interactiveBlocks.push(minion);
+            });
+        };
+    }
+
+    // D. 攔截迷宮救兵 (Mode 5：確保迷宮數列包含鎖定嘅目標數字)
+    if (typeof setupTreasureRound === 'function') {
+        const _origSetupTreasure = setupTreasureRound;
+        setupTreasureRound = function () {
+            const lockedNums = getLockedList('number');
+            if (!lockedNums.length) {
+                _origSetupTreasure();
+                return;
+            }
+            const focusN = pickNextLockedItem('number');
+            const prevRange = gameState.settings.range;
+            gameState.settings.range = (focusN >= 6) ? '6-10' : '1-5';
+            _origSetupTreasure();
+            gameState.settings.range = prevRange;
+        };
+    }
+
+    // E. 攔截自由探索 (Mode 4：若鎖定目標則只展示鎖定公仔，減少視覺干擾)
+    if (typeof setupExploreMode === 'function') {
+        const _origSetupExplore = setupExploreMode;
+        setupExploreMode = function () {
+            const locked = getLockedList(gameState.subject);
+            if (!locked.length) {
+                _origSetupExplore();
+                return;
+            }
+            updateTargetBadgeUI(null, true);
+            const spacing = locked.length > 5 ? 1.92 : 2.35;
+            const startX = -((locked.length - 1) * spacing) / 2;
+            locked.forEach((itemKey, idx) => {
+                const xPos = startX + idx * spacing;
+                const zPos = 0.55 + Math.abs(idx - (locked.length - 1) / 2) * 0.25;
+                interactiveBlocks.push(create3DNumberCharacter(itemKey, xPos, zPos, locked.length > 5 ? 0.84 : 0.96));
+            });
+            setPromptUI(`自由探索（已鎖定 ${locked.length} 個重點目標）：隨便篤立體公仔探索啦！`, ``);
+        };
+    }
+
+    // F. 攔截基礎三選一模式 (扭蛋 gacha / 火車 train / 頂磚 mario)
+    const _prevStartRound = startNewRound;
+    startNewRound = function () {
+        const isBasicMode = ['gacha', 'train', 'mario'].includes(gameState.mode);
+        const locked = getLockedList(gameState.subject);
+
+        if (!isBasicMode || locked.length === 0) {
+            _prevStartRound();
+            refreshVisualStepFlowchart(true);
+            return;
+        }
+
+        clearTimeout(autoPromptTimer);
+        clearCountingObjects();
+        numberBlocksGroup.clear();
+        interactiveBlocks = [];
+        gameState.isBusy = false;
+
+        ['addition-fire-btn', 'shape-slam-btn', 'color-splash-btn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+        if (typeof colorSplashGroup !== 'undefined') colorSplashGroup.visible = false;
+
+        const target = pickNextLockedItem(gameState.subject);
+        const fullPool = getFullCatalogForSubject(gameState.subject);
+        gameState.targetKey = target;
+        gameState.targetNumber = target;
+        updateTargetBadgeUI(target, false);
+
+        const numChoices = gameState.settings.choices;
+        const distractors = fullPool.filter(k => k !== target).sort(() => Math.random() - 0.5);
+        const choices = [target, ...distractors.slice(0, numChoices - 1)].sort(() => Math.random() - 0.5);
+        gameState.currentOptions = choices;
+
+        const meta = getCognitiveItemMeta(target);
+
+        if (gameState.mode === 'mario') {
+            setupMarioRound(choices, target, meta);
+            if (!gameState.inLobby) scheduleAutoVisualPrompt();
+            refreshVisualStepFlowchart(true);
+            return;
+        }
+
+        const spacing = numChoices === 1 ? 0 : (numChoices === 2 ? 3.4 : 3.1);
+        const startX = -((numChoices - 1) * spacing) / 2;
+        choices.forEach((itemKey, idx) => {
+            interactiveBlocks.push(create3DNumberCharacter(itemKey, startX + idx * spacing, 1.35, 1.08));
+        });
+
+        if (gameState.mode === 'gacha') {
+            setPromptUI(`請搵出「${meta.title}」扭蛋尋寶！`, ``);
+        } else if (gameState.mode === 'train') {
+            updateTrainSignTexture(target);
+            trainAnimState.currentX = -12;
+            trainAnimState.targetX = 0;
+            playTrainWhistle();
+            setPromptUI(`小火車載住「${meta.title}」，請搵出一樣嘅積木公仔！`, ``);
+        }
+
+        if (!gameState.inLobby) scheduleAutoVisualPrompt();
+        refreshVisualStepFlowchart(true);
+    };
+
+    const _prevOpenLobby = openLobby;
+    openLobby = function (step = 'subject') {
+        _prevOpenLobby(step);
+        refreshVisualStepFlowchart(true);
+    };
+
+    // 每幀輕量同步步驟高亮（只有步驟真正改變時先更新 DOM，零效能負擔）
+    const _prevAnim = animate;
+    animate = function () {
+        _prevAnim();
+        refreshVisualStepFlowchart(false);
+    };
+
+    const bootPatch6 = () => {
+        loadPatch6Settings();
+        mountTargetLockPanelIntoSettings();
+        if (typeof window.dockTopFloatingBars === 'function') window.dockTopFloatingBars();
+        refreshVisualStepFlowchart(true);
+    };
+    if (document.readyState === 'complete') setTimeout(bootPatch6, 260);
+    else window.addEventListener('load', () => setTimeout(bootPatch6, 260));
+})();
