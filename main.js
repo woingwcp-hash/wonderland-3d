@@ -3272,3 +3272,294 @@ function updateColorSplashFrame(dt, elapsed) {
         }
     };
 })();
+/********************************************************************
+ * Patch Steps 2 + 3 + 4 (合併版：直接貼於 main.js 最底端最後一行之後)
+ * 包含：頂部算式防撞位、數數欄寬度自適應、新遊戲提示連動、iPad防誤觸、自動存檔與廣東話讀題
+ ********************************************************************/
+(function applyWonderlandCombinedPatches() {
+    if (window.__wonderlandPatch234Applied) return;
+    window.__wonderlandPatch234Applied = true;
+
+    // ==================== 步驟 2：頂部雙層自動排位 + 數數欄自適應寬度 ====================
+    function getTopHudStack() {
+        let stack = document.getElementById('top-hud-stack');
+        if (!stack) {
+            stack = document.createElement('div');
+            stack.id = 'top-hud-stack';
+            stack.className = 'fixed inset-x-0 z-30 flex flex-col items-center gap-1.5 px-2 pointer-events-none';
+            document.body.appendChild(stack);
+        }
+        let maxBottom = 52;
+        ['status-mode-badge', 'stars-bar', 'btn-visual-hint'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                if (rect.bottom > 0) maxBottom = Math.max(maxBottom, rect.bottom);
+            }
+        });
+        stack.style.top = `${Math.min(135, Math.round(maxBottom + 6))}px`;
+        return stack;
+    }
+
+    window.dockTopFloatingBars = function () {
+        const stack = getTopHudStack();
+        const tierBar = document.getElementById('maze-tier-bar');
+        if (tierBar && tierBar.parentElement !== stack) {
+            stack.appendChild(tierBar);
+            tierBar.className = 'w-full flex flex-wrap items-center justify-center gap-1.5 pointer-events-none';
+        }
+        const eqHud = document.getElementById('addition-equation-hud');
+        if (eqHud) {
+            if (eqHud.parentElement !== stack) stack.appendChild(eqHud);
+            eqHud.className = 'w-full flex items-center justify-center pointer-events-none transition-all duration-300';
+        }
+    };
+
+    window.syncCountingBannerWidth = function () {
+        const banner = document.getElementById('counting-banner');
+        const dots = document.getElementById('counting-dots');
+        if (!banner || !dots) return;
+
+        const wasHidden = banner.classList.contains('hidden');
+        dots.className = 'flex flex-wrap items-center gap-1 sm:gap-1.5';
+
+        const hasCornerDpad = ['treasure', 'addition', 'shapebridge', 'colorsplash'].includes(gameState.mode);
+        if (hasCornerDpad) {
+            banner.className = 'fixed left-2.5 sm:left-4 bottom-16 sm:bottom-20 z-20 pointer-events-none bg-white/90 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border-2 border-amber-300 shadow-md flex items-center gap-1.5 max-w-[62vw] sm:max-w-[460px]' + (wasHidden ? ' hidden' : '');
+        } else {
+            if (dots.previousElementSibling) dots.previousElementSibling.style.display = 'block';
+            const bottomCls = (gameState.mode === 'mario') ? 'bottom-20 sm:bottom-24' : 'bottom-16 sm:bottom-20';
+            banner.className = `fixed left-2.5 sm:left-4 ${bottomCls} z-20 pointer-events-none bg-white/92 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-amber-300 shadow-lg flex items-center gap-2 max-w-[92vw] sm:max-w-[620px]` + (wasHidden ? ' hidden' : '');
+        }
+    };
+
+    if (typeof updateAdditionEquationHUD === 'function') {
+        const _prevUpdateEq = updateAdditionEquationHUD;
+        updateAdditionEquationHUD = function (l, r, s) {
+            _prevUpdateEq(l, r, s);
+            dockTopFloatingBars();
+        };
+    }
+
+    if (typeof ensureMazeCompactHUD === 'function') {
+        const _prevEnsureHUD = ensureMazeCompactHUD;
+        ensureMazeCompactHUD = function () {
+            _prevEnsureHUD();
+            dockTopFloatingBars();
+            syncCountingBannerWidth();
+        };
+    }
+
+    if (typeof runQuantityCountingSequence === 'function') {
+        const _prevRunCounting = runQuantityCountingSequence;
+        runQuantityCountingSequence = function (itemKey, autoAdvanceAfter, isCoin = false) {
+            syncCountingBannerWidth();
+            _prevRunCounting(itemKey, autoAdvanceAfter, isCoin);
+        };
+    }
+
+    window.addEventListener('resize', dockTopFloatingBars);
+
+    // ==================== 步驟 3：補齊新遊戲「提示」視覺指引 + iPad 觸控防卡掣 ====================
+    const style = document.createElement('style');
+    style.textContent = `
+        body, #canvas-container, #canvas-container canvas, #treasure-dpad-bar, #treasure-dpad-bar button, #mario-controls-bar button {
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const stopAllHeroDirs = () => {
+        if (typeof setTreasureMoveDir === 'function') setTreasureMoveDir(0, 0);
+    };
+    window.addEventListener('pointerup', stopAllHeroDirs);
+    window.addEventListener('pointercancel', stopAllHeroDirs);
+    window.addEventListener('blur', stopAllHeroDirs);
+
+    if (typeof triggerVisualHint === 'function') {
+        const _prevHint = triggerVisualHint;
+        triggerVisualHint = function (manualClick = false) {
+            if (gameState.isBusy || gameState.mode === 'explore') return;
+
+            if (gameState.mode === 'shapebridge' && typeof shapeBridgeState !== 'undefined') {
+                if (manualClick) playPopSound(660);
+                if (shapeBridgeState.carryingMinion) {
+                    const matchSlot = shapeBridgeState.slots.find(s => !s.filled && s.requiredShapeId === shapeBridgeState.carryingMinion.itemKey);
+                    if (matchSlot) {
+                        if (matchSlot.arrowMesh) matchSlot.arrowMesh.visible = true;
+                        emitStarParticles(new THREE.Vector3(matchSlot.x, 1.2, matchSlot.z));
+                    }
+                } else {
+                    const nextSlot = shapeBridgeState.slots.find(s => !s.filled);
+                    if (nextSlot) {
+                        const m = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.itemKey === nextSlot.requiredShapeId);
+                        if (m) {
+                            m.state = 'hint';
+                            if (m.haloMesh) m.haloMesh.material.opacity = 0.92;
+                            emitStarParticles(new THREE.Vector3(m.homeX, 1.6, m.homeZ));
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (gameState.mode === 'colorsplash' && typeof colorSplashState !== 'undefined') {
+                _prevHint(manualClick);
+                const targetSc = colorSplashState.sculptures.find(s => !s.painted);
+                if (!targetSc) return;
+
+                targetSc.bounceTimer = 1.0;
+                targetSc.pedRim.material.color.setHex(targetSc.spec.numHex);
+                targetSc.pedRim.material.emissive.setHex(targetSc.spec.emissive);
+                targetSc.pedRim.material.emissiveIntensity = 0.45;
+
+                if (colorSplashState.loadedColor === targetSc.colorId) {
+                    emitColorSplashParticles(new THREE.Vector3(targetSc.x, 1.7, targetSc.z), targetSc.spec.numHex);
+                } else {
+                    let needColor = targetSc.colorId;
+                    if (colorSplashState.tier === 'mix') {
+                        const pair = targetSc.colorId === 'orange' ? ['red', 'yellow'] : (targetSc.colorId === 'green' ? ['blue', 'yellow'] : ['red', 'blue']);
+                        needColor = pair.find(c => !colorSplashState.tankColors.includes(c)) || pair[0];
+                    }
+                    const m = interactiveBlocks.find(b => b.isArenaMinion && b.group.visible && b.itemKey === needColor);
+                    if (m) {
+                        if (m.haloMesh) {
+                            m.haloMesh.rotation.x = Math.PI / 2;
+                            m.haloMesh.position.set(0, -0.95, 0);
+                            m.haloMesh.material.opacity = 0.95;
+                        }
+                        if (typeof getVividSpec === 'function') {
+                            emitColorSplashParticles(new THREE.Vector3(m.homeX, 1.6, m.homeZ), getVividSpec(needColor).numHex);
+                        }
+                    }
+                }
+                return;
+            }
+
+            _prevHint(manualClick);
+        };
+    }
+
+    // ==================== 步驟 4：自動存檔 + 廣東話語音讀題開關 ====================
+    const SAVE_KEY = 'wonderland3d_save_v1';
+    window.voiceReadEnabled = true;
+
+    function saveGameProgress() {
+        try {
+            localStorage.setItem(SAVE_KEY, JSON.stringify({
+                stars: gameState.stars,
+                unlockedToys: gameState.unlockedToys,
+                settings: gameState.settings,
+                voiceReadEnabled: window.voiceReadEnabled
+            }));
+        } catch (e) {}
+    }
+
+    function loadGameProgress() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (typeof data.stars === 'number') gameState.stars = data.stars;
+            if (Array.isArray(data.unlockedToys) && data.unlockedToys.length > 0) gameState.unlockedToys = data.unlockedToys;
+            if (data.settings) Object.assign(gameState.settings, data.settings);
+            if (typeof data.voiceReadEnabled === 'boolean') window.voiceReadEnabled = data.voiceReadEnabled;
+            if (typeof renderStarsBar === 'function') renderStarsBar();
+        } catch (e) {}
+    }
+
+    window.resetSavedProgress = function () {
+        playPopSound(420);
+        gameState.stars = 0;
+        gameState.unlockedToys = [1];
+        saveGameProgress();
+        if (typeof renderStarsBar === 'function') renderStarsBar();
+        if (typeof renderToyCabinetGrid === 'function') renderToyCabinetGrid();
+    };
+
+    function speakCantonesePrompt(rawText) {
+        if (!window.voiceReadEnabled || gameState.inLobby || !('speechSynthesis' in window) || !rawText) return;
+        const clean = rawText
+            .replace(/\+/g, ' 加 ')
+            .replace(/[−-](?=\s*[\d?？])/g, ' 減 ')
+            .replace(/=/g, ' 等於 ')
+            .replace(/[?？]/g, ' 幾多 ')
+            .replace(/➔/g, ' 跟住 ')
+            .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}【】\[\]✓]/gu, '')
+            .trim();
+        if (!clean) return;
+
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = 'zh-HK';
+        utter.rate = 0.95;
+        utter.pitch = 1.1;
+        window.speechSynthesis.speak(utter);
+    }
+
+    function mountVoiceAndResetButtons() {
+        const hintBtn = document.getElementById('btn-visual-hint');
+        if (hintBtn && !document.getElementById('btn-voice-toggle')) {
+            const vBtn = document.createElement('button');
+            vBtn.id = 'btn-voice-toggle';
+            const syncLabel = () => {
+                vBtn.className = `btn-toy-sm font-black px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border-2 shadow text-xs sm:text-sm flex items-center gap-1 ${window.voiceReadEnabled ? 'bg-amber-400 text-slate-950 border-amber-500' : 'bg-slate-200 text-slate-600 border-slate-300'}`;
+                vBtn.innerHTML = window.voiceReadEnabled ? '<span>🗣️</span><span class="hidden sm:inline">讀題：開</span>' : '<span>🔇</span><span class="hidden sm:inline">讀題：關</span>';
+            };
+            vBtn.onclick = () => {
+                playPopSound(540);
+                window.voiceReadEnabled = !window.voiceReadEnabled;
+                if (!window.voiceReadEnabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+                syncLabel();
+                saveGameProgress();
+                if (window.voiceReadEnabled) speakCantonesePrompt(document.getElementById('prompt-text')?.textContent || '');
+            };
+            syncLabel();
+            hintBtn.parentNode.insertBefore(vBtn, hintBtn);
+        }
+
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsCard = settingsModal ? settingsModal.firstElementChild : null;
+        if (settingsCard && !document.getElementById('btn-reset-save')) {
+            const resetWrap = document.createElement('div');
+            resetWrap.className = 'mt-3 pt-3 border-t border-slate-200 flex justify-end';
+            resetWrap.innerHTML = `<button id="btn-reset-save" onclick="resetSavedProgress()" class="btn-toy-sm bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-xl text-xs font-bold">🔄 重置星星與玩具收集進度</button>`;
+            settingsCard.appendChild(resetWrap);
+        }
+    }
+
+    if (typeof awardStarProgress === 'function') {
+        const _prevAward = awardStarProgress;
+        awardStarProgress = function () {
+            _prevAward();
+            setTimeout(saveGameProgress, 100);
+        };
+    }
+
+    if (typeof updateSetting === 'function') {
+        const _prevUpdateSetting = updateSetting;
+        updateSetting = function (k, v) {
+            _prevUpdateSetting(k, v);
+            saveGameProgress();
+        };
+    }
+
+    if (typeof setPromptUI === 'function') {
+        const _prevSetPrompt = setPromptUI;
+        setPromptUI = function (mainText, subText) {
+            _prevSetPrompt(mainText, subText);
+            speakCantonesePrompt(mainText);
+        };
+    }
+
+    const initPatchUI = () => {
+        loadGameProgress();
+        mountVoiceAndResetButtons();
+        setTimeout(dockTopFloatingBars, 180);
+    };
+    if (document.readyState === 'complete') initPatchUI();
+    else window.addEventListener('load', initPatchUI);
+})();
