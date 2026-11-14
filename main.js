@@ -4723,3 +4723,608 @@ function updateColorSplashFrame(dt, elapsed) {
     if (document.readyState === 'complete') setTimeout(bootPatch6, 260);
     else window.addEventListener('load', () => setTimeout(bootPatch6, 260));
 })();
+/********************************************************************
+ * Patch Step 7: 形狀修橋 3D 穿模修復 + 蘑菇台配色高度校正 + 城堡對比與左下提示框防截斷
+ * (直接貼於 main.js 最底端最後一行之後，無需修改 scene3d.js)
+ ********************************************************************/
+(function applyShapeBridgeVisualAndLayoutFixStep7() {
+    if (window.__wonderlandPatch7Applied) return;
+    window.__wonderlandPatch7Applied = true;
+
+    // 若場景曾預先建立舊版橋樑，先重置以便套用新版建模
+    if (typeof shapeBridgeState !== 'undefined') {
+        shapeBridgeState.built = false;
+        if (typeof shapeBridgeGroup !== 'undefined') shapeBridgeGroup.clear();
+    }
+
+    // ==================== 1. 重建形狀修橋舞台（翠綠北岸 + 暖金立體城堡） ====================
+    window.ensure3DShapeBridgeBuilt = ensure3DShapeBridgeBuilt = function () {
+        if (shapeBridgeState.built) return;
+        shapeBridgeState.built = true;
+        shapeBridgeGroup.clear();
+        shapeBridgeGroup.visible = (gameState.mode === 'shapebridge');
+        if (scene && !shapeBridgeGroup.parent) scene.add(shapeBridgeGroup);
+
+        // 1. 蔚藍大河底座
+        const waterMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(34, 34, 0.25, 48),
+            new THREE.MeshStandardMaterial({ color: 0x0EA5E9, roughness: 0.22 })
+        );
+        waterMesh.position.set(0, -0.06, -0.5);
+        shapeBridgeGroup.add(waterMesh);
+
+        // 2. 南岸草地廣場
+        const southSand = new THREE.Mesh(
+            new THREE.BoxGeometry(18.6, 0.3, 6.4),
+            new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
+        );
+        southSand.position.set(0, 0.1, 3.6);
+        shapeBridgeGroup.add(southSand);
+
+        const southGrass = new THREE.Mesh(
+            new THREE.BoxGeometry(17.8, 0.36, 6.0),
+            new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.7 })
+        );
+        southGrass.position.set(0, 0.18, 3.6);
+        southGrass.receiveShadow = true;
+        shapeBridgeGroup.add(southGrass);
+
+        // 3. 北岸皇冠城堡島（改為翠綠草地配暖金沙岸，徹底解決白牆撞白地問題）
+        const northSand = new THREE.Mesh(
+            new THREE.BoxGeometry(18.6, 0.3, 6.0),
+            new THREE.MeshStandardMaterial({ color: 0xFCD34D, roughness: 0.8 })
+        );
+        northSand.position.set(0, 0.1, -6.1);
+        shapeBridgeGroup.add(northSand);
+
+        const northLawn = new THREE.Mesh(
+            new THREE.BoxGeometry(17.8, 0.36, 5.6),
+            new THREE.MeshStandardMaterial({ color: 0x34D399, roughness: 0.72 })
+        );
+        northLawn.position.set(0, 0.18, -6.1);
+        northLawn.receiveShadow = true;
+        shapeBridgeGroup.add(northLawn);
+
+        const carpet = new THREE.Mesh(
+            new THREE.BoxGeometry(9.6, 0.05, 3.2),
+            new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.55 })
+        );
+        carpet.position.set(0, 0.37, -4.8);
+        shapeBridgeGroup.add(carpet);
+
+        // 過橋衝刺時展開嘅三線彩虹加速大橋跑道
+        const rainbowTrack = new THREE.Mesh(
+            new THREE.BoxGeometry(8.6, 0.28, 4.1),
+            new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.3, metalness: 0.15 })
+        );
+        rainbowTrack.position.set(0, 0.42, -1.3);
+        rainbowTrack.visible = false;
+        shapeBridgeState.rainbowTrackMesh = rainbowTrack;
+        shapeBridgeGroup.add(rainbowTrack);
+
+        // 北岸終點立體城堡（暖米金石牆 + 淡紫圓塔 + 木拱門，縮放至 0.82 避開頂部懸浮欄）
+        const castleGroup = new THREE.Group();
+        castleGroup.position.set(0, 0.36, -6.75);
+        castleGroup.scale.setScalar(0.82);
+
+        const mainKeep = new THREE.Mesh(
+            new THREE.BoxGeometry(5.0, 2.7, 1.8),
+            new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.55 })
+        );
+        mainKeep.position.y = 1.35;
+        mainKeep.castShadow = true;
+        castleGroup.add(mainKeep);
+
+        const doorArch = new THREE.Mesh(
+            new THREE.BoxGeometry(1.35, 1.55, 0.16),
+            new THREE.MeshStandardMaterial({ color: 0x78350F, roughness: 0.7 })
+        );
+        doorArch.position.set(0, 0.78, 0.92);
+        castleGroup.add(doorArch);
+
+        [-2.8, 2.8].forEach(tx => {
+            const tower = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.85, 0.95, 3.1, 20),
+                new THREE.MeshStandardMaterial({ color: 0xC4B5FD, roughness: 0.5 })
+            );
+            tower.position.set(tx, 1.55, 0.1);
+            castleGroup.add(tower);
+
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(1.15, 1.35, 20),
+                new THREE.MeshStandardMaterial({ color: 0xF43F5E, roughness: 0.35 })
+            );
+            roof.position.set(tx, 3.75, 0.1);
+            castleGroup.add(roof);
+        });
+
+        const topStar = createCustom3DShapeMesh('star', 0xFACC15);
+        topStar.scale.setScalar(0.65);
+        topStar.position.set(0, 3.25, 0.25);
+        castleGroup.add(topStar);
+        shapeBridgeGroup.add(castleGroup);
+
+        // 4. 動態橋面、蘑菇台與金幣容器
+        shapeBridgeState.slotsContainer = new THREE.Group();
+        shapeBridgeGroup.add(shapeBridgeState.slotsContainer);
+
+        // 5. 點擊地面光圈與馬利奧方向環
+        const clickRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.4, 0.65, 24),
+            new THREE.MeshBasicMaterial({ color: 0xFDE047, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+        );
+        clickRing.rotation.x = -Math.PI / 2;
+        clickRing.position.set(0, 0.38, 0);
+        clickRing.visible = false;
+        shapeBridgeState.clickMarker = clickRing;
+        shapeBridgeGroup.add(clickRing);
+
+        const compassGroup = new THREE.Group();
+        const ringMesh = new THREE.Mesh(
+            new THREE.RingGeometry(0.55, 0.75, 32),
+            new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+        );
+        ringMesh.rotation.x = -Math.PI / 2;
+        compassGroup.add(ringMesh);
+
+        const arrowMesh = new THREE.Mesh(
+            new THREE.ConeGeometry(0.26, 0.52, 3),
+            new THREE.MeshBasicMaterial({ color: 0xEA580C })
+        );
+        arrowMesh.rotation.x = Math.PI / 2;
+        arrowMesh.position.set(0, 0.06, 0.95);
+        compassGroup.add(arrowMesh);
+
+        compassGroup.position.set(0, 0.38, 2.1);
+        shapeBridgeState.compassRing = compassGroup;
+        shapeBridgeGroup.add(compassGroup);
+
+        // 6. 馬利奧主角 + 黃金大魔槌
+        const hero = marioHero.group.clone();
+        hero.scale.setScalar(0.92);
+        hero.position.set(0, 0.36, 2.1);
+
+        const hammerGroup = new THREE.Group();
+        const handle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.09, 0.09, 1.35, 12),
+            new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.6 })
+        );
+        handle.position.y = 0.65;
+        hammerGroup.add(handle);
+
+        const headMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.42, 0.42, 0.95, 20),
+            new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.2, metalness: 0.6 })
+        );
+        headMesh.rotation.z = Math.PI / 2;
+        headMesh.position.y = 1.35;
+        hammerGroup.add(headMesh);
+
+        [-0.49, 0.49].forEach(capX => {
+            const cap = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.45, 0.45, 0.08, 20),
+                new THREE.MeshStandardMaterial({ color: 0xEF4444, roughness: 0.3 })
+            );
+            cap.rotation.z = Math.PI / 2;
+            cap.position.set(capX, 1.35, 0);
+            hammerGroup.add(cap);
+        });
+
+        hammerGroup.position.set(0.55, 0.7, 0.25);
+        hammerGroup.visible = false;
+        hero.add(hammerGroup);
+
+        shapeBridgeState.hammerMesh = hammerGroup;
+        shapeBridgeState.heroMesh = hero;
+        shapeBridgeGroup.add(hero);
+    };
+
+    // ==================== 2. 低矮奶白軟墊蘑菇台（唔遮字、唔撞色） ====================
+    window.createMushroomPedestal = createMushroomPedestal = function (x, z, colorHex) {
+        const group = new THREE.Group();
+        group.position.set(x, 0.36, z);
+
+        const rimMat = new THREE.MeshStandardMaterial({ color: colorHex || 0xFBBF24, roughness: 0.35 });
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.84, 0.92, 0.12, 28), rimMat);
+        rim.position.y = 0.06;
+        group.add(rim);
+
+        const cushion = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.72, 0.76, 0.15, 28),
+            new THREE.MeshStandardMaterial({ color: 0xFFFBEB, roughness: 0.5 })
+        );
+        cushion.position.y = 0.09;
+        group.add(cushion);
+
+        group.userData = { isPedestal: true, rimMat, x, z };
+        shapeBridgeState.slotsContainer.add(group);
+        return group;
+    };
+
+    // ==================== 3. 清晰橋面形狀缺口 + 水底海龜 + 後排紫色小水怪 ====================
+    window.createBridgeSlotObject = createBridgeSlotObject = function (index, x, shapeId, tier, splitPartShape = null) {
+        const meta = getCognitiveItemMeta(shapeId, 'shape');
+        const z = -1.3;
+        const slotGroup = new THREE.Group();
+        slotGroup.position.set(x, 0.36, z);
+
+        // 1. 海龜浮島底座：壓平龜殼潛於木橋下方（絕不穿出橋面），只向北伸出可愛龜頭與四肢
+        const turtleGroup = new THREE.Group();
+        turtleGroup.position.set(0, -0.18, 0);
+
+        const shell = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.38, 1.5, 0.18, 24),
+            new THREE.MeshStandardMaterial({ color: 0x15803D, roughness: 0.5 })
+        );
+        shell.position.y = -0.12;
+        turtleGroup.add(shell);
+
+        const tHead = new THREE.Group();
+        const headSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.38, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.4 })
+        );
+        tHead.add(headSphere);
+        [-0.14, 0.14].forEach(ex => {
+            const ew = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), new THREE.MeshBasicMaterial({ color: 0xFFFFFF }));
+            ew.position.set(ex, 0.16, -0.26);
+            const ep = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0x0F172A }));
+            ep.position.set(ex, 0.18, -0.34);
+            tHead.add(ew, ep);
+        });
+        tHead.position.set(0, 0.08, -1.78);
+        turtleGroup.add(tHead);
+
+        [[-1.42, -0.85, 0.35], [1.42, -0.85, -0.35], [-1.42, 0.85, -0.35], [1.42, 0.85, 0.35]].forEach(([fx, fz, rotY]) => {
+            const flipper = new THREE.Mesh(
+                new THREE.BoxGeometry(0.58, 0.1, 0.36),
+                new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.4 })
+            );
+            flipper.position.set(fx, -0.08, fz);
+            flipper.rotation.y = rotY;
+            turtleGroup.add(flipper);
+        });
+        slotGroup.add(turtleGroup);
+
+        // 2. 黃金木橋邊框
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.6 });
+        const railMat = new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.4 });
+        [-1.38, 1.38].forEach(pz => {
+            const abutment = new THREE.Mesh(new THREE.BoxGeometry(2.96, 0.24, 0.52), woodMat);
+            abutment.position.set(0, 0.06, pz);
+            slotGroup.add(abutment);
+        });
+        [-1.34, 1.34].forEach(rx => {
+            const sideBeam = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 3.2), woodMat);
+            sideBeam.position.set(rx, 0.06, 0);
+            slotGroup.add(sideBeam);
+
+            const postS = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.58, 12), railMat);
+            postS.position.set(rx, 0.34, 1.42);
+            const postN = postS.clone();
+            postN.position.set(rx, 0.34, -1.42);
+            slotGroup.add(postS, postN);
+        });
+
+        // 3. 高清形狀穿窿缺口板（升高至 y = 0.21，完全露出鮮明形狀輪廓與文字）
+        const cavityGroup = new THREE.Group();
+        let rotRad = 0;
+        if (tier === 'windmill') {
+            const rotMap = { triangle: Math.PI, square: Math.PI / 4, rectangle: Math.PI / 2, star: Math.PI / 5, heart: -0.45, circle: 0 };
+            rotRad = rotMap[shapeId] || 0.5;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#0F172A';
+        roundRectCanvas(ctx, 10, 10, 492, 492, 64);
+        ctx.fill();
+
+        ctx.lineWidth = 18;
+        ctx.setLineDash([32, 20]);
+        ctx.strokeStyle = (tier === 'shadow') ? '#CBD5E1' : meta.hex;
+        roundRectCanvas(ctx, 28, 28, 456, 456, 52);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.save();
+        ctx.translate(256, 215);
+        ctx.rotate(rotRad);
+        if (tier === 'shadow') {
+            drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 142, '#334155', '#F8FAFC');
+        } else {
+            drawShapeSymbolOnCanvas(ctx, shapeId, 0, 0, 142, meta.hex, '#FFFFFF');
+        }
+        if (tier === 'split') {
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 14;
+            ctx.setLineDash([22, 16]);
+            ctx.beginPath();
+            ctx.moveTo(-130, -130);
+            ctx.lineTo(130, 130);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.fillStyle = '#FEF08A';
+        ctx.font = '900 62px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (tier === 'shadow') {
+            ctx.fillText('❓ 神秘黑影窿', 256, 428);
+        } else if (tier === 'split' && splitPartShape) {
+            const pMeta = getCognitiveItemMeta(splitPartShape, 'shape');
+            ctx.fillText(`🧩 捉2隻${pMeta.title}`, 256, 428);
+        } else {
+            ctx.fillText(`${meta.title}缺口`, 256, 428);
+        }
+
+        const holeTex = new THREE.CanvasTexture(canvas);
+        const holeBoard = new THREE.Mesh(
+            new THREE.BoxGeometry(2.42, 2.42, 0.12),
+            new THREE.MeshBasicMaterial({ map: holeTex })
+        );
+        holeBoard.rotation.x = -Math.PI / 2;
+        holeBoard.position.set(0, 0.20, 0.06);
+        cavityGroup.add(holeBoard);
+
+        const halfFilledMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.18, 0.22, 2.2),
+            new THREE.MeshStandardMaterial({ color: meta.hex, roughness: 0.3 })
+        );
+        halfFilledMesh.position.set(-0.58, 0.26, 0.06);
+        halfFilledMesh.visible = false;
+        cavityGroup.add(halfFilledMesh);
+
+        // 調皮紫色小水怪：移至橋孔北側邊緣 (z = -1.08)，唔遮中間形狀亦唔撞綠色龜殼
+        const monsterGroup = new THREE.Group();
+        const monBody = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x9333EA, roughness: 0.3 })
+        );
+        monsterGroup.add(monBody);
+        [-0.18, 0.18].forEach(hx => {
+            const horn = new THREE.Mesh(
+                new THREE.ConeGeometry(0.08, 0.22, 10),
+                new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.3 })
+            );
+            horn.position.set(hx, 0.34, 0);
+            horn.rotation.z = hx > 0 ? -0.35 : 0.35;
+            monsterGroup.add(horn);
+        });
+        [-0.13, 0.13].forEach(ex => {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xFFFFFF }));
+            eye.position.set(ex, 0.14, 0.28);
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), new THREE.MeshBasicMaterial({ color: 0x0F172A }));
+            pupil.position.set(ex, 0.14, 0.37);
+            monsterGroup.add(eye, pupil);
+        });
+        monsterGroup.position.set(0, 0.26, -1.08);
+        cavityGroup.add(monsterGroup);
+
+        const arrowMesh = new THREE.Mesh(
+            new THREE.ConeGeometry(0.4, 0.75, 16),
+            new THREE.MeshBasicMaterial({ color: 0xFDE047 })
+        );
+        arrowMesh.rotation.x = Math.PI;
+        arrowMesh.position.set(0, 1.65, 0);
+        arrowMesh.visible = false;
+        cavityGroup.add(arrowMesh);
+
+        slotGroup.add(cavityGroup);
+
+        // 4. 修好後嘅黃金橋板 + 3D 立體形狀鑲嵌磚
+        const repairedGroup = new THREE.Group();
+        repairedGroup.visible = false;
+
+        const plank = new THREE.Mesh(
+            new THREE.BoxGeometry(2.85, 0.28, 2.75),
+            new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.42 })
+        );
+        plank.position.y = 0.14;
+        plank.receiveShadow = true;
+        repairedGroup.add(plank);
+
+        const shape3D = createCustom3DShapeMesh(shapeId, meta.hex);
+        shape3D.rotation.x = -Math.PI / 2;
+        shape3D.scale.setScalar(0.95);
+        shape3D.position.set(0, 0.32, 0);
+        repairedGroup.add(shape3D);
+
+        slotGroup.add(repairedGroup);
+        shapeBridgeState.slotsContainer.add(slotGroup);
+
+        const slotObj = {
+            index, x, z, shapeId,
+            requiredShapeId: splitPartShape || shapeId,
+            neededCount: splitPartShape ? 2 : 1,
+            currentCount: 0,
+            rotRad,
+            filled: false,
+            group: slotGroup,
+            turtleGroup,
+            cavityGroup,
+            holeBoard,
+            halfFilledMesh,
+            monsterGroup,
+            repairedGroup,
+            shape3D,
+            hitMesh: holeBoard,
+            arrowMesh
+        };
+        holeBoard.userData = { isBridgeSlot: true, slotObj };
+        return slotObj;
+    };
+
+    // ==================== 4. 左下角提示框防截斷 + 鮮色清晰進度章 ====================
+    function upgradeBottomLeftPromptAndBanner() {
+        const targetBadge = document.getElementById('target-number-card');
+        const promptCard = targetBadge ? targetBadge.parentElement : null;
+        if (promptCard) {
+            promptCard.className = 'fixed left-2.5 sm:left-4 bottom-2.5 sm:bottom-4 z-20 pointer-events-none bg-white/92 backdrop-blur-md px-3 py-2 rounded-2xl border-2 border-sky-300 shadow-lg flex items-center gap-2.5 max-w-[calc(100vw-165px)] sm:max-w-[540px] transition-all';
+        }
+        const mainPrompt = document.getElementById('prompt-text');
+        if (mainPrompt) {
+            mainPrompt.className = 'text-xs sm:text-sm font-black text-slate-800 leading-snug text-left';
+        }
+
+        const banner = document.getElementById('counting-banner');
+        if (banner && promptCard) {
+            const pRect = promptCard.getBoundingClientRect();
+            if (pRect.height > 0) {
+                banner.style.bottom = `${Math.round(window.innerHeight - pRect.top + 8)}px`;
+            }
+        }
+    }
+
+    window.updateShapeBridgeBanner = updateShapeBridgeBanner = function () {
+        const banner = document.getElementById('counting-banner');
+        const dotsContainer = document.getElementById('counting-dots');
+        const emojiEl = document.getElementById('counting-emoji');
+        if (!banner || !dotsContainer) return;
+
+        banner.classList.remove('hidden');
+        if (dotsContainer.previousElementSibling) dotsContainer.previousElementSibling.style.display = 'none';
+        emojiEl.textContent = '🌉';
+        emojiEl.className = 'text-lg sm:text-xl';
+        dotsContainer.innerHTML = '';
+
+        const firstUnfilled = shapeBridgeState.slots.find(s => !s.filled);
+
+        shapeBridgeState.slots.forEach(slot => {
+            const meta = getCognitiveItemMeta(slot.shapeId, 'shape');
+            const pill = document.createElement('span');
+            const isCarriedMatch = shapeBridgeState.carryingMinion && shapeBridgeState.carryingMinion.itemKey === slot.requiredShapeId && !slot.filled;
+            const isNextFocus = !shapeBridgeState.carryingMinion && firstUnfilled === slot;
+
+            if (slot.filled) {
+                pill.className = 'inline-flex items-center gap-1 bg-emerald-500 text-white px-2.5 py-0.5 rounded-xl text-xs sm:text-sm font-black shadow-sm star-earned';
+                pill.textContent = `✓ ${meta.badgeSymbol}${meta.title}`;
+            } else if (isCarriedMatch) {
+                pill.className = 'inline-flex items-center gap-1 bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-xl text-xs sm:text-sm font-black border-2 border-orange-500 animate-bounce shadow';
+                pill.textContent = `🔨 篤${meta.title}窿！`;
+            } else {
+                const progressTxt = slot.neededCount > 1 ? `(${slot.currentCount}/2)` : '';
+                const borderCls = isNextFocus ? 'border-2 border-amber-400 bg-amber-50' : 'border border-slate-300 bg-white';
+                pill.className = `inline-flex items-center gap-1 text-slate-800 px-2.5 py-0.5 rounded-xl text-xs sm:text-sm font-black shadow-sm ${borderCls}`;
+                if (shapeBridgeState.tier === 'shadow') {
+                    pill.textContent = `❓ 黑影窿`;
+                } else {
+                    pill.innerHTML = `<span style="color:${meta.hex}" class="text-sm sm:text-base leading-none">${meta.badgeSymbol}</span><span>${meta.title}${progressTxt}</span>`;
+                }
+            }
+            dotsContainer.appendChild(pill);
+        });
+
+        setTimeout(upgradeBottomLeftPromptAndBanner, 20);
+    };
+
+    // 同步蘑菇台外圈顏色跟隨小兵自身形狀顏色，並精簡提示文字免截斷
+    const _prevSetupSB = setupShapeBridgeRound;
+    setupShapeBridgeRound = function () {
+        _prevSetupSB();
+
+        const pedestals = shapeBridgeState.slotsContainer
+            ? shapeBridgeState.slotsContainer.children.filter(c => c.userData && c.userData.isPedestal)
+            : [];
+
+        const minions = interactiveBlocks.filter(b => b.isShapeBridgeMinion && b.isArenaMinion);
+        minions.forEach((m, idx) => {
+            m.homeZ = Math.min(m.homeZ, 3.65);
+            if (m.haloMesh) {
+                m.haloMesh.rotation.x = Math.PI / 2;
+                m.haloMesh.position.set(0, -1.32, 0);
+            }
+            const meta = getCognitiveItemMeta(m.itemKey, 'shape');
+            const ped = pedestals[idx];
+            if (ped) {
+                ped.position.set(m.homeX, 0.36, m.homeZ);
+                if (ped.userData.rimMat && meta.hex) {
+                    ped.userData.rimMat.color.set(meta.hex);
+                }
+            }
+        });
+
+        const tier = shapeBridgeState.tier || 'turtle';
+        if (tier === 'split') {
+            setPromptUI(`🧩 雙拼橋：篤蘑菇台細形狀小兵，2隻拼埋修好大橋窿！`, ``);
+        } else if (tier === 'shadow') {
+            setPromptUI(`🕵️ 黑影橋：數下橋窿有幾多隻角，篤啱形狀小兵去修橋！`, ``);
+        } else if (tier === 'windmill') {
+            setPromptUI(`🔄 旋轉橋：睇清楚轉動中嘅橋窿形狀，揀啱小兵打樁修橋！`, ``);
+        } else {
+            setPromptUI(`🐢 烏龜浮橋：先篤蘑菇台上嘅形狀小兵，再篤橋窿用黃金大槌修橋！`, ``);
+        }
+
+        updateShapeBridgeBanner();
+    };
+
+    const _prevSetPrompt7 = setPromptUI;
+    setPromptUI = function (mainText, subText) {
+        _prevSetPrompt7(mainText, subText);
+        requestAnimationFrame(upgradeBottomLeftPromptAndBanner);
+    };
+
+    // ==================== 5. 渲染前校正：墊高蘑菇台小兵與最佳化鏡頭視角 ====================
+    function applyPreRenderSceneAdjustments() {
+        // 墊高形狀修橋與水槍染色蘑菇台上嘅小兵，露出完整文字與雙腳
+        if (gameState.mode === 'shapebridge' || gameState.mode === 'colorsplash') {
+            const liftY = (gameState.mode === 'colorsplash') ? 1.60 : 1.56;
+            interactiveBlocks.forEach(b => {
+                if (b.isShapeBridgeMinion && b.isArenaMinion && b.group.visible) {
+                    const bounce = Math.max(0, b.group.position.y - 1.32);
+                    b.group.position.y = liftY + bounce;
+                    b.group.updateMatrixWorld();
+                }
+            });
+        }
+
+        // 調整形狀修橋鏡頭角度，確保城堡尖頂與星星完整顯示於頂部懸浮欄下方
+        if (gameState.mode === 'shapebridge' && typeof shapeBridgeGroup !== 'undefined' && shapeBridgeGroup.visible && camera) {
+            const isEnd = (shapeBridgeState.phase === 'crossing' || shapeBridgeState.phase === 'celebrate');
+            if (!isEnd) {
+                camera.position.y = 12.0;
+                camera.position.z = 13.4;
+                camera.lookAt(shapeBridgeState.heroX * 0.16, 1.75, -1.8);
+                camera.updateMatrixWorld();
+            }
+        }
+    }
+
+    function hookWebGLRendererBeforeDraw() {
+        if (!renderer || renderer.__patch7Hooked) return;
+        renderer.__patch7Hooked = true;
+        const _rawRender = renderer.render.bind(renderer);
+        renderer.render = function (sc, cam) {
+            if (sc === scene && cam === camera) {
+                applyPreRenderSceneAdjustments();
+            }
+            return _rawRender(sc, cam);
+        };
+    }
+
+    if (typeof initThreeScene === 'function') {
+        const _origInit3D = initThreeScene;
+        initThreeScene = function () {
+            const res = _origInit3D.apply(this, arguments);
+            hookWebGLRendererBeforeDraw();
+            return res;
+        };
+    }
+
+    window.addEventListener('resize', upgradeBottomLeftPromptAndBanner);
+
+    const bootPatch7 = () => {
+        hookWebGLRendererBeforeDraw();
+        upgradeBottomLeftPromptAndBanner();
+        if (gameState.mode === 'shapebridge' && !gameState.inLobby) {
+            ensure3DShapeBridgeBuilt();
+            startNewRound();
+        }
+    };
+    if (document.readyState === 'complete') setTimeout(bootPatch7, 280);
+    else window.addEventListener('load', () => setTimeout(bootPatch7, 280));
+})();
