@@ -1,80 +1,80 @@
 /********************************************************************
  * [FILE: category-game.js]
- * Mode 9: 🧺 水果與交通工具 3D 語義分類大挑戰 (K2 臨床訓練模組)
- * 直接掛載於《數字奇幻樂園》Three.js 引擎，免修改 scene3d.js / main.js
+ * 3D 雙區拖放語義分類模組：分辨「🧺 水果」與「🚏 交通工具」(K2 10題版)
  ********************************************************************/
-(function initWonderlandCategoryGame() {
-    if (window.__wonderlandCategoryGameLoaded) return;
-    window.__wonderlandCategoryGameLoaded = true;
+(function initWonderland3DCategorySorting() {
+    if (window.__wonderlandCategorySortingV2) return;
+    window.__wonderlandCategorySortingV2 = true;
 
-    // ==================== 1. 香港日常詞彙庫與手繪風 Canvas 圖卡資料 ====================
-    const CATEGORY_ITEMS = {
-        // 水果類 (Fruits)
-        apple:      { id: 'apple',      name: '蘋果',     category: 'fruit',   praise: '「蘋果」紅卜卜又爽甜，係水果嚟㗎！' },
-        banana:     { id: 'banana',     name: '香蕉',     category: 'fruit',   praise: '「香蕉」剝開皮就食得，係水果嚟㗎！' },
-        orange:     { id: 'orange',     name: '橙',       category: 'fruit',   praise: '「橙」酸酸甜甜多維他命，係水果嚟㗎！' },
-        strawberry: { id: 'strawberry', name: '士多啤梨', category: 'fruit',   praise: '「士多啤梨」香甜好味，係水果嚟㗎！' },
-        grapes:     { id: 'grapes',     name: '提子',     category: 'fruit',   praise: '「提子」一串串甜甜哋，係水果嚟㗎！' },
-        watermelon: { id: 'watermelon', name: '西瓜',     category: 'fruit',   praise: '「西瓜」多汁又消暑，係水果嚟㗎！' },
-        mango:      { id: 'mango',      name: '芒果',     category: 'fruit',   praise: '「芒果」黃澄澄好香甜，係水果嚟㗎！' },
-        pineapple:  { id: 'pineapple',  name: '菠蘿',     category: 'fruit',   praise: '「菠蘿」酸甜開胃，係水果嚟㗎！' },
-        pear:       { id: 'pear',       name: '梨',       category: 'fruit',   praise: '「梨」清甜多汁，係水果嚟㗎！' },
-        kiwi:       { id: 'kiwi',       name: '奇異果',   category: 'fruit',   praise: '「奇異果」切開綠油油，係水果嚟㗎！' },
+    // ==================== 1. 香港日常詞彙庫 ====================
+    const CAT_DB = {
+        // 水果 (Fruits)
+        apple:      { id: 'apple',      name: '蘋果',     cat: 'fruit',   msg: '「蘋果」紅卜卜甜甜哋，係水果！' },
+        banana:     { id: 'banana',     name: '香蕉',     cat: 'fruit',   msg: '「香蕉」剝咗皮就食得，係水果！' },
+        orange:     { id: 'orange',     name: '橙',       cat: 'fruit',   msg: '「橙」酸酸甜甜多汁，係水果！' },
+        watermelon: { id: 'watermelon', name: '西瓜',     cat: 'fruit',   msg: '「西瓜」清甜又解渴，係水果！' },
+        strawberry: { id: 'strawberry', name: '士多啤梨', cat: 'fruit',   msg: '「士多啤梨」香甜好味，係水果！' },
+        grapes:     { id: 'grapes',     name: '提子',     cat: 'fruit',   msg: '「提子」一粒粒甜甜哋，係水果！' },
+        mango:      { id: 'mango',      name: '芒果',     cat: 'fruit',   msg: '「芒果」黃澄澄好香甜，係水果！' },
+        pear:       { id: 'pear',       name: '梨',       cat: 'fruit',   msg: '「梨」爽脆又清甜，係水果！' },
+        pineapple:  { id: 'pineapple',  name: '菠蘿',     cat: 'fruit',   msg: '「菠蘿」酸甜開胃，係水果！' },
+        kiwi:       { id: 'kiwi',       name: '奇異果',   cat: 'fruit',   msg: '「奇異果」綠油油好味，係水果！' },
 
-        // 交通工具類 (Hong Kong Vehicles)
-        bus:        { id: 'bus',        name: '雙層巴士', category: 'vehicle', praise: '「雙層巴士」載好多人出街，係交通工具！' },
-        taxi:       { id: 'taxi',       name: '的士',     category: 'vehicle', praise: '紅色「的士」喺馬路載客，係交通工具！' },
-        minibus:    { id: 'minibus',    name: '小巴',     category: 'vehicle', praise: '「小巴」載我哋去唔同地方，係交通工具！' },
-        mtr:        { id: 'mtr',        name: '港鐵',     category: 'vehicle', praise: '「港鐵」喺路軌飛快行駛，係交通工具！' },
-        ferry:      { id: 'ferry',      name: '渡輪',     category: 'vehicle', praise: '「渡輪」喺海面載人過海，係交通工具！' },
-        tram:       { id: 'tram',       name: '電車',     category: 'vehicle', praise: '叮叮「電車」喺港島行駛，係交通工具！' },
-        firetruck:  { id: 'firetruck',  name: '消防車',   category: 'vehicle', praise: '「消防車」載消防員去救火，係交通工具！' },
-        ambulance:  { id: 'ambulance',  name: '救護車',   category: 'vehicle', praise: '「救護車」載病人去醫院，係交通工具！' },
-        bicycle:    { id: 'bicycle',    name: '單車',     category: 'vehicle', praise: '「單車」有兩個轆踩去公園，係交通工具！' },
-        airplane:   { id: 'airplane',   name: '飛機',     category: 'vehicle', praise: '「飛機」喺天空載人去旅行，係交通工具！' }
+        // 香港常見交通工具 (Vehicles)
+        bus:        { id: 'bus',        name: '雙層巴士', cat: 'vehicle', msg: '「雙層巴士」載好多人去街，係交通工具！' },
+        taxi:       { id: 'taxi',       name: '的士',     cat: 'vehicle', msg: '紅色「的士」喺馬路載客，係交通工具！' },
+        minibus:    { id: 'minibus',    name: '小巴',     cat: 'vehicle', msg: '「小巴」載我哋去唔同地方，係交通工具！' },
+        airplane:   { id: 'airplane',   name: '飛機',     cat: 'vehicle', msg: '「飛機」喺天空飛去旅行，係交通工具！' },
+        mtr:        { id: 'mtr',        name: '港鐵',     cat: 'vehicle', msg: '「港鐵」喺路軌飛快行駛，係交通工具！' },
+        bicycle:    { id: 'bicycle',    name: '單車',     cat: 'vehicle', msg: '「單車」有兩個轆踩去公園，係交通工具！' },
+        firetruck:  { id: 'firetruck',  name: '消防車',   cat: 'vehicle', msg: '「消防車」載消防員去救火，係交通工具！' },
+        ambulance:  { id: 'ambulance',  name: '救護車',   cat: 'vehicle', msg: '「救護車」載病人去醫院，係交通工具！' },
+        ferry:      { id: 'ferry',      name: '渡輪',     cat: 'vehicle', msg: '「渡輪」喺海面載人過海，係交通工具！' },
+        tram:       { id: 'tram',       name: '電車',     cat: 'vehicle', msg: '叮叮「電車」喺馬路行駛，係交通工具！' }
     };
 
-    // 10 題臨床訓練題庫（每題 4 個選項）
-    const CATEGORY_QUESTION_BANK = [
-        { qNo: 1,  targetCat: 'fruit',   answer: 'apple',      distractors: ['bus', 'taxi', 'airplane'],          dualPair: ['apple', 'orange', 'bus', 'taxi'] },
-        { qNo: 2,  targetCat: 'vehicle', answer: 'bus',        distractors: ['banana', 'orange', 'watermelon'],   dualPair: ['bus', 'airplane', 'banana', 'watermelon'] },
-        { qNo: 3,  targetCat: 'fruit',   answer: 'banana',     distractors: ['taxi', 'firetruck', 'bicycle'],     dualPair: ['banana', 'pear', 'taxi', 'bicycle'] },
-        { qNo: 4,  targetCat: 'vehicle', answer: 'taxi',       distractors: ['apple', 'grapes', 'strawberry'],    dualPair: ['taxi', 'firetruck', 'apple', 'strawberry'] },
-        { qNo: 5,  targetCat: 'fruit',   answer: 'strawberry', distractors: ['mtr', 'minibus', 'airplane'],       dualPair: ['strawberry', 'grapes', 'mtr', 'minibus'] },
-        { qNo: 6,  targetCat: 'vehicle', answer: 'mtr',        distractors: ['orange', 'mango', 'pineapple'],     dualPair: ['mtr', 'tram', 'orange', 'mango'] },
-        { qNo: 7,  targetCat: 'fruit',   answer: 'grapes',     distractors: ['minibus', 'tram', 'ambulance'],     dualPair: ['grapes', 'pineapple', 'tram', 'ambulance'] },
-        { qNo: 8,  targetCat: 'vehicle', answer: 'minibus',    distractors: ['watermelon', 'pear', 'kiwi'],       dualPair: ['minibus', 'bicycle', 'pear', 'kiwi'] },
-        { qNo: 9,  targetCat: 'fruit',   answer: 'watermelon', distractors: ['ferry', 'bicycle', 'firetruck'],    dualPair: ['watermelon', 'mango', 'ferry', 'firetruck'] },
-        { qNo: 10, targetCat: 'vehicle', answer: 'ferry',      distractors: ['mango', 'pineapple', 'kiwi'],       dualPair: ['ferry', 'ambulance', 'pineapple', 'kiwi'] }
+    // 10 題題庫（每題 4 個選項：2 水果 + 2 交通工具）
+    const QUESTION_SETS = [
+        ['apple', 'banana', 'bus', 'taxi'],
+        ['orange', 'watermelon', 'minibus', 'airplane'],
+        ['strawberry', 'grapes', 'mtr', 'bicycle'],
+        ['mango', 'pear', 'firetruck', 'ambulance'],
+        ['pineapple', 'kiwi', 'ferry', 'tram'],
+        ['apple', 'strawberry', 'bus', 'mtr'],
+        ['banana', 'watermelon', 'taxi', 'ferry'],
+        ['orange', 'grapes', 'minibus', 'firetruck'],
+        ['mango', 'pineapple', 'airplane', 'tram'],
+        ['pear', 'kiwi', 'ambulance', 'bicycle']
     ];
 
-    // ==================== 2. 狀態管理 ====================
     const categorySortGroup = new THREE.Group();
     window.categorySortGroup = categorySortGroup;
 
-    const catSortState = {
+    const sortState = {
         built: false,
-        subMode: 'single', // 'single' = 標準四選一拖放 | 'dual' = 雙籃四卡全分類
-        qIndex: 0,         // 0 ~ 9 (共10題)
-        hadRetryThisQ: false,
-        firstTryCount: 0,
-        retrySolvedCount: 0,
-        questionSolved: false,
-        sessionFinished: false,
-        zones: [],
-        optionCards: [],
-        draggingCard: null,
-        selectedCard: null,
-        dragStartPos: { x: 0, y: 0 },
-        pointerMovedDist: 0,
+        difficulty: 'all4', // 'all4' = 每題拖晒4件分類 | 'one' = 每題4選1件拖入對應區
+        qIndex: 0,
+        totalQuestions: 10,
+        hadHintThisQ: false,
+        independentCount: 0,
+        scaffoldedCount: 0,
+        roundDone: false,
+        quizFinished: false,
+        zones: {},
+        items: [],
+        draggingItem: null,
+        selectedItem: null,
         hoveredZone: null,
+        dragShadowRing: null,
+        pointerStart: { x: 0, y: 0 },
+        movedPx: 0,
         heroMesh: null,
-        heroCheerTimer: 0,
-        stageItemsGroup: null
+        heroJumpTimer: 0,
+        dynamicGroup: null
     };
-    window.catSortState = catSortState;
+    window.catSortState = sortState;
 
-    function speakCatText(text, force = false) {
+    function speakCantonese(text, force = false) {
         if (typeof window.speakCantoneseSmart === 'function') {
             window.speakCantoneseSmart(text, force);
         } else if (window.voiceReadEnabled !== false && 'speechSynthesis' in window && text) {
@@ -86,7 +86,7 @@
         }
     }
 
-    function catRoundRect(ctx, x, y, w, h, r) {
+    function drawRoundBox(ctx, x, y, w, h, r) {
         ctx.beginPath();
         ctx.moveTo(x + r, y);
         ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -96,1211 +96,1001 @@
         ctx.closePath();
     }
 
-    // ==================== 3. 繪製香港特色清晰插畫圖卡 (512x512 Canvas) ====================
-    function drawCategoryIllustration(ctx, id) {
-        ctx.save();
-        ctx.translate(256, 200);
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
+    function makeLabelMesh(text, bgHex, textHex, width3D, height3D, fontSize = 58) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 160;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = bgHex;
+        drawRoundBox(ctx, 8, 8, 496, 144, 44);
+        ctx.fill();
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.stroke();
 
-        const drawWheel = (wx, wy, r = 28) => {
-            ctx.fillStyle = '#1E293B';
-            ctx.beginPath(); ctx.arc(wx, wy, r, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#CBD5E1';
-            ctx.beginPath(); ctx.arc(wx, wy, r * 0.48, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = textHex;
+        ctx.font = `900 ${fontSize}px "Noto Sans TC", "PingFang HK", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 256, 84);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(width3D, height3D),
+            new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+        );
+        return mesh;
+    }
+
+    // ==================== 2. 建立 3D 立體水果與香港交通工具模型 ====================
+    function build3DItemModel(id) {
+        const g = new THREE.Group();
+        const mat = (hex, rough = 0.35) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough });
+
+        const addWheels = (w = 0.58, zOff = 0.42, r = 0.2) => {
+            const wMat = mat(0x1E293B, 0.6);
+            const hubMat = mat(0xE2E8F0, 0.3);
+            [[-w, zOff], [w, zOff], [-w, -zOff], [w, -zOff]].forEach(([wx, wz]) => {
+                const wheel = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.14, 16), wMat);
+                wheel.rotation.x = Math.PI / 2;
+                wheel.position.set(wx, r, wz);
+                const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.48, r * 0.48, 0.16, 12), hubMat);
+                hub.rotation.x = Math.PI / 2;
+                hub.position.set(wx, r, wz);
+                g.add(wheel, hub);
+            });
+        };
+
+        const addLeafAndStem = (topY) => {
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.26, 10), mat(0x78350F, 0.7));
+            stem.position.set(0, topY + 0.08, 0);
+            const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), mat(0x16A34A, 0.4));
+            leaf.scale.set(1.5, 0.35, 0.8);
+            leaf.position.set(0.18, topY + 0.12, 0);
+            leaf.rotation.z = -0.3;
+            g.add(stem, leaf);
         };
 
         switch (id) {
-            case 'apple':
-                ctx.fillStyle = '#EF4444';
-                ctx.beginPath();
-                ctx.arc(-32, 12, 78, 0, Math.PI * 2);
-                ctx.arc(32, 12, 78, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#78350F'; ctx.lineWidth = 12;
-                ctx.beginPath(); ctx.moveTo(0, -52); ctx.quadraticCurveTo(8, -95, 22, -102); ctx.stroke();
-                ctx.fillStyle = '#22C55E';
-                ctx.beginPath(); ctx.ellipse(42, -82, 34, 16, -0.35, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = 'rgba(255,255,255,0.55)';
-                ctx.beginPath(); ctx.ellipse(-52, -18, 16, 30, -0.4, 0, Math.PI * 2); ctx.fill();
+            case 'apple': {
+                const body = new THREE.Mesh(new THREE.SphereGeometry(0.56, 24, 20), mat(0xEF4444, 0.25));
+                body.scale.set(1.06, 0.94, 1.06);
+                body.position.y = 0.54;
+                g.add(body);
+                addLeafAndStem(1.0);
                 break;
-
-            case 'banana':
-                ctx.strokeStyle = '#FACC15'; ctx.lineWidth = 46;
-                ctx.beginPath(); ctx.arc(-15, -35, 118, 0.25, 1.95); ctx.stroke();
-                ctx.strokeStyle = '#FDE047'; ctx.lineWidth = 20;
-                ctx.beginPath(); ctx.arc(-15, -42, 112, 0.32, 1.88); ctx.stroke();
-                ctx.fillStyle = '#78350F';
-                ctx.beginPath(); ctx.arc(98, -6, 14, 0, Math.PI * 2); ctx.fill();
+            }
+            case 'banana': {
+                const arc = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.19, 16, 28, Math.PI * 0.82), mat(0xFACC15, 0.3));
+                arc.position.set(0, 0.68, 0);
+                arc.rotation.z = Math.PI * 1.08;
+                const tip = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), mat(0x78350F));
+                tip.position.set(-0.54, 0.62, 0);
+                g.add(arc, tip);
                 break;
-
-            case 'orange':
-                ctx.fillStyle = '#FB923C';
-                ctx.beginPath(); ctx.arc(0, 12, 92, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#EA580C'; ctx.lineWidth = 6; ctx.stroke();
-                ctx.fillStyle = '#16A34A';
-                ctx.beginPath(); ctx.ellipse(26, -84, 34, 15, -0.3, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#FED7AA';
-                [[-32, -18], [28, 35], [40, -10], [-20, 42]].forEach(([dx, dy]) => {
-                    ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI * 2); ctx.fill();
+            }
+            case 'orange': {
+                const body = new THREE.Mesh(new THREE.SphereGeometry(0.56, 24, 20), mat(0xFB923C, 0.35));
+                body.position.y = 0.56;
+                g.add(body);
+                addLeafAndStem(1.04);
+                break;
+            }
+            case 'watermelon': {
+                const rind = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.34, 24, 1, false, 0, Math.PI), mat(0x15803D, 0.4));
+                rind.rotation.z = Math.PI / 2;
+                rind.rotation.y = Math.PI / 2;
+                rind.position.y = 0.72;
+                const flesh = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.36, 24, 1, false, 0, Math.PI), mat(0xEF4444, 0.3));
+                flesh.rotation.z = Math.PI / 2;
+                flesh.rotation.y = Math.PI / 2;
+                flesh.position.y = 0.72;
+                g.add(rind, flesh);
+                break;
+            }
+            case 'strawberry': {
+                const berry = new THREE.Mesh(new THREE.ConeGeometry(0.54, 0.96, 22), mat(0xF43F5E, 0.3));
+                berry.rotation.x = Math.PI;
+                berry.position.y = 0.56;
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.12, 0.14, 7), mat(0x16A34A, 0.4));
+                cap.position.y = 1.02;
+                g.add(berry, cap);
+                break;
+            }
+            case 'grapes': {
+                const coords = [[-0.24, 0.82, 0], [0.24, 0.82, 0], [0, 0.84, 0.2], [0, 0.84, -0.2], [-0.16, 0.54, 0.14], [0.16, 0.54, 0.14], [0, 0.54, -0.16], [0, 0.28, 0]];
+                coords.forEach(([gx, gy, gz]) => {
+                    const b = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 14), mat(0x9333EA, 0.25));
+                    b.position.set(gx, gy, gz);
+                    g.add(b);
                 });
+                addLeafAndStem(1.0);
                 break;
-
-            case 'strawberry':
-                ctx.fillStyle = '#F43F5E';
-                ctx.beginPath();
-                ctx.moveTo(0, 108);
-                ctx.bezierCurveTo(-110, 45, -105, -70, 0, -68);
-                ctx.bezierCurveTo(105, -70, 110, 45, 0, 108);
-                ctx.fill();
-                ctx.fillStyle = '#16A34A';
-                [-42, 0, 42].forEach(lx => {
-                    ctx.beginPath(); ctx.ellipse(lx, -72, 32, 16, lx * 0.008, 0, Math.PI * 2); ctx.fill();
-                });
-                ctx.fillStyle = '#FEF08A';
-                [[-38, -18], [0, -22], [38, -18], [-25, 22], [25, 22], [0, 58]].forEach(([sx, sy]) => {
-                    ctx.beginPath(); ctx.ellipse(sx, sy, 5, 8, 0, 0, Math.PI * 2); ctx.fill();
-                });
+            }
+            case 'mango': {
+                const m = new THREE.Mesh(new THREE.SphereGeometry(0.52, 22, 18), mat(0xFBBF24, 0.3));
+                m.scale.set(1.32, 0.86, 0.88);
+                m.rotation.z = -0.28;
+                m.position.y = 0.52;
+                g.add(m);
+                addLeafAndStem(0.92);
                 break;
-
-            case 'grapes':
-                ctx.strokeStyle = '#78350F'; ctx.lineWidth = 10;
-                ctx.beginPath(); ctx.moveTo(0, -65); ctx.lineTo(0, -105); ctx.stroke();
-                ctx.fillStyle = '#22C55E';
-                ctx.beginPath(); ctx.ellipse(32, -88, 30, 15, -0.3, 0, Math.PI * 2); ctx.fill();
-                [[-56, -38], [0, -38], [56, -38], [-28, 8], [28, 8], [-54, 10], [54, 10], [-26, 54], [26, 54], [0, 94]].forEach(([gx, gy]) => {
-                    ctx.fillStyle = '#9333EA';
-                    ctx.beginPath(); ctx.arc(gx, gy, 30, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-                    ctx.beginPath(); ctx.arc(gx - 8, gy - 8, 8, 0, Math.PI * 2); ctx.fill();
-                });
+            }
+            case 'pear': {
+                const bot = new THREE.Mesh(new THREE.SphereGeometry(0.48, 20, 18), mat(0xA3E635, 0.35));
+                bot.position.y = 0.46;
+                const top = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 16), mat(0xA3E635, 0.35));
+                top.position.y = 0.88;
+                g.add(bot, top);
+                addLeafAndStem(1.14);
                 break;
-
-            case 'watermelon':
-                ctx.fillStyle = '#15803D';
-                ctx.beginPath(); ctx.arc(0, -25, 122, 0, Math.PI, false); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#BBF7D0';
-                ctx.beginPath(); ctx.arc(0, -25, 106, 0, Math.PI, false); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#EF4444';
-                ctx.beginPath(); ctx.arc(0, -25, 94, 0, Math.PI, false); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#0F172A';
-                [[-45, 5], [0, 12], [45, 5], [-22, 38], [22, 38]].forEach(([sx, sy]) => {
-                    ctx.beginPath(); ctx.ellipse(sx, sy, 5, 9, 0, 0, Math.PI * 2); ctx.fill();
-                });
+            }
+            case 'pineapple': {
+                const body = new THREE.Mesh(new THREE.SphereGeometry(0.48, 18, 16), mat(0xF59E0B, 0.45));
+                body.scale.set(0.95, 1.22, 0.95);
+                body.position.y = 0.56;
+                const crown = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.52, 7), mat(0x16A34A, 0.4));
+                crown.position.y = 1.22;
+                g.add(body, crown);
                 break;
-
-            case 'mango':
-                ctx.save(); ctx.rotate(-0.35);
-                ctx.fillStyle = '#FBBF24';
-                ctx.beginPath(); ctx.ellipse(0, 8, 96, 68, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#D97706'; ctx.lineWidth = 6; ctx.stroke();
-                ctx.restore();
-                ctx.fillStyle = '#16A34A';
-                ctx.beginPath(); ctx.ellipse(42, -74, 34, 15, 0.3, 0, Math.PI * 2); ctx.fill();
+            }
+            case 'kiwi': {
+                const outer = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.34, 24), mat(0x92400E, 0.65));
+                outer.rotation.x = Math.PI / 3;
+                outer.position.y = 0.56;
+                const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.36, 24), mat(0x84CC16, 0.3));
+                inner.rotation.x = Math.PI / 3;
+                inner.position.y = 0.56;
+                const core = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.38, 16), mat(0xFEF9C3, 0.3));
+                core.rotation.x = Math.PI / 3;
+                core.position.y = 0.56;
+                g.add(outer, inner, core);
                 break;
-
-            case 'pineapple':
-                ctx.fillStyle = '#16A34A';
-                [-32, 0, 32].forEach(px => {
-                    ctx.beginPath(); ctx.moveTo(px - 22, -45); ctx.lineTo(px, -112); ctx.lineTo(px + 22, -45); ctx.fill();
-                });
-                ctx.fillStyle = '#F59E0B';
-                ctx.beginPath(); ctx.ellipse(0, 24, 72, 84, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#B45309'; ctx.lineWidth = 5;
-                [-30, 0, 30].forEach(lx => {
-                    ctx.beginPath(); ctx.moveTo(lx - 35, -35); ctx.lineTo(lx + 35, 80); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(lx + 35, -35); ctx.lineTo(lx - 35, 80); ctx.stroke();
-                });
+            }
+            case 'bus': { // 香港雙層巴士
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.05, 0.78), mat(0xD97706, 0.35));
+                hull.position.y = 0.68;
+                const belt = new THREE.Mesh(new THREE.BoxGeometry(1.57, 0.12, 0.8), mat(0xEF4444, 0.3));
+                belt.position.y = 0.68;
+                const winUpper = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.28, 0.81), mat(0xBAE6FD, 0.2));
+                winUpper.position.y = 0.96;
+                const winLower = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.26, 0.81), mat(0xBAE6FD, 0.2));
+                winLower.position.y = 0.44;
+                g.add(hull, belt, winUpper, winLower);
+                addWheels(0.5, 0.38, 0.19);
                 break;
-
-            case 'pear':
-                ctx.fillStyle = '#A3E635';
-                ctx.beginPath(); ctx.arc(0, 38, 72, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(0, -32, 46, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#78350F'; ctx.lineWidth = 10;
-                ctx.beginPath(); ctx.moveTo(0, -76); ctx.lineTo(8, -106); ctx.stroke();
-                ctx.fillStyle = '#16A34A';
-                ctx.beginPath(); ctx.ellipse(30, -90, 26, 13, -0.3, 0, Math.PI * 2); ctx.fill();
+            }
+            case 'taxi': { // 香港紅色的士
+                const base = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.42, 0.78), mat(0xEF4444, 0.3));
+                base.position.y = 0.38;
+                const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.36, 0.7), mat(0xF8FAFC, 0.3));
+                cabin.position.y = 0.75;
+                const glass = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.24, 0.72), mat(0x38BDF8, 0.2));
+                glass.position.y = 0.74;
+                const sign = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.18), mat(0xFEF08A, 0.2));
+                sign.position.y = 0.98;
+                g.add(base, cabin, glass, sign);
+                addWheels(0.46, 0.38, 0.19);
                 break;
-
-            case 'kiwi':
-                ctx.fillStyle = '#92400E';
-                ctx.beginPath(); ctx.arc(0, 8, 94, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#84CC16';
-                ctx.beginPath(); ctx.arc(0, 8, 78, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#ECFCCB';
-                ctx.beginPath(); ctx.arc(0, 8, 32, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#0F172A';
-                for (let a = 0; a < 10; a++) {
-                    const ang = (a / 10) * Math.PI * 2;
-                    ctx.beginPath(); ctx.arc(Math.cos(ang) * 46, 8 + Math.sin(ang) * 46, 4.5, 0, Math.PI * 2); ctx.fill();
-                }
+            }
+            case 'minibus': { // 香港紅頂小巴
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.68, 0.78), mat(0xFEF3C7, 0.35));
+                body.position.y = 0.5;
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(1.44, 0.18, 0.8), mat(0xEF4444, 0.35));
+                roof.position.y = 0.88;
+                const win = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.26, 0.8), mat(0x7DD3FC, 0.2));
+                win.position.y = 0.62;
+                g.add(body, roof, win);
+                addWheels(0.45, 0.38, 0.18);
                 break;
-
-            case 'bus': // 香港雙層巴士
-                ctx.fillStyle = '#D97706';
-                catRoundRect(ctx, -130, -82, 260, 150, 22); ctx.fill();
-                ctx.fillStyle = '#EF4444';
-                ctx.fillRect(-130, -8, 260, 14);
-                ctx.fillStyle = '#E0F2FE';
-                [-95, -35, 25, 80].forEach(wx => {
-                    catRoundRect(ctx, wx, -68, 42, 46, 8); ctx.fill();
-                    catRoundRect(ctx, wx, 14, 42, 40, 8); ctx.fill();
-                });
-                drawWheel(-75, 72, 30); drawWheel(75, 72, 30);
+            }
+            case 'mtr': { // 港鐵列車
+                const track = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.08, 0.9), mat(0x64748B, 0.6));
+                track.position.y = 0.06;
+                const car = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.74, 0.76), mat(0xF1F5F9, 0.3));
+                car.position.y = 0.48;
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.78), mat(0xE11D48, 0.3));
+                stripe.position.y = 0.34;
+                const win = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.26, 0.79), mat(0x38BDF8, 0.2));
+                win.position.y = 0.58;
+                g.add(track, car, stripe, win);
                 break;
-
-            case 'taxi': // 香港紅色的士
-                ctx.fillStyle = '#F8FAFC';
-                catRoundRect(ctx, -34, -84, 68, 24, 8); ctx.fill();
-                ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 4; ctx.stroke();
-                ctx.fillStyle = '#E2E8F0';
-                ctx.beginPath(); ctx.moveTo(-82, -12); ctx.lineTo(-52, -62); ctx.lineTo(52, -62); ctx.lineTo(86, -12); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#EF4444';
-                catRoundRect(ctx, -132, -14, 264, 78, 22); ctx.fill();
-                ctx.fillStyle = '#38BDF8';
-                ctx.fillRect(-46, -52, 40, 34); ctx.fillRect(6, -52, 42, 34);
-                drawWheel(-76, 68, 30); drawWheel(76, 68, 30);
+            }
+            case 'ferry': { // 天星小輪渡輪
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.36, 0.78), mat(0x15803D, 0.4));
+                hull.position.y = 0.26;
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.38, 0.68), mat(0xFFFBEB, 0.4));
+                deck.position.y = 0.62;
+                const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.32, 14), mat(0xD97706, 0.4));
+                funnel.position.y = 0.95;
+                g.add(hull, deck, funnel);
                 break;
-
-            case 'minibus': // 香港小巴
-                ctx.fillStyle = '#FEF3C7';
-                catRoundRect(ctx, -126, -62, 252, 130, 26); ctx.fill();
-                ctx.strokeStyle = '#D97706'; ctx.lineWidth = 5; ctx.stroke();
-                ctx.fillStyle = '#EF4444';
-                catRoundRect(ctx, -124, -62, 248, 28, 18); ctx.fill();
-                ctx.fillStyle = '#BAE6FD';
-                [-95, -35, 25, 78].forEach(wx => { catRoundRect(ctx, wx, -24, 42, 42, 8); ctx.fill(); });
-                drawWheel(-74, 72, 28); drawWheel(74, 72, 28);
+            }
+            case 'tram': { // 電車
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.12, 0.68), mat(0x15803D, 0.4));
+                body.position.y = 0.68;
+                const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.26, 0.7), mat(0xFEF08A, 0.3));
+                win1.position.y = 0.96;
+                const win2 = win1.clone();
+                win2.position.y = 0.46;
+                g.add(body, win1, win2);
+                addWheels(0.32, 0.32, 0.15);
                 break;
-
-            case 'mtr': // 港鐵列車
-                ctx.strokeStyle = '#64748B'; ctx.lineWidth = 10;
-                ctx.beginPath(); ctx.moveTo(-145, 78); ctx.lineTo(145, 78); ctx.stroke();
-                ctx.fillStyle = '#F1F5F9';
-                catRoundRect(ctx, -135, -62, 270, 128, 30); ctx.fill();
-                ctx.strokeStyle = '#334155'; ctx.lineWidth = 6; ctx.stroke();
-                ctx.fillStyle = '#E11D48';
-                ctx.fillRect(-133, 14, 266, 18);
-                ctx.fillStyle = '#38BDF8';
-                [-95, -25, 45].forEach(wx => { catRoundRect(ctx, wx, -42, 50, 44, 10); ctx.fill(); });
+            }
+            case 'firetruck': { // 消防車
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.68, 0.78), mat(0xDC2626, 0.3));
+                body.position.y = 0.52;
+                const ladder = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.1, 0.32), mat(0xE2E8F0, 0.3));
+                ladder.position.set(-0.1, 0.92, 0);
+                const siren = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.14, 12), mat(0x38BDF8, 0.2));
+                siren.position.set(0.52, 0.93, 0);
+                g.add(body, ladder, siren);
+                addWheels(0.46, 0.38, 0.19);
                 break;
-
-            case 'ferry': // 天星小輪渡輪
-                ctx.fillStyle = '#FFFBEB';
-                catRoundRect(ctx, -88, -68, 176, 62, 12); ctx.fill();
-                ctx.fillStyle = '#D97706';
-                ctx.fillRect(-16, -98, 32, 30);
-                ctx.fillStyle = '#15803D';
-                ctx.beginPath(); ctx.moveTo(-132, -8); ctx.lineTo(132, -8); ctx.lineTo(102, 58); ctx.lineTo(-102, 58); ctx.closePath(); ctx.fill();
-                ctx.strokeStyle = '#0284C7'; ctx.lineWidth = 12;
-                ctx.beginPath(); ctx.moveTo(-140, 72); ctx.quadraticCurveTo(-70, 52, 0, 72); ctx.quadraticCurveTo(70, 92, 140, 72); ctx.stroke();
+            }
+            case 'ambulance': { // 救護車
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.46, 0.72, 0.78), mat(0xFFFFFF, 0.3));
+                body.position.y = 0.54;
+                const band = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.12, 0.8), mat(0xEF4444, 0.3));
+                band.position.y = 0.38;
+                const siren = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.32), mat(0x38BDF8, 0.2));
+                siren.position.set(0.45, 0.96, 0);
+                g.add(body, band, siren);
+                addWheels(0.45, 0.38, 0.19);
                 break;
-
-            case 'tram': // 香港雙層電車
-                ctx.strokeStyle = '#475569'; ctx.lineWidth = 7;
-                ctx.beginPath(); ctx.moveTo(0, -88); ctx.lineTo(24, -114); ctx.lineTo(-24, -114); ctx.closePath(); ctx.stroke();
-                ctx.fillStyle = '#15803D';
-                catRoundRect(ctx, -78, -88, 156, 160, 16); ctx.fill();
-                ctx.fillStyle = '#FEF08A';
-                [-56, -12, 32].forEach(wx => {
-                    ctx.fillRect(wx, -72, 30, 42);
-                    ctx.fillRect(wx, 6, 30, 38);
-                });
-                drawWheel(-42, 76, 22); drawWheel(42, 76, 22);
+            }
+            case 'bicycle': { // 單車
+                const w1 = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.06, 12, 24), mat(0x1E293B));
+                w1.position.set(-0.46, 0.38, 0);
+                const w2 = w1.clone();
+                w2.position.set(0.46, 0.38, 0);
+                const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 10), mat(0x0284C7));
+                bar.rotation.z = Math.PI / 2;
+                bar.position.set(0, 0.56, 0);
+                const seat = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.2), mat(0xEA580C));
+                seat.position.set(-0.26, 0.74, 0);
+                g.add(w1, w2, bar, seat);
                 break;
-
-            case 'firetruck': // 消防車
-                ctx.fillStyle = '#E2E8F0';
-                ctx.fillRect(-115, -82, 180, 18);
-                ctx.fillStyle = '#38BDF8';
-                catRoundRect(ctx, 72, -82, 28, 22, 8); ctx.fill();
-                ctx.fillStyle = '#DC2626';
-                catRoundRect(ctx, -130, -60, 260, 126, 20); ctx.fill();
-                ctx.fillStyle = '#BAE6FD';
-                catRoundRect(ctx, 52, -44, 64, 48, 10); ctx.fill();
-                ctx.fillStyle = '#FACC15';
-                ctx.fillRect(-130, 16, 260, 14);
-                drawWheel(-76, 70, 30); drawWheel(76, 70, 30);
+            }
+            case 'airplane': { // 飛機
+                const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.2, 1.55, 18), mat(0xF8FAFC, 0.3));
+                fuselage.rotation.z = Math.PI / 2;
+                fuselage.position.y = 0.62;
+                const wing = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 1.55), mat(0x0284C7, 0.3));
+                wing.position.y = 0.6;
+                const tail = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.42, 4), mat(0x0284C7, 0.3));
+                tail.position.set(-0.62, 0.88, 0);
+                g.add(fuselage, wing, tail);
                 break;
-
-            case 'ambulance': // 救護車
-                ctx.fillStyle = '#38BDF8';
-                catRoundRect(ctx, 56, -80, 30, 20, 8); ctx.fill();
-                ctx.fillStyle = '#FFFFFF';
-                catRoundRect(ctx, -128, -60, 256, 126, 22); ctx.fill();
-                ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 6; ctx.stroke();
-                ctx.fillStyle = '#EF4444';
-                ctx.fillRect(-62, -26, 52, 16); ctx.fillRect(-44, -44, 16, 52);
-                ctx.fillRect(-126, 26, 252, 14);
-                ctx.fillStyle = '#BAE6FD';
-                catRoundRect(ctx, 48, -42, 66, 46, 10); ctx.fill();
-                drawWheel(-74, 70, 29); drawWheel(74, 70, 29);
-                break;
-
-            case 'bicycle': // 單車
-                ctx.strokeStyle = '#0F172A'; ctx.lineWidth = 12;
-                ctx.beginPath(); ctx.arc(-78, 42, 46, 0, Math.PI * 2); ctx.stroke();
-                ctx.beginPath(); ctx.arc(78, 42, 46, 0, Math.PI * 2); ctx.stroke();
-                ctx.strokeStyle = '#0284C7'; ctx.lineWidth = 12;
-                ctx.beginPath();
-                ctx.moveTo(-78, 42); ctx.lineTo(-10, -24); ctx.lineTo(64, -24); ctx.lineTo(78, 42);
-                ctx.moveTo(-78, 42); ctx.lineTo(12, 42); ctx.lineTo(-10, -24);
-                ctx.stroke();
-                ctx.strokeStyle = '#334155'; ctx.lineWidth = 10;
-                ctx.beginPath(); ctx.moveTo(64, -24); ctx.lineTo(50, -64); ctx.lineTo(78, -68); ctx.stroke();
-                ctx.fillStyle = '#EA580C';
-                catRoundRect(ctx, -34, -42, 44, 16, 8); ctx.fill();
-                break;
-
-            case 'airplane': // 飛機
-                ctx.fillStyle = '#0284C7';
-                ctx.beginPath(); ctx.moveTo(-120, -10); ctx.lineTo(-142, -74); ctx.lineTo(-88, -10); ctx.closePath(); ctx.fill();
-                ctx.beginPath(); ctx.moveTo(-25, 10); ctx.lineTo(-55, 86); ctx.lineTo(35, 10); ctx.closePath(); ctx.fill();
-                ctx.beginPath(); ctx.moveTo(-20, -18); ctx.lineTo(-48, -82); ctx.lineTo(28, -18); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#F8FAFC';
-                ctx.beginPath(); ctx.ellipse(8, 0, 135, 38, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#0284C7'; ctx.lineWidth = 6; ctx.stroke();
-                ctx.fillStyle = '#38BDF8';
-                [-60, -25, 10, 45, 80].forEach(wx => {
-                    ctx.beginPath(); ctx.arc(wx, -4, 9, 0, Math.PI * 2); ctx.fill();
-                });
-                break;
+            }
         }
-        ctx.restore();
+        return g;
     }
 
-    function createOptionCardTexture(itemObj, isSolved = false) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 560;
-        const ctx = canvas.getContext('2d');
-
-        // 統一柔和暖白底色，避免幼兒靠邊框顏色估答案
-        ctx.fillStyle = isSolved ? '#DCFCE7' : '#FFFDF7';
-        catRoundRect(ctx, 12, 12, 488, 536, 56);
-        ctx.fill();
-
-        ctx.lineWidth = 16;
-        ctx.strokeStyle = isSolved ? '#22C55E' : '#F59E0B';
-        catRoundRect(ctx, 18, 18, 476, 524, 50);
-        ctx.stroke();
-
-        // 上方柔和淺景圓底
-        ctx.fillStyle = isSolved ? '#BBF7D0' : '#FEF3C7';
-        ctx.beginPath();
-        ctx.arc(256, 200, 148, 0, Math.PI * 2);
-        ctx.fill();
-
-        drawCategoryIllustration(ctx, itemObj.id);
-
-        // 下方香港繁體中文名稱
-        ctx.fillStyle = '#0F172A';
-        ctx.font = '900 76px "Noto Sans TC", "PingFang HK", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(itemObj.name, 256, 448);
-
-        if (isSolved) {
-            ctx.fillStyle = '#16A34A';
-            ctx.beginPath(); ctx.arc(432, 82, 46, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '900 58px sans-serif';
-            ctx.fillText('✓', 432, 86);
-        }
-
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.needsUpdate = true;
-        return tex;
-    }
-
-    // ==================== 4. 建立 3D 分類舞台、3D 水果果籃與交通工具車站 ====================
-    function ensure3DCategoryStageBuilt() {
-        if (catSortState.built) return;
-        catSortState.built = true;
+    // ==================== 3. 建立左右雙分類區（左：水果果籃 ｜ 右：交通工具停車場） ====================
+    function ensureStageBuilt() {
+        if (sortState.built) return;
+        sortState.built = true;
         categorySortGroup.clear();
         categorySortGroup.visible = false;
         if (scene) scene.add(categorySortGroup);
 
-        // 1. 清爽無干擾陽光草地舞台
-        const sandBase = new THREE.Mesh(
-            new THREE.BoxGeometry(18.6, 0.3, 11.4),
-            new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 })
-        );
-        sandBase.position.set(0, 0.1, 0.4);
-        categorySortGroup.add(sandBase);
+        // 草地大舞台底座
+        const sand = new THREE.Mesh(new THREE.BoxGeometry(19.2, 0.3, 11.8), new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.8 }));
+        sand.position.set(0, 0.1, 0.4);
+        categorySortGroup.add(sand);
 
-        const meadow = new THREE.Mesh(
-            new THREE.BoxGeometry(17.8, 0.36, 10.6),
-            new THREE.MeshStandardMaterial({ color: 0x86EFAC, roughness: 0.72 })
-        );
-        meadow.position.set(0, 0.18, 0.4);
-        meadow.receiveShadow = true;
-        categorySortGroup.add(meadow);
+        const grass = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.36, 11.0), new THREE.MeshStandardMaterial({ color: 0x86EFAC, roughness: 0.72 }));
+        grass.position.set(0, 0.18, 0.4);
+        grass.receiveShadow = true;
+        categorySortGroup.add(grass);
 
-        // 南岸 4 個選項擺放軟墊區
-        const cardDockStrip = new THREE.Mesh(
-            new THREE.BoxGeometry(13.8, 0.05, 2.8),
-            new THREE.MeshStandardMaterial({ color: 0xFEF9C3, roughness: 0.65 })
-        );
-        cardDockStrip.position.set(0, 0.37, 2.55);
-        categorySortGroup.add(cardDockStrip);
+        // 下方待分類物件木托盤長檯
+        const tray = new THREE.Mesh(new THREE.BoxGeometry(14.6, 0.12, 2.9), new THREE.MeshStandardMaterial({ color: 0xFEF3C7, roughness: 0.6 }));
+        tray.position.set(0, 0.4, 2.85);
+        categorySortGroup.add(tray);
 
-        // 2. 馬利奧啦啦隊隊長（企喺舞台後方拍手鼓勵）
+        // 拖曳時地面落點光圈
+        const shadowRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.55, 0.85, 28),
+            new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+        );
+        shadowRing.rotation.x = -Math.PI / 2;
+        shadowRing.position.y = 0.48;
+        shadowRing.visible = false;
+        sortState.dragShadowRing = shadowRing;
+        categorySortGroup.add(shadowRing);
+
+        // 馬利奧小裁判（企喺中間後方拍手鼓勵）
         if (typeof marioHero !== 'undefined' && marioHero.group) {
             const hero = marioHero.group.clone();
-            hero.scale.setScalar(0.88);
-            hero.position.set(0, 0.36, -3.55);
-            catSortState.heroMesh = hero;
+            hero.scale.setScalar(0.86);
+            hero.position.set(0, 0.36, -2.55);
+            sortState.heroMesh = hero;
             categorySortGroup.add(hero);
         }
 
-        catSortState.stageItemsGroup = new THREE.Group();
-        categorySortGroup.add(catSortState.stageItemsGroup);
+        sortState.dynamicGroup = new THREE.Group();
+        categorySortGroup.add(sortState.dynamicGroup);
     }
 
-    function create3DCategoryZone(categoryType, x, z) {
-        const isFruit = (categoryType === 'fruit');
-        const group = new THREE.Group();
-        group.position.set(x, 0.36, z);
+    function createTargetZones() {
+        sortState.zones = {};
 
-        // 底部柔和磁吸/提示光環
-        const glowRingMat = new THREE.MeshBasicMaterial({
-            color: isFruit ? 0xFB7185 : 0x38BDF8,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.55
-        });
-        const glowRing = new THREE.Mesh(new THREE.RingGeometry(1.75, 2.15, 36), glowRingMat);
-        glowRing.rotation.x = -Math.PI / 2;
-        glowRing.position.y = 0.04;
-        group.add(glowRing);
+        const makeZone = (catKey, centerX, centerZ) => {
+            const isFruit = (catKey === 'fruit');
+            const root = new THREE.Group();
+            root.position.set(centerX, 0.36, centerZ);
 
-        if (isFruit) {
-            // 🧺 3D 立體藤編野餐水果籃
-            const basketBody = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.58, 1.18, 0.86, 28),
-                new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.6 })
-            );
-            basketBody.position.y = 0.44;
-            group.add(basketBody);
+            // 感應外光環
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: isFruit ? 0xFB7185 : 0x38BDF8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.55
+            });
+            const ring = new THREE.Mesh(new THREE.RingGeometry(2.35, 2.75, 40), ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.04;
+            root.add(ring);
 
-            const innerCloth = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.44, 1.1, 0.2, 26),
-                new THREE.MeshStandardMaterial({ color: 0xFFE4E6, roughness: 0.5 })
-            );
-            innerCloth.position.y = 0.82;
-            group.add(innerCloth);
+            if (isFruit) {
+                // 左區：🧺 3D 大型野餐水果果籃（內設 2 個擺放格位）
+                const matCloth = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.08, 2.8), new THREE.MeshStandardMaterial({ color: 0xFDA4AF, roughness: 0.6 }));
+                matCloth.position.y = 0.05;
+                const basketWall = new THREE.Mesh(new THREE.CylinderGeometry(2.15, 1.85, 0.65, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0xD97706, roughness: 0.6, side: THREE.DoubleSide }));
+                basketWall.position.y = 0.36;
+                basketWall.scale.set(1.05, 1, 0.72);
+                const basketFloor = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.14, 32), new THREE.MeshStandardMaterial({ color: 0xFFF1F2, roughness: 0.5 }));
+                basketFloor.position.y = 0.12;
+                basketFloor.scale.set(1.05, 1, 0.72);
+                const archHandle = new THREE.Mesh(new THREE.TorusGeometry(1.95, 0.1, 12, 32, Math.PI), new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.5 }));
+                archHandle.position.set(0, 0.65, -0.2);
+                root.add(matCloth, basketWall, basketFloor, archHandle);
+            } else {
+                // 右區：🚏 3D 香港交通工具停車場（內設 2 個泊車格位 + 巴士站牌）
+                const asphalt = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.18, 2.85), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.65 }));
+                asphalt.position.y = 0.09;
+                const curb = new THREE.Mesh(new THREE.BoxGeometry(4.56, 0.12, 3.0), new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.4 }));
+                curb.position.y = 0.04;
+                root.add(curb, asphalt);
 
-            const rim = new THREE.Mesh(
-                new THREE.TorusGeometry(1.56, 0.13, 12, 32),
-                new THREE.MeshStandardMaterial({ color: 0xB45309, roughness: 0.5 })
-            );
-            rim.rotation.x = Math.PI / 2;
-            rim.position.y = 0.86;
-            group.add(rim);
+                // 白色泊車分隔線
+                [-1.95, 0, 1.95].forEach(lx => {
+                    const line = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 2.1), new THREE.MeshBasicMaterial({ color: 0xF8FAFC }));
+                    line.position.set(lx, 0.19, 0.05);
+                    root.add(line);
+                });
 
-            const handle = new THREE.Mesh(
-                new THREE.TorusGeometry(1.48, 0.09, 12, 28, Math.PI),
-                new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.5 })
-            );
-            handle.position.set(0, 0.86, -0.15);
-            group.add(handle);
-        } else {
-            // 🚏 3D 立體香港交通工具車站台
-            const stationPad = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.62, 1.72, 0.34, 32),
-                new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.55 })
-            );
-            stationPad.position.y = 0.17;
-            group.add(stationPad);
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.8, 12), new THREE.MeshStandardMaterial({ color: 0xE2E8F0 }));
+                pole.position.set(2.05, 0.98, -1.1);
+                const stopHead = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.1, 20), new THREE.MeshStandardMaterial({ color: 0xEF4444 }));
+                stopHead.rotation.x = Math.PI / 2;
+                stopHead.position.set(2.05, 1.92, -1.1);
+                root.add(pole, stopHead);
+            }
 
-            const yellowCurb = new THREE.Mesh(
-                new THREE.TorusGeometry(1.64, 0.11, 12, 32),
-                new THREE.MeshStandardMaterial({ color: 0xFACC15, roughness: 0.35 })
-            );
-            yellowCurb.rotation.x = Math.PI / 2;
-            yellowCurb.position.y = 0.33;
-            group.add(yellowCurb);
-
-            [-0.75, -0.25, 0.25, 0.75].forEach(sx => {
-                const stripe = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.26, 0.04, 1.5),
-                    new THREE.MeshBasicMaterial({ color: 0xF8FAFC })
+            // 區內 2 個虛線擺放圓墊（清楚提示小朋友物件放喺邊）
+            [-1.02, 1.02].forEach(sx => {
+                const slotRing = new THREE.Mesh(
+                    new THREE.RingGeometry(0.62, 0.76, 24),
+                    new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide, transparent: true, opacity: 0.7 })
                 );
-                stripe.position.set(sx, 0.36, 0);
-                group.add(stripe);
+                slotRing.rotation.x = -Math.PI / 2;
+                slotRing.position.set(sx, 0.22, 0.1);
+                root.add(slotRing);
             });
 
-            // 巴士站牌柱
-            const pole = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.08, 0.08, 1.7, 12),
-                new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.4 })
+            // 巨型清晰類別標題牌
+            const banner = makeLabelMesh(
+                isFruit ? '🧺 水果' : '🚏 交通工具',
+                isFruit ? '#E11D48' : '#0284C7',
+                '#FFFFFF',
+                3.4, 0.98, 64
             );
-            pole.position.set(1.45, 0.95, -0.45);
-            const stopDisc = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.36, 0.36, 0.1, 20),
-                new THREE.MeshStandardMaterial({ color: 0xEF4444, roughness: 0.35 })
+            banner.position.set(0, 2.38, -0.85);
+            banner.rotation.x = -0.18;
+            root.add(banner);
+
+            // 答錯提示時彈出嘅金色向下引導大箭咀
+            const hintArrow = new THREE.Mesh(
+                new THREE.ConeGeometry(0.45, 0.85, 16),
+                new THREE.MeshBasicMaterial({ color: 0xFACC15 })
             );
-            stopDisc.rotation.x = Math.PI / 2;
-            stopDisc.position.set(1.45, 1.85, -0.45);
-            group.add(pole, stopDisc);
-        }
+            hintArrow.rotation.x = Math.PI;
+            hintArrow.position.set(0, 3.35, 0);
+            hintArrow.visible = false;
+            root.add(hintArrow);
 
-        // 清晰上方分類標示牌
-        const signCanvas = document.createElement('canvas');
-        signCanvas.width = 512; signCanvas.height = 148;
-        const sctx = signCanvas.getContext('2d');
-        sctx.fillStyle = isFruit ? '#E11D48' : '#0284C7';
-        catRoundRect(sctx, 8, 8, 496, 132, 42); sctx.fill();
-        sctx.fillStyle = '#FFFFFF';
-        catRoundRect(sctx, 18, 18, 476, 112, 34); sctx.fill();
-        sctx.fillStyle = isFruit ? '#BE123C' : '#0369A1';
-        sctx.font = '900 62px "Noto Sans TC", sans-serif';
-        sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
-        sctx.fillText(isFruit ? '🧺 水果' : '🚏 交通工具', 256, 76);
+            // 隱形點擊感應區
+            const hitBox = new THREE.Mesh(
+                new THREE.BoxGeometry(4.8, 2.8, 3.4),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            hitBox.position.y = 1.2;
+            root.add(hitBox);
 
-        const signMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(3.15, 0.92, 0.12),
-            new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(signCanvas) })
-        );
-        signMesh.position.set(0, 2.32, -0.65);
-        group.add(signMesh);
+            sortState.dynamicGroup.add(root);
 
-        // 大範圍隱形點擊盒（支援輕觸輔助放入）
-        const hitBox = new THREE.Mesh(
-            new THREE.CylinderGeometry(2.1, 2.1, 2.6, 18),
-            new THREE.MeshBasicMaterial({ visible: false })
-        );
-        hitBox.position.y = 1.1;
-        group.add(hitBox);
-
-        catSortState.stageItemsGroup.add(group);
-
-        const zoneObj = {
-            category: categoryType,
-            x, z,
-            group,
-            glowRing,
-            glowRingMat,
-            hitBox,
-            hintTimer: 0,
-            placedCount: 0
+            const zObj = {
+                cat: catKey,
+                x: centerX,
+                z: centerZ,
+                slots: [
+                    { x: centerX - 1.02, z: centerZ + 0.12, taken: false },
+                    { x: centerX + 1.02, z: centerZ + 0.12, taken: false }
+                ],
+                root,
+                ringMat,
+                hintArrow,
+                hitBox,
+                hintTimer: 0
+            };
+            hitBox.userData = { isSortZone: true, zoneObj: zObj };
+            banner.userData = { isSortZone: true, zoneObj: zObj };
+            sortState.zones[catKey] = zObj;
         };
-        hitBox.userData = { isCategoryZone: true, zoneObj };
-        signMesh.userData = { isCategoryZone: true, zoneObj };
-        return zoneObj;
+
+        makeZone('fruit', -3.35, -1.15);
+        makeZone('vehicle', 3.35, -1.15);
     }
 
-    function create3DCategoryOptionCard(itemKey, homeX, homeZ, slotIdx) {
-        const itemObj = CATEGORY_ITEMS[itemKey];
-        const group = new THREE.Group();
-        group.position.set(homeX, 1.48, homeZ);
+    function createDraggable3DItem(itemKey, homeX, homeZ, idx) {
+        const info = CAT_DB[itemKey];
+        const wrap = new THREE.Group();
+        wrap.position.set(homeX, 0.48, homeZ);
 
-        // 底座淺色圓墊（固定於地面）
-        const pad = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.95, 1.02, 0.12, 24),
-            new THREE.MeshStandardMaterial({ color: 0xFDE68A, roughness: 0.5 })
+        // 托盤固定底墊
+        const homePad = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.05, 1.12, 0.1, 24),
+            new THREE.MeshStandardMaterial({ color: 0xFDE047, roughness: 0.5 })
         );
-        pad.position.set(homeX, 0.41, homeZ);
-        catSortState.stageItemsGroup.add(pad);
+        homePad.position.set(homeX, 0.47, homeZ);
+        sortState.dynamicGroup.add(homePad);
 
-        // 溫和提示用嘅金色柔和光圈（答錯需要線索時先慢慢亮起）
-        const hintHaloMat = new THREE.MeshBasicMaterial({
-            color: 0xFACC15,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0
-        });
-        const hintHalo = new THREE.Mesh(new THREE.RingGeometry(1.08, 1.38, 32), hintHaloMat);
-        hintHalo.rotation.x = -Math.PI / 2;
-        hintHalo.position.set(0, -1.02, 0);
-        group.add(hintHalo);
-
-        const frontTex = createOptionCardTexture(itemObj, false);
-        const sideMat = new THREE.MeshStandardMaterial({ color: 0xFBBF24, roughness: 0.38 });
-        const frontMat = new THREE.MeshBasicMaterial({ map: frontTex });
-
-        const cardMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(2.08, 2.28, 0.36),
-            [sideMat, sideMat, sideMat, sideMat, frontMat, sideMat]
+        // 物件圓形木底座
+        const disc = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.92, 0.98, 0.16, 26),
+            new THREE.MeshStandardMaterial({ color: 0xFFFBEB, roughness: 0.4 })
         );
-        cardMesh.rotation.x = -0.18;
-        cardMesh.castShadow = true;
-        group.add(cardMesh);
+        disc.position.y = 0.08;
+        wrap.add(disc);
 
-        // 放大點擊感應框方便 K2 小朋友手指按住拖曳
+        // 3D 立體水果／交通工具模型
+        const model = build3DItemModel(itemKey);
+        model.position.y = 0.14;
+        wrap.add(model);
+
+        // 前方香港繁體中文名牌
+        const nameTag = makeLabelMesh(info.name, '#1E293B', '#FFFFFF', 2.05, 0.62, 62);
+        nameTag.position.set(0, 0.28, 1.05);
+        nameTag.rotation.x = -0.52;
+        wrap.add(nameTag);
+
+        // 答啱後顯示嘅綠色剔號牌
+        const okBadge = makeLabelMesh(`✓ ${info.name}`, '#16A34A', '#FFFFFF', 1.85, 0.56, 56);
+        okBadge.position.set(0, 1.48, 0);
+        okBadge.rotation.x = -0.25;
+        okBadge.visible = false;
+        wrap.add(okBadge);
+
+        // 大範圍觸控感應框（方便幼兒手指直接按住拖動）
         const hitMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(2.45, 2.65, 0.9),
+            new THREE.CylinderGeometry(1.28, 1.28, 2.2, 18),
             new THREE.MeshBasicMaterial({ visible: false })
         );
-        group.add(hitMesh);
+        hitMesh.position.y = 0.9;
+        wrap.add(hitMesh);
 
-        catSortState.stageItemsGroup.add(group);
+        sortState.dynamicGroup.add(wrap);
 
-        const cardObj = {
-            slotIdx,
-            itemKey,
-            itemObj,
+        const itemObj = {
+            idx,
+            key: itemKey,
+            info,
             homeX,
-            homeY: 1.48,
+            homeY: 0.48,
             homeZ,
             targetX: homeX,
-            targetY: 1.48,
+            targetY: 0.48,
             targetZ: homeZ,
             targetScale: 1.0,
-            solved: false,
-            hintGlow: false,
+            sorted: false,
             wobbleTimer: 0,
-            group,
-            cardMesh,
-            frontMat,
-            hintHaloMat,
+            wrap,
+            model,
+            nameTag,
+            okBadge,
             hitMesh
         };
-        hitMesh.userData = { isCategoryCard: true, cardObj };
-        cardMesh.userData = { isCategoryCard: true, cardObj };
-        return cardObj;
+        hitMesh.userData = { isSortItem: true, itemObj };
+        return itemObj;
     }
 
-    // ==================== 5. 介面（進度欄、「下一題」按鈕與 10 題完成總結畫面） ====================
-    function ensureCategoryOverlayUI() {
-        // 正向回饋 +「下一題」按鈕浮動列（擺喺右下角，唔遮擋中間舞台）
-        let nextBar = document.getElementById('cat-next-bar');
+    // ==================== 4. 進度欄、「下一題」與完成總結 UI ====================
+    function ensureCategoryHUD() {
+        let nextBar = document.getElementById('cat-sort-next-bar');
         if (!nextBar) {
             nextBar = document.createElement('div');
-            nextBar.id = 'cat-next-bar';
+            nextBar.id = 'cat-sort-next-bar';
             nextBar.className = 'fixed right-3 sm:right-6 bottom-3 sm:bottom-5 z-40 pointer-events-auto hidden items-center gap-3 bg-emerald-500 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-3xl border-4 border-white shadow-2xl';
             nextBar.innerHTML = `
-                <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-full bg-white text-emerald-600 font-black text-xl flex items-center justify-center shadow">✓</span>
-                    <span id="cat-next-msg" class="font-black text-sm sm:text-lg">好叻呀！答啱喇！</span>
-                </div>
-                <button id="cat-next-btn" type="button" class="btn-toy bg-amber-300 hover:bg-amber-200 text-slate-950 font-black px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl border-2 border-amber-500 shadow-md text-sm sm:text-lg whitespace-nowrap">
+                <span class="w-8 h-8 rounded-full bg-white text-emerald-600 font-black text-xl flex items-center justify-center shadow">✓</span>
+                <span id="cat-sort-next-msg" class="font-black text-sm sm:text-lg">好叻呀！全部分啱晒！</span>
+                <button id="cat-sort-next-btn" type="button" class="btn-toy bg-amber-300 hover:bg-amber-200 text-slate-950 font-black px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl border-2 border-amber-500 shadow-md text-sm sm:text-lg whitespace-nowrap">
                     下一題 ➔
                 </button>
             `;
             document.body.appendChild(nextBar);
-            document.getElementById('cat-next-btn').onclick = () => advanceCategoryQuestion();
+            document.getElementById('cat-sort-next-btn').onclick = () => window.nextCategorySortQuestion();
         }
 
-        // 完成 10 題後嘅簡單鼓勵總結視窗
-        let sumModal = document.getElementById('cat-summary-modal');
-        if (!sumModal) {
-            sumModal = document.createElement('div');
-            sumModal.id = 'cat-summary-modal';
-            sumModal.className = 'fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-sm hidden items-center justify-center p-4';
-            sumModal.innerHTML = `
+        let modal = document.getElementById('cat-sort-summary-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'cat-sort-summary-modal';
+            modal.className = 'fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-sm hidden items-center justify-center p-4';
+            modal.innerHTML = `
                 <div class="bg-white rounded-3xl border-4 border-amber-400 shadow-2xl max-w-md w-full p-6 text-center space-y-4">
-                    <div class="text-5xl sm:text-6xl">🏆🎉</div>
-                    <h2 class="text-2xl sm:text-3xl font-black text-slate-800">好叻呀！全部完成！</h2>
+                    <div class="text-5xl sm:text-6xl">🧺🏆🚌</div>
+                    <h2 class="text-2xl sm:text-3xl font-black text-slate-800">好叻呀！分類大成功！</h2>
                     <p class="text-base sm:text-lg font-bold text-slate-600 leading-relaxed">
-                        你已經完成晒 <span class="text-emerald-600 font-black">10 題</span> 分類挑戰，識得分清楚邊啲係「🧺 水果」、邊啲係「🚏 交通工具」喇！
+                        你已經完成晒 <span class="text-emerald-600 font-black">10 題</span> 挑戰，成功將「水果」同「交通工具」放晒去正確位置喇！
                     </p>
-                    <div id="cat-summary-stats" class="bg-amber-50 border-2 border-amber-200 rounded-2xl px-4 py-3 text-sm font-black text-amber-900"></div>
+                    <div id="cat-sort-stats" class="bg-amber-50 border-2 border-amber-200 rounded-2xl px-4 py-3 text-sm font-black text-amber-900"></div>
                     <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                        <button type="button" id="cat-replay-btn" class="flex-1 btn-toy bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black py-3.5 px-5 rounded-2xl border-2 border-emerald-600 shadow-lg text-lg">
+                        <button type="button" id="cat-sort-replay-btn" class="flex-1 btn-toy bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black py-3.5 px-5 rounded-2xl border-2 border-emerald-600 shadow-lg text-lg">
                             🔄 再玩一次
                         </button>
-                        <button type="button" id="cat-lobby-btn" class="btn-toy bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3.5 px-4 rounded-2xl border-2 border-slate-300 text-base">
+                        <button type="button" id="cat-sort-home-btn" class="btn-toy bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3.5 px-4 rounded-2xl border-2 border-slate-300 text-base">
                             🏠 返回大廳
                         </button>
                     </div>
                 </div>
             `;
-            document.body.appendChild(sumModal);
-            document.getElementById('cat-replay-btn').onclick = () => restartCategoryQuiz();
-            document.getElementById('cat-lobby-btn').onclick = () => {
-                hideCategoryOverlays();
+            document.body.appendChild(modal);
+            document.getElementById('cat-sort-replay-btn').onclick = () => window.restartCategorySortQuiz();
+            document.getElementById('cat-sort-home-btn').onclick = () => {
+                hideSortModals();
                 openLobby('subject');
             };
         }
     }
 
-    function hideCategoryOverlays() {
-        const nb = document.getElementById('cat-next-bar');
-        if (nb) { nb.classList.add('hidden'); nb.classList.remove('flex'); }
-        const sm = document.getElementById('cat-summary-modal');
-        if (sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
+    function hideSortModals() {
+        ['cat-sort-next-bar', 'cat-sort-summary-modal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.classList.add('hidden'); el.classList.remove('flex'); }
+        });
     }
 
-    window.selectCategorySubMode = function (sub) {
+    window.setCategorySortDifficulty = function (diff) {
         if (typeof playPopSound === 'function') playPopSound(560);
-        catSortState.subMode = sub;
-        restartCategoryQuiz();
+        sortState.difficulty = diff;
+        window.restartCategorySortQuiz();
     };
 
-    function renderCategoryTopProgressUI() {
+    function renderSortTopBar() {
         const tierBar = document.getElementById('maze-tier-bar');
         if (!tierBar) return;
-        const curQ = Math.min(10, catSortState.qIndex + 1);
-        const isSingle = (catSortState.subMode === 'single');
-
-        let dotsHtml = '';
-        for (let i = 0; i < 10; i++) {
-            const cls = (i < catSortState.qIndex || (i === catSortState.qIndex && catSortState.questionSolved))
-                ? 'bg-emerald-500 text-white'
-                : (i === catSortState.qIndex ? 'bg-amber-400 text-slate-950 ring-2 ring-orange-500 scale-110' : 'bg-slate-200 text-slate-400');
-            dotsHtml += `<span class="w-5 h-5 rounded-full text-[11px] font-black inline-flex items-center justify-center transition-all ${cls}">${i + 1}</span>`;
-        }
+        const qNum = Math.min(10, sortState.qIndex + 1);
+        const isAll4 = (sortState.difficulty === 'all4');
+        const sortedNow = sortState.items.filter(i => i.sorted).length;
+        const needCount = isAll4 ? 4 : 1;
 
         tierBar.innerHTML = `
             <div class="pointer-events-auto flex flex-wrap items-center justify-center gap-2 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border-2 border-emerald-400 shadow-lg">
                 <span class="bg-emerald-600 text-white font-black text-xs sm:text-sm px-3 py-1 rounded-xl shadow-sm">
-                    📋 第 ${curQ} / 10 題
+                    📋 第 ${qNum} / 10 題
                 </span>
-                <div class="hidden md:flex items-center gap-1">${dotsHtml}</div>
-                <span class="text-slate-300 font-black">|</span>
-                <button type="button" onclick="selectCategorySubMode('single')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs border ${isSingle ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm' : 'bg-slate-100 text-slate-600 border-slate-200'}">
-                    🎯 四選一拖放
+                <span class="bg-amber-100 text-amber-900 font-black text-xs sm:text-sm px-2.5 py-1 rounded-xl border border-amber-300">
+                    本題已分類：${Math.min(needCount, sortedNow)} / ${needCount}
+                </span>
+                <button type="button" onclick="setCategorySortDifficulty('all4')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs border ${isAll4 ? 'bg-amber-400 text-slate-950 border-amber-500' : 'bg-slate-100 text-slate-600 border-slate-200'}">
+                    🧺🚏 4件全分類
                 </button>
-                <button type="button" onclick="selectCategorySubMode('dual')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs border ${!isSingle ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm' : 'bg-slate-100 text-slate-600 border-slate-200'}">
-                    🧺🚏 雙籃四卡分類
+                <button type="button" onclick="setCategorySortDifficulty('one')" class="btn-toy-sm px-2.5 py-1 rounded-xl font-black text-xs border ${!isAll4 ? 'bg-amber-400 text-slate-950 border-amber-500' : 'bg-slate-100 text-slate-600 border-slate-200'}">
+                    🌱 單件指定分類
                 </button>
             </div>
         `;
     }
 
-    // ==================== 6. 載入單題、答對正向回饋與答錯溫和提示 ====================
-    function loadCategoryQuestion(qIdx) {
-        ensure3DCategoryStageBuilt();
-        ensureCategoryOverlayUI();
-        hideCategoryOverlays();
+    // ==================== 5. 題目載入與拖放判定邏輯 ====================
+    function setupSortQuestion(qIdx) {
+        ensureStageBuilt();
+        ensureCategoryHUD();
+        hideSortModals();
 
-        catSortState.qIndex = qIdx;
-        catSortState.hadRetryThisQ = false;
-        catSortState.questionSolved = false;
-        catSortState.sessionFinished = false;
-        catSortState.draggingCard = null;
-        catSortState.selectedCard = null;
-        catSortState.hoveredZone = null;
-        catSortState.zones = [];
-        catSortState.optionCards = [];
-        catSortState.stageItemsGroup.clear();
+        sortState.qIndex = qIdx;
+        sortState.hadHintThisQ = false;
+        sortState.roundDone = false;
+        sortState.quizFinished = false;
+        sortState.draggingItem = null;
+        sortState.selectedItem = null;
+        sortState.hoveredZone = null;
+        sortState.items = [];
+        sortState.dynamicGroup.clear();
+        if (sortState.dragShadowRing) sortState.dragShadowRing.visible = false;
 
-        const qData = CATEGORY_QUESTION_BANK[qIdx % CATEGORY_QUESTION_BANK.length];
-        renderCategoryTopProgressUI();
+        createTargetZones();
 
-        let optionKeys = [];
-        if (catSortState.subMode === 'dual') {
-            catSortState.zones.push(
-                create3DCategoryZone('fruit', -3.0, -1.45),
-                create3DCategoryZone('vehicle', 3.0, -1.45)
-            );
-            optionKeys = [...qData.dualPair].sort(() => Math.random() - 0.5);
-        } else {
-            catSortState.zones.push(create3DCategoryZone(qData.targetCat, 0, -1.45));
-            optionKeys = [qData.answer, ...qData.distractors].sort(() => Math.random() - 0.5);
-        }
-
-        const xPositions = [-4.35, -1.45, 1.45, 4.35];
-        optionKeys.forEach((k, idx) => {
-            catSortState.optionCards.push(create3DCategoryOptionCard(k, xPositions[idx], 2.55, idx));
+        const rawSet = QUESTION_SETS[qIdx % QUESTION_SETS.length];
+        const shuffledKeys = [...rawSet].sort(() => Math.random() - 0.5);
+        const xSlots = [-4.5, -1.5, 1.5, 4.5];
+        shuffledKeys.forEach((k, idx) => {
+            sortState.items.push(createDraggable3DItem(k, xSlots[idx], 2.85, idx));
         });
 
-        // 更新左下角目標章與語音提示
+        renderSortTopBar();
+
         const cardEl = document.getElementById('target-number-card');
         const numEl = document.getElementById('target-badge-num');
         const dotsEl = document.getElementById('target-badge-dots');
         if (cardEl && numEl && dotsEl) {
-            if (catSortState.subMode === 'dual') {
-                cardEl.style.background = 'linear-gradient(to bottom, #10B981, #059669)';
-                cardEl.style.color = '#FFFFFF';
-                numEl.textContent = '🧺🚏';
-                dotsEl.textContent = '雙籃分類';
-            } else if (qData.targetCat === 'fruit') {
-                cardEl.style.background = 'linear-gradient(to bottom, #FB7185, #E11D48)';
-                cardEl.style.color = '#FFFFFF';
-                numEl.textContent = '🧺';
-                dotsEl.textContent = '搵水果';
-            } else {
-                cardEl.style.background = 'linear-gradient(to bottom, #38BDF8, #0284C7)';
-                cardEl.style.color = '#FFFFFF';
-                numEl.textContent = '🚏';
-                dotsEl.textContent = '交通工具';
-            }
+            cardEl.style.background = 'linear-gradient(to bottom, #10B981, #059669)';
+            cardEl.style.color = '#FFFFFF';
+            numEl.textContent = '🧺🚏';
+            dotsEl.textContent = `第${qIdx + 1}/10題`;
         }
-
         const banner = document.getElementById('counting-banner');
         if (banner) banner.classList.add('hidden');
 
-        if (catSortState.subMode === 'dual') {
-            setPromptUI(`第 ${qIdx + 1} 題：請將下面 4 張圖卡，分別拖入「水果籃」或者「交通工具站」啦！`, ``);
-        } else if (qData.targetCat === 'fruit') {
-            setPromptUI(`第 ${qIdx + 1} 題：邊個係「水果」呀？請拖去上面嘅水果籃度！`, ``);
+        if (sortState.difficulty === 'one') {
+            const wantCat = (qIdx % 2 === 0) ? 'fruit' : 'vehicle';
+            sortState.targetSingleCat = wantCat;
+            setPromptUI(
+                wantCat === 'fruit'
+                    ? `第 ${qIdx + 1} 題：請喺下面搵 1 個「水果」，拖去左邊「水果」果籃度！`
+                    : `第 ${qIdx + 1} 題：請喺下面搵 1 架「交通工具」，拖去右邊「交通工具」停車場度！`,
+                ``
+            );
         } else {
-            setPromptUI(`第 ${qIdx + 1} 題：邊個係「交通工具」呀？請拖去上面嘅車站度！`, ``);
+            sortState.targetSingleCat = null;
+            setPromptUI(`第 ${qIdx + 1} 題：請將下面 4 件物件分類，水果拖去左邊果籃，交通工具拖去右邊停車場！`, ``);
         }
         updateRightButtonForMode();
     }
 
-    function evaluateCardDrop(card, zone) {
-        if (!card || !zone || card.solved || catSortState.questionSolved) return;
+    function handleDropOnZone(item, zone) {
+        if (!item || !zone || item.sorted || sortState.roundDone) return;
 
-        if (card.itemObj.category === zone.category) {
-            // ✅ 答對回饋：清晰綠色視覺標示 + 正向簡潔鼓勵 + 彈出「下一題」按鈕
-            card.solved = true;
-            card.hintGlow = false;
-            card.hintHaloMat.opacity = 0;
-            card.frontMat.map.dispose();
-            card.frontMat.map = createOptionCardTexture(card.itemObj, true);
-            card.frontMat.needsUpdate = true;
+        // 若喺「單件指定分類」模式，檢查係咪放緊指定類別
+        if (sortState.difficulty === 'one' && sortState.targetSingleCat && item.info.cat !== sortState.targetSingleCat) {
+            sortState.hadHintThisQ = true;
+            if (typeof playGentleNudge === 'function') playGentleNudge();
+            item.targetX = item.homeX; item.targetY = item.homeY; item.targetZ = item.homeZ; item.targetScale = 1.0;
+            item.wobbleTimer = 0.55;
+            const rightZ = sortState.zones[sortState.targetSingleCat];
+            if (rightZ) rightZ.hintTimer = 2.4;
+            const label = sortState.targetSingleCat === 'fruit' ? '水果（左邊果籃）' : '交通工具（右邊停車場）';
+            setPromptUI(`💡 今題我哋先搵 1 個「${label}」試吓啦！`, ``);
+            return;
+        }
 
-            zone.placedCount += 1;
-            const offsetX = (catSortState.subMode === 'dual') ? ((zone.placedCount === 1) ? -0.65 : 0.65) : 0;
-            card.targetX = zone.x + offsetX;
-            card.targetY = 1.45;
-            card.targetZ = zone.z + 0.32;
-            card.targetScale = 0.72;
+        if (item.info.cat === zone.cat) {
+            // ✅ 分類正確：泊入果籃或停車場空位
+            item.sorted = true;
+            const freeSlot = zone.slots.find(s => !s.taken) || { x: zone.x, z: zone.z };
+            freeSlot.taken = true;
+
+            item.targetX = freeSlot.x;
+            item.targetY = 0.66;
+            item.targetZ = freeSlot.z;
+            item.targetScale = 0.82;
+            item.nameTag.visible = false;
+            item.okBadge.visible = true;
+
+            // 清除之前嘅錯誤提示箭咀
+            Object.values(sortState.zones).forEach(z => { z.hintTimer = 0; z.hintArrow.visible = false; });
 
             if (typeof playSuccessChime === 'function') playSuccessChime();
-            if (typeof emitStarParticles === 'function') emitStarParticles(new THREE.Vector3(zone.x, 1.8, zone.z));
-            catSortState.heroCheerTimer = 1.3;
+            if (typeof emitStarParticles === 'function') emitStarParticles(new THREE.Vector3(freeSlot.x, 1.4, freeSlot.z));
+            sortState.heroJumpTimer = 1.1;
+            renderSortTopBar();
 
-            const allDone = (catSortState.subMode === 'single')
+            const finishedThisRound = (sortState.difficulty === 'one')
                 ? true
-                : catSortState.optionCards.every(c => c.solved);
+                : sortState.items.every(i => i.sorted);
 
-            if (!allDone) {
-                setPromptUI(`好叻呀！${card.itemObj.praise}繼續分埋淨低嘅圖卡啦！`, ``);
+            if (!finishedThisRound) {
+                const remain = sortState.items.filter(i => !i.sorted).length;
+                setPromptUI(`👍 啱喇！${item.info.msg}仲有 ${remain} 件，繼續拖去啱嘅位置啦！`, ``);
                 return;
             }
 
-            // 本題完成！記錄成績並顯示「下一題」按鈕
-            catSortState.questionSolved = true;
-            if (!catSortState.hadRetryThisQ) catSortState.firstTryCount += 1;
-            else catSortState.retrySolvedCount += 1;
+            // 本題全部完成！彈出「下一題」按鈕
+            sortState.roundDone = true;
+            if (!sortState.hadHintThisQ) sortState.independentCount += 1;
+            else sortState.scaffoldedCount += 1;
 
-            // 隱藏未用嘅干擾卡，突顯正確答案視覺標示
-            if (catSortState.subMode === 'single') {
-                catSortState.optionCards.forEach(c => {
-                    if (!c.solved) c.targetScale = 0.85;
-                });
-            }
+            const isLast = (sortState.qIndex >= sortState.totalQuestions - 1);
+            setPromptUI(`🌟 好叻呀！${item.info.msg}本題分類完成！`, ``);
 
-            renderCategoryTopProgressUI();
-            const isLast = (catSortState.qIndex >= CATEGORY_QUESTION_BANK.length - 1);
-            const praiseMsg = `好叻呀！${card.itemObj.praise}`;
-            setPromptUI(`🌟 ${praiseMsg}`, ``);
-
-            const nextBar = document.getElementById('cat-next-bar');
-            const nextMsg = document.getElementById('cat-next-msg');
-            const nextBtn = document.getElementById('cat-next-btn');
-            if (nextBar && nextMsg && nextBtn) {
-                nextMsg.textContent = praiseMsg;
-                nextBtn.textContent = isLast ? '完成總結 🏆' : '下一題 ➔';
-                nextBar.classList.remove('hidden');
-                nextBar.classList.add('flex');
+            const bar = document.getElementById('cat-sort-next-bar');
+            const msg = document.getElementById('cat-sort-next-msg');
+            const btn = document.getElementById('cat-sort-next-btn');
+            if (bar && msg && btn) {
+                msg.textContent = isLast ? '10 題全部分類完成！' : `第 ${sortState.qIndex + 1} 題完成！好叻呀！`;
+                btn.textContent = isLast ? '睇總結獎勵 🏆' : '下一題 ➔';
+                bar.classList.remove('hidden');
+                bar.classList.add('flex');
             }
             updateRightButtonForMode();
         } else {
-            // 💡 答錯回饋：絕無紅叉或懲罰，輕柔滑回原位 + 金色柔和光圈提示線索 + 鼓勵再試一次
-            catSortState.hadRetryThisQ = true;
+            // 💡 分類錯位：無紅叉懲罰，順滑回彈 + 點亮正確目標區金色箭咀引導再試
+            sortState.hadHintThisQ = true;
             if (typeof playGentleNudge === 'function') playGentleNudge();
 
-            card.targetX = card.homeX;
-            card.targetY = card.homeY;
-            card.targetZ = card.homeZ;
-            card.targetScale = 1.0;
-            card.wobbleTimer = 0.55;
+            item.targetX = item.homeX;
+            item.targetY = item.homeY;
+            item.targetZ = item.homeZ;
+            item.targetScale = 1.0;
+            item.wobbleTimer = 0.6;
 
-            // 點亮目標籃及正確選項嘅柔和金色提示光圈 (Scaffolding Highlight)
-            zone.hintTimer = 2.0;
-            catSortState.optionCards.forEach(c => {
-                if (!c.solved && c.itemObj.category === zone.category) {
-                    c.hintGlow = true;
-                }
-            });
+            const correctZone = sortState.zones[item.info.cat];
+            if (correctZone) correctZone.hintTimer = 2.8;
 
-            let gentleHint = '';
-            if (zone.category === 'fruit') {
-                gentleHint = `「${card.itemObj.name}」係搭車出街用㗎！試吓搵甜甜哋、食得嘅「水果」拖入果籃啦！`;
+            if (item.info.cat === 'fruit') {
+                setPromptUI(`💡「${item.info.name}」係甜甜哋食得㗎，試吓拖去左邊「🧺 水果」果籃啦！`, ``);
             } else {
-                gentleHint = `「${card.itemObj.name}」係食得嘅水果嚟㗎！試吓搵載我哋去街街嘅「交通工具」拖去車站啦！`;
+                setPromptUI(`💡「${item.info.name}」係載我哋去街街㗎，試吓拖去右邊「🚏 交通工具」停車場啦！`, ``);
             }
-            setPromptUI(`💡 ${gentleHint}`, ``);
         }
     }
 
-    window.advanceCategoryQuestion = function () {
+    window.nextCategorySortQuestion = function () {
         if (typeof playPopSound === 'function') playPopSound(580);
-        if (catSortState.qIndex < CATEGORY_QUESTION_BANK.length - 1) {
-            loadCategoryQuestion(catSortState.qIndex + 1);
+        if (sortState.qIndex < sortState.totalQuestions - 1) {
+            setupSortQuestion(sortState.qIndex + 1);
         } else {
-            showCategoryCompletionSummary();
+            sortState.quizFinished = true;
+            hideSortModals();
+            if (typeof playStageClearFanfare === 'function') playStageClearFanfare();
+            if (typeof awardStarProgress === 'function') awardStarProgress();
+            const stats = document.getElementById('cat-sort-stats');
+            if (stats) {
+                stats.textContent = `🌟 完成 10 / 10 題 ｜ 獨立完成：${sortState.independentCount} 題 ｜ 提示後完成：${sortState.scaffoldedCount} 題`;
+            }
+            const modal = document.getElementById('cat-sort-summary-modal');
+            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+            speakCantonese('好叻呀！十題分類全部完成晒，你識得分清楚水果同交通工具喇！', true);
         }
     };
 
-    function showCategoryCompletionSummary() {
-        catSortState.sessionFinished = true;
-        hideCategoryOverlays();
-        if (typeof playStageClearFanfare === 'function') playStageClearFanfare();
-        if (typeof emitStarParticles === 'function') {
-            emitStarParticles(new THREE.Vector3(-2.2, 2.5, -1.2));
-            emitStarParticles(new THREE.Vector3(2.2, 2.5, -1.2));
-        }
-        // 完成 10 題獎勵星星
-        if (typeof gameState !== 'undefined' && typeof renderStarsBar === 'function') {
-            gameState.stars = Math.min(5, (gameState.stars || 0) + 1);
-            renderStarsBar();
-        }
-
-        const statsEl = document.getElementById('cat-summary-stats');
-        if (statsEl) {
-            statsEl.textContent = `🌟 完成 10 / 10 題 ｜ 獨立答啱：${catSortState.firstTryCount} 題 ｜ 提示後答啱：${catSortState.retrySolvedCount} 題`;
-        }
-        const sumModal = document.getElementById('cat-summary-modal');
-        if (sumModal) {
-            sumModal.classList.remove('hidden');
-            sumModal.classList.add('flex');
-        }
-        speakCatText('好叻呀！你已經完成晒十題分類挑戰，識得分清楚水果同交通工具喇！撳再玩一次可以繼續挑戰㗎！', true);
-    }
-
-    window.restartCategoryQuiz = function () {
+    window.restartCategorySortQuiz = function () {
         if (typeof playPopSound === 'function') playPopSound(540);
-        catSortState.firstTryCount = 0;
-        catSortState.retrySolvedCount = 0;
-        loadCategoryQuestion(0);
+        sortState.independentCount = 0;
+        sortState.scaffoldedCount = 0;
+        setupSortQuestion(0);
     };
 
-    // ==================== 7. 60FPS 觸控拖放互動（支援直接拖放 + 輕觸輔助） ====================
-    function updateRaycasterFromEvent(event) {
+    // ==================== 6. 手指與滑鼠 3D 拖放控制 ====================
+    function setRayFromPointer(e) {
         const rect = renderer.domElement.getBoundingClientRect();
-        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, camera);
     }
 
-    function bindCategoryPointerEvents() {
-        if (!renderer || !renderer.domElement || renderer.domElement.dataset.catDragBound) return;
-        renderer.domElement.dataset.catDragBound = 'true';
+    function bindDragEvents() {
+        if (!renderer || !renderer.domElement || renderer.domElement.dataset.catSortV2Bound) return;
+        renderer.domElement.dataset.catSortV2Bound = 'true';
         const dom = renderer.domElement;
 
         dom.addEventListener('pointerdown', (e) => {
             if (gameState.inLobby || gameState.mode !== 'categorysort') return;
             e.stopImmediatePropagation();
-            if (catSortState.questionSolved || catSortState.sessionFinished) return;
+            if (sortState.roundDone || sortState.quizFinished) return;
             if (typeof ensureAudioCtx === 'function') ensureAudioCtx();
 
-            updateRaycasterFromEvent(e);
+            setRayFromPointer(e);
 
-            // 1. 檢查係咪按住咗 4 個選項木牌之一
-            const activeCardMeshes = catSortState.optionCards
-                .filter(c => !c.solved)
-                .flatMap(c => [c.hitMesh, c.cardMesh]);
-            const hits = raycaster.intersectObjects(activeCardMeshes, false);
-
-            if (hits.length > 0 && hits[0].object.userData.cardObj) {
-                const card = hits[0].object.userData.cardObj;
+            // 1. 按住未分類嘅 3D 物件開始拖曳
+            const itemHits = raycaster.intersectObjects(sortState.items.filter(i => !i.sorted).map(i => i.hitMesh), false);
+            if (itemHits.length > 0 && itemHits[0].object.userData.itemObj) {
+                const it = itemHits[0].object.userData.itemObj;
                 if (typeof playPopSound === 'function') playPopSound(560);
-                catSortState.draggingCard = card;
-                catSortState.selectedCard = card;
-                catSortState.dragStartPos = { x: e.clientX, y: e.clientY };
-                catSortState.pointerMovedDist = 0;
-                card.targetY = 2.15;
-                card.targetScale = 1.12;
+                sortState.draggingItem = it;
+                sortState.selectedItem = it;
+                sortState.pointerStart = { x: e.clientX, y: e.clientY };
+                sortState.movedPx = 0;
+                it.targetY = 1.65;
+                it.targetScale = 1.15;
+                if (sortState.dragShadowRing) {
+                    sortState.dragShadowRing.position.set(it.targetX, 0.48, it.targetZ);
+                    sortState.dragShadowRing.visible = true;
+                }
                 return;
             }
 
-            // 2. 無障礙輔助：若幼兒已輕觸揀中某張卡，再篤一下上方分類籃亦可放入
-            if (catSortState.selectedCard && !catSortState.selectedCard.solved) {
-                const zoneMeshes = catSortState.zones.map(z => z.hitBox);
-                const zHits = raycaster.intersectObjects(zoneMeshes, false);
-                if (zHits.length > 0 && zHits[0].object.userData.zoneObj) {
-                    const chosenCard = catSortState.selectedCard;
-                    catSortState.selectedCard = null;
-                    evaluateCardDrop(chosenCard, zHits[0].object.userData.zoneObj);
+            // 2. 點選輔助：若已篤選某物件，再篤左籃或右車場亦可放入
+            if (sortState.selectedItem && !sortState.selectedItem.sorted) {
+                const zoneHits = raycaster.intersectObjects(Object.values(sortState.zones).map(z => z.hitBox), false);
+                if (zoneHits.length > 0 && zoneHits[0].object.userData.zoneObj) {
+                    const chosen = sortState.selectedItem;
+                    sortState.selectedItem = null;
+                    handleDropOnZone(chosen, zoneHits[0].object.userData.zoneObj);
                 }
             }
         }, true);
 
         dom.addEventListener('pointermove', (e) => {
-            if (gameState.inLobby || gameState.mode !== 'categorysort' || !catSortState.draggingCard) return;
+            if (gameState.inLobby || gameState.mode !== 'categorysort' || !sortState.draggingItem) return;
             e.stopImmediatePropagation();
 
-            const card = catSortState.draggingCard;
-            catSortState.pointerMovedDist = Math.hypot(
-                e.clientX - catSortState.dragStartPos.x,
-                e.clientY - catSortState.dragStartPos.y
-            );
+            const it = sortState.draggingItem;
+            sortState.movedPx = Math.hypot(e.clientX - sortState.pointerStart.x, e.clientY - sortState.pointerStart.y);
 
-            updateRaycasterFromEvent(e);
-            const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.65);
-            const hitPt = new THREE.Vector3();
-            if (raycaster.ray.intersectPlane(dragPlane, hitPt)) {
-                card.targetX = THREE.MathUtils.clamp(hitPt.x, -6.4, 6.4);
-                card.targetZ = THREE.MathUtils.clamp(hitPt.z, -2.9, 4.4);
-                card.targetY = 2.18;
+            setRayFromPointer(e);
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.1);
+            const pt = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(plane, pt)) {
+                it.targetX = THREE.MathUtils.clamp(pt.x, -6.8, 6.8);
+                it.targetZ = THREE.MathUtils.clamp(pt.z, -2.8, 4.4);
+                it.targetY = 1.7;
 
-                // 檢查拖近邊個分類籃，放大發光提示可以放手
-                let nearZone = null;
-                let bestDist = 2.75;
-                catSortState.zones.forEach(z => {
-                    const d = Math.hypot(card.targetX - z.x, card.targetZ - z.z);
-                    if (d < bestDist) { bestDist = d; nearZone = z; }
+                if (sortState.dragShadowRing) {
+                    sortState.dragShadowRing.position.set(it.targetX, 0.48, it.targetZ);
+                    sortState.dragShadowRing.visible = true;
+                }
+
+                // 磁吸感應：拖近左邊果籃或右邊停車場即高亮放大
+                let bestZone = null;
+                Object.values(sortState.zones).forEach(z => {
+                    if (Math.abs(it.targetX - z.x) < 2.65 && Math.abs(it.targetZ - z.z) < 2.15) {
+                        bestZone = z;
+                    }
                 });
-                catSortState.hoveredZone = nearZone;
+                sortState.hoveredZone = bestZone;
             }
         }, true);
 
-        const finishDrag = (e) => {
-            if (gameState.mode !== 'categorysort' || !catSortState.draggingCard) return;
-            const card = catSortState.draggingCard;
-            catSortState.draggingCard = null;
-            const hovered = catSortState.hoveredZone;
-            catSortState.hoveredZone = null;
+        const onRelease = () => {
+            if (gameState.mode !== 'categorysort' || !sortState.draggingItem) return;
+            const it = sortState.draggingItem;
+            sortState.draggingItem = null;
+            const dropZone = sortState.hoveredZone;
+            sortState.hoveredZone = null;
+            if (sortState.dragShadowRing) sortState.dragShadowRing.visible = false;
 
-            if (hovered) {
-                catSortState.selectedCard = null;
-                evaluateCardDrop(card, hovered);
-            } else if (catSortState.pointerMovedDist < 12) {
-                // 小朋友只係輕篤一下張卡：讀出物件名稱並微微托起，提示拖去上面個籃度
-                card.targetX = card.homeX;
-                card.targetZ = card.homeZ;
-                card.targetY = 1.78;
-                card.targetScale = 1.06;
-                catSortState.optionCards.forEach(other => {
-                    if (other !== card && !other.solved) {
-                        other.targetY = other.homeY;
-                        other.targetScale = 1.0;
-                    }
+            if (dropZone) {
+                sortState.selectedItem = null;
+                handleDropOnZone(it, dropZone);
+            } else if (sortState.movedPx < 10) {
+                // 輕觸物件：讀出名稱並微升，提示拖去左邊或右邊
+                it.targetX = it.homeX; it.targetZ = it.homeZ; it.targetY = 0.95; it.targetScale = 1.08;
+                sortState.items.forEach(o => {
+                    if (o !== it && !o.sorted) { o.targetY = o.homeY; o.targetScale = 1.0; }
                 });
-                speakCatText(`${card.itemObj.name}。請將佢拖去上面啱嘅籃度啦！`, true);
+                speakCantonese(`${it.info.name}。請拖去水果籃或者交通工具停車場啦！`, true);
             } else {
-                // 喺半路放開手指：順滑彈回原位
-                catSortState.selectedCard = null;
-                card.targetX = card.homeX;
-                card.targetY = card.homeY;
-                card.targetZ = card.homeZ;
-                card.targetScale = 1.0;
+                sortState.selectedItem = null;
+                it.targetX = it.homeX; it.targetY = it.homeY; it.targetZ = it.homeZ; it.targetScale = 1.0;
             }
         };
 
-        window.addEventListener('pointerup', finishDrag, true);
-        window.addEventListener('pointercancel', finishDrag, true);
+        window.addEventListener('pointerup', onRelease, true);
+        window.addEventListener('pointercancel', onRelease, true);
     }
 
-    // ==================== 8. 每幀 3D 動畫更新與大廳/主系統無縫掛載 ====================
-    function updateCategorySortFrame(dt, elapsed) {
+    // ==================== 7. 每幀動畫與主遊戲大廳掛載 ====================
+    function updateSortScene(dt, elapsed) {
         if (!categorySortGroup.visible) return;
         if (typeof environmentGroup !== 'undefined') environmentGroup.visible = false;
 
-        // 1. 分類籃磁吸放大與提示閃爍動畫
-        catSortState.zones.forEach(z => {
-            const isHovered = (catSortState.hoveredZone === z);
-            const targetS = isHovered ? 1.12 : 1.0;
-            z.group.scale.setScalar(THREE.MathUtils.lerp(z.group.scale.x, targetS, dt * 12));
+        Object.values(sortState.zones).forEach(z => {
+            const hovered = (sortState.hoveredZone === z);
+            z.root.scale.setScalar(THREE.MathUtils.lerp(z.root.scale.x, hovered ? 1.08 : 1.0, dt * 12));
 
             if (z.hintTimer > 0) {
                 z.hintTimer = Math.max(0, z.hintTimer - dt);
-                z.glowRingMat.color.setHex(0xFACC15);
-                z.glowRingMat.opacity = 0.55 + Math.sin(elapsed * 10) * 0.35;
+                z.ringMat.color.setHex(0xFACC15);
+                z.ringMat.opacity = 0.6 + Math.sin(elapsed * 10) * 0.35;
+                z.hintArrow.visible = true;
+                z.hintArrow.position.y = 3.25 + Math.abs(Math.sin(elapsed * 7)) * 0.35;
             } else {
-                z.glowRingMat.color.setHex(z.category === 'fruit' ? 0xFB7185 : 0x38BDF8);
-                z.glowRingMat.opacity = isHovered ? 0.92 : (0.45 + Math.sin(elapsed * 3) * 0.12);
+                z.hintArrow.visible = false;
+                z.ringMat.color.setHex(z.cat === 'fruit' ? 0xFB7185 : 0x38BDF8);
+                z.ringMat.opacity = hovered ? 0.95 : 0.5;
             }
         });
 
-        // 2. 4 張立體選項圖卡順滑移動、溫和搖擺與金色線索光圈
-        catSortState.optionCards.forEach((c, idx) => {
-            const lerpRate = (catSortState.draggingCard === c) ? 22 : 11;
-            c.group.position.x = THREE.MathUtils.lerp(c.group.position.x, c.targetX, Math.min(1, dt * lerpRate));
-            c.group.position.z = THREE.MathUtils.lerp(c.group.position.z, c.targetZ, Math.min(1, dt * lerpRate));
+        sortState.items.forEach((it, idx) => {
+            const speed = (sortState.draggingItem === it) ? 24 : 11;
+            it.wrap.position.x = THREE.MathUtils.lerp(it.wrap.position.x, it.targetX, Math.min(1, dt * speed));
+            it.wrap.position.z = THREE.MathUtils.lerp(it.wrap.position.z, it.targetZ, Math.min(1, dt * speed));
+            const bob = (!it.sorted && sortState.draggingItem !== it) ? Math.sin(elapsed * 2.6 + idx) * 0.04 : 0;
+            it.wrap.position.y = THREE.MathUtils.lerp(it.wrap.position.y, it.targetY + bob, Math.min(1, dt * speed));
+            it.wrap.scale.setScalar(THREE.MathUtils.lerp(it.wrap.scale.x, it.targetScale, Math.min(1, dt * 10)));
 
-            const idleBob = (!c.solved && catSortState.draggingCard !== c) ? Math.sin(elapsed * 2.8 + idx) * 0.05 : 0;
-            c.group.position.y = THREE.MathUtils.lerp(c.group.position.y, c.targetY + idleBob, Math.min(1, dt * lerpRate));
-            c.group.scale.setScalar(THREE.MathUtils.lerp(c.group.scale.x, c.targetScale, Math.min(1, dt * 10)));
-
-            if (c.wobbleTimer > 0) {
-                c.wobbleTimer = Math.max(0, c.wobbleTimer - dt);
-                c.group.rotation.z = Math.sin(elapsed * 26) * 0.12;
+            if (!it.sorted && sortState.draggingItem !== it) {
+                it.model.rotation.y = Math.sin(elapsed * 1.4 + idx) * 0.25;
             } else {
-                c.group.rotation.z = THREE.MathUtils.lerp(c.group.rotation.z, 0, dt * 10);
+                it.model.rotation.y = THREE.MathUtils.lerp(it.model.rotation.y, 0, dt * 8);
             }
 
-            if (c.hintGlow && !c.solved) {
-                c.hintHaloMat.opacity = 0.55 + Math.sin(elapsed * 6) * 0.32;
+            if (it.wobbleTimer > 0) {
+                it.wobbleTimer = Math.max(0, it.wobbleTimer - dt);
+                it.wrap.rotation.z = Math.sin(elapsed * 26) * 0.14;
             } else {
-                c.hintHaloMat.opacity = 0;
+                it.wrap.rotation.z = THREE.MathUtils.lerp(it.wrap.rotation.z, 0, dt * 10);
             }
         });
 
-        // 3. 馬利奧歡呼彈跳
-        if (catSortState.heroMesh) {
-            if (catSortState.heroCheerTimer > 0) {
-                catSortState.heroCheerTimer = Math.max(0, catSortState.heroCheerTimer - dt);
-                catSortState.heroMesh.position.y = 0.36 + Math.abs(Math.sin(elapsed * 14)) * 0.45;
+        if (sortState.heroMesh) {
+            if (sortState.heroJumpTimer > 0) {
+                sortState.heroJumpTimer = Math.max(0, sortState.heroJumpTimer - dt);
+                sortState.heroMesh.position.y = 0.36 + Math.abs(Math.sin(elapsed * 14)) * 0.42;
             } else {
-                catSortState.heroMesh.position.y = 0.36 + Math.sin(elapsed * 3) * 0.03;
+                sortState.heroMesh.position.y = 0.36 + Math.sin(elapsed * 3) * 0.03;
             }
         }
 
-        // 4. 最佳化俯視鏡頭角度（同時兼容橫向與直向 iPad）
         if (camera) {
             camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, dt * 5);
-            camera.position.y = THREE.MathUtils.lerp(camera.position.y, 11.4, dt * 5);
-            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 11.8, dt * 5);
-            camera.lookAt(0, 0.85, 0.45);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, 11.2, dt * 5);
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 11.6, dt * 5);
+            camera.lookAt(0, 0.75, 0.55);
         }
     }
 
-    function ensureCategoryLobbyButtons() {
-        // A. 在主大廳「第1步：揀選主題樂園」加入【🧺 分類樂園】大按鈕
+    function injectLobbyCards() {
         const stepSubj = document.getElementById('lobby-step-subject');
         if (stepSubj && !document.getElementById('lobby-subj-category')) {
-            const sampleBtn = stepSubj.querySelector('[onclick*="selectSubjectFromLobby"]');
-            if (sampleBtn && sampleBtn.parentElement) {
-                const catSubjBtn = document.createElement('button');
-                catSubjBtn.id = 'lobby-subj-category';
-                catSubjBtn.type = 'button';
-                catSubjBtn.onclick = () => selectSubjectFromLobby('category');
-                catSubjBtn.className = 'btn-toy group bg-gradient-to-b from-emerald-50 to-teal-100 hover:from-emerald-100 hover:to-teal-200 p-5 rounded-3xl border-4 border-emerald-400 flex flex-col items-center justify-center gap-2 shadow-lg transition-all';
-                catSubjBtn.innerHTML = `
-                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-4xl sm:text-5xl shadow-md group-hover:scale-110 transition-transform">🧺</div>
+            const firstBtn = stepSubj.querySelector('button[onclick*="selectSubjectFromLobby"]');
+            if (firstBtn && firstBtn.parentElement) {
+                const btn = document.createElement('button');
+                btn.id = 'lobby-subj-category';
+                btn.type = 'button';
+                btn.onclick = () => {
+                    gameState.subject = 'category';
+                    startGameFromLobby('categorysort');
+                };
+                btn.className = 'btn-toy group bg-gradient-to-b from-emerald-50 to-teal-100 hover:from-emerald-100 hover:to-teal-200 p-5 rounded-3xl border-4 border-emerald-400 flex flex-col items-center justify-center gap-2 shadow-lg transition-all';
+                btn.innerHTML = `
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-white flex items-center justify-center text-3xl sm:text-4xl shadow-md group-hover:scale-110 transition-transform">🧺🚌</div>
                     <span class="text-xl sm:text-2xl font-black text-slate-800">分類樂園</span>
-                    <span class="text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-200/80 px-3 py-0.5 rounded-full">🍎 水果 vs 🚌 交通工具</span>
+                    <span class="text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-200/80 px-3 py-0.5 rounded-full">水果 vs 交通工具</span>
                 `;
-                sampleBtn.parentElement.appendChild(catSubjBtn);
+                firstBtn.parentElement.appendChild(btn);
             }
-        }
-
-        // B. 在「第2步：揀選遊戲模式」加入分類遊戲卡
-        const treasureCard = document.getElementById('lobby-card-treasure');
-        if (treasureCard && treasureCard.parentElement && !document.getElementById('lobby-card-categorysort')) {
-            const modeGrid = treasureCard.parentElement;
-            const card1 = document.createElement('button');
-            card1.id = 'lobby-card-categorysort';
-            card1.type = 'button';
-            card1.onclick = () => { catSortState.subMode = 'single'; startGameFromLobby('categorysort'); };
-            card1.className = 'btn-toy group sm:col-span-2 bg-gradient-to-r from-emerald-100 via-amber-50 to-sky-100 hover:from-emerald-200 hover:to-sky-200 p-5 rounded-3xl border-4 border-emerald-400 items-center gap-4 text-left shadow-lg hidden';
-            card1.innerHTML = `
-                <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-white flex items-center justify-center text-3xl sm:text-4xl shadow-md group-hover:scale-110 transition-transform flex-shrink-0">🍎🚌</div>
-                <div class="flex-1">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-lg sm:text-2xl font-black text-slate-800">水果與交通工具分類大挑戰（共 10 題）</span>
-                        <span class="text-xs font-black bg-emerald-600 text-white px-3 py-1 rounded-full shadow-sm">🎯 K2 語義分類・拖放玩法</span>
-                    </div>
-                    <p class="text-xs sm:text-sm font-bold text-slate-600 mt-1">每題 4 個香港日常圖卡選項！用手指將立體木牌拖入 3D 水果籃或交通工具車站！</p>
-                </div>
-            `;
-            modeGrid.appendChild(card1);
         }
     }
 
-    function hookMainSystem() {
+    function connectToWonderland() {
         SUBJECT_DISPLAY_META.category = { icon: '🧺', title: '分類樂園', short: '🧺 分類' };
-        MODE_DISPLAY_META.categorysort = '🍎🚌 水果與交通分類';
-        if (gameState && gameState.settings && gameState.settings.lockedTargets) {
-            gameState.settings.lockedTargets.category = [];
-        }
-
-        // 支援 getCognitiveItemMeta 查詢分類詞彙
-        if (typeof window.getCognitiveItemMeta === 'function') {
-            const _origMeta = window.getCognitiveItemMeta;
-            window.getCognitiveItemMeta = getCognitiveItemMeta = function (key, subj) {
-                if (CATEGORY_ITEMS[key]) {
-                    const it = CATEGORY_ITEMS[key];
-                    return {
-                        key: it.id,
-                        subject: 'category',
-                        title: it.name,
-                        shortLabel: it.name[0],
-                        badgeSymbol: it.category === 'fruit' ? '🧺' : '🚏',
-                        hex: it.category === 'fruit' ? '#E11D48' : '#0284C7',
-                        subBadge: it.category === 'fruit' ? '水果' : '交通工具',
-                        spawnCount: 1,
-                        itemEmoji: it.category === 'fruit' ? '🍎' : '🚌',
-                        itemName: it.name
-                    };
-                }
-                return _origMeta(key, subj);
-            };
-        }
+        MODE_DISPLAY_META.categorysort = '🧺🚏 水果與交通分類';
 
         const _origOpenLobby = openLobby;
         window.openLobby = openLobby = function (step = 'subject') {
-            ensureCategoryLobbyButtons();
-            hideCategoryOverlays();
+            injectLobbyCards();
+            hideSortModals();
             _origOpenLobby(step);
-
-            const treasureCard = document.getElementById('lobby-card-treasure');
-            const catCard = document.getElementById('lobby-card-categorysort');
-            if (step !== 'subject' && treasureCard && treasureCard.parentElement && catCard) {
-                const isCatSubj = (gameState.subject === 'category');
-                Array.from(treasureCard.parentElement.children).forEach(child => {
-                    if (child.id === 'lobby-card-categorysort') {
-                        child.classList.toggle('hidden', !isCatSubj);
-                        child.classList.toggle('flex', isCatSubj);
-                    } else if (isCatSubj) {
-                        child.dataset.hiddenByCat = child.classList.contains('hidden') ? '1' : '0';
-                        child.classList.add('hidden');
-                        child.classList.remove('flex');
-                    } else if (child.dataset.hiddenByCat !== undefined) {
-                        if (child.dataset.hiddenByCat === '0') {
-                            child.classList.remove('hidden');
-                        }
-                        delete child.dataset.hiddenByCat;
-                    }
-                });
-                if (!isCatSubj) {
-                    // 重新觸發原有主題卡片篩選
-                    ['lobby-card-treasure', 'lobby-card-addition'].forEach(id => {
-                        const c = document.getElementById(id);
-                        if (c) { c.classList.toggle('hidden', gameState.subject !== 'number'); c.classList.toggle('flex', gameState.subject === 'number'); }
-                    });
-                    const sb = document.getElementById('lobby-card-shapebridge');
-                    if (sb) { sb.classList.toggle('hidden', gameState.subject !== 'shape'); sb.classList.toggle('flex', gameState.subject === 'shape'); }
-                    const cs = document.getElementById('lobby-card-colorsplash');
-                    if (cs) { cs.classList.toggle('hidden', gameState.subject !== 'color'); cs.classList.toggle('flex', gameState.subject === 'color'); }
-                }
-            }
-        };
-
-        const _origSwitchSubject = switchSubject;
-        window.switchSubject = switchSubject = function (newSubject) {
-            if (newSubject === 'category') {
-                gameState.subject = 'category';
-                switchMode('categorysort');
-                return;
-            }
-            if (gameState.mode === 'categorysort') {
-                hideCategoryOverlays();
-                categorySortGroup.visible = false;
-                gameState.mode = 'gacha';
-            }
-            _origSwitchSubject(newSubject);
         };
 
         const _origSwitchMode = switchMode;
         window.switchMode = switchMode = function (newMode) {
-            bindCategoryPointerEvents();
+            bindDragEvents();
             if (newMode === 'categorysort') {
                 gameState.subject = 'category';
-                ensure3DCategoryStageBuilt();
+                ensureStageBuilt();
             } else {
-                hideCategoryOverlays();
+                hideSortModals();
                 categorySortGroup.visible = false;
             }
             _origSwitchMode(newMode);
 
             if (newMode === 'categorysort') {
                 categorySortGroup.visible = true;
-                if (typeof gachaMachineGroup !== 'undefined') gachaMachineGroup.visible = false;
-                if (typeof trainGroup !== 'undefined') trainGroup.visible = false;
-                if (typeof marioStageGroup !== 'undefined') marioStageGroup.visible = false;
-                if (typeof treasureIslandGroup !== 'undefined') treasureIslandGroup.visible = false;
-                if (typeof additionArenaGroup !== 'undefined') additionArenaGroup.visible = false;
-                if (typeof shapeBridgeGroup !== 'undefined') shapeBridgeGroup.visible = false;
-                if (typeof colorSplashGroup !== 'undefined') colorSplashGroup.visible = false;
-                if (typeof environmentGroup !== 'undefined') environmentGroup.visible = false;
+                [window.gachaMachineGroup, window.trainGroup, window.marioStageGroup, window.treasureIslandGroup, window.additionArenaGroup, window.shapeBridgeGroup, window.colorSplashGroup, window.environmentGroup].forEach(grp => {
+                    if (grp) grp.visible = false;
+                });
                 const mainFloor = scene ? scene.getObjectByName('mainFloor') : null;
                 if (mainFloor) mainFloor.visible = false;
-
-                // 隱藏右下角十字方向盤，留空位置俾「下一題」按鈕
                 const dpad = document.getElementById('treasure-dpad-bar');
                 if (dpad) { dpad.classList.add('hidden'); dpad.classList.remove('flex'); }
-                renderCategoryTopProgressUI();
+                renderSortTopBar();
             }
         };
 
@@ -1311,26 +1101,42 @@
                 if (typeof numberBlocksGroup !== 'undefined') numberBlocksGroup.clear();
                 interactiveBlocks = [];
                 gameState.isBusy = false;
-                catSortState.firstTryCount = 0;
-                catSortState.retrySolvedCount = 0;
-                loadCategoryQuestion(0);
-                if (typeof window.refreshVisualStepFlowchart === 'function') window.refreshVisualStepFlowchart(true);
+                sortState.independentCount = 0;
+                sortState.scaffoldedCount = 0;
+                setupSortQuestion(0);
                 return;
             }
             categorySortGroup.visible = false;
-            hideCategoryOverlays();
+            hideSortModals();
             _origStartNewRound();
+        };
+
+        const _origHint = triggerVisualHint;
+        window.triggerVisualHint = triggerVisualHint = function (manualClick = false) {
+            if (gameState.mode === 'categorysort') {
+                if (sortState.roundDone || sortState.quizFinished) return;
+                if (manualClick && typeof playPopSound === 'function') playPopSound(660);
+                const nextUnsorted = sortState.items.find(i => !i.sorted);
+                if (nextUnsorted) {
+                    nextUnsorted.targetY = 0.92;
+                    const z = sortState.zones[nextUnsorted.info.cat];
+                    if (z) z.hintTimer = 2.6;
+                    speakCantonese(`試吓將「${nextUnsorted.info.name}」拖去${nextUnsorted.info.cat === 'fruit' ? '左邊水果籃' : '右邊交通工具停車場'}啦！`, true);
+                }
+                return;
+            }
+            _origHint(manualClick);
         };
 
         const _origUpdateRightBtn = updateRightButtonForMode;
         window.updateRightButtonForMode = updateRightButtonForMode = function () {
             _origUpdateRightBtn();
             if (gameState.mode === 'categorysort') {
-                const rightLabel = document.getElementById('right-btn-label');
-                const rightIcon = document.getElementById('right-btn-icon');
-                if (rightLabel && rightIcon) {
-                    rightLabel.textContent = catSortState.questionSolved ? '下一題' : '重聽題目';
-                    rightIcon.className = catSortState.questionSolved ? 'fa-solid fa-forward-step' : 'fa-solid fa-volume-high';
+                const lbl = document.getElementById('right-btn-label');
+                const ico = document.getElementById('right-btn-icon');
+                if (lbl && ico) {
+                    lbl.textContent = sortState.roundDone ? '下一題' : '重聽提示';
+                    ico.className = sortState.roundDone ? 'fa-solid fa-forward-step' : 'fa-solid fa-volume-high';
                 }
             }
         };
@@ -1338,67 +1144,20 @@
         const _origRightAction = handleRightActionBtn;
         window.handleRightActionBtn = handleRightActionBtn = function () {
             if (gameState.mode === 'categorysort') {
-                if (catSortState.questionSolved) advanceCategoryQuestion();
-                else speakCatText(document.getElementById('prompt-text')?.textContent || '', true);
+                if (sortState.roundDone) window.nextCategorySortQuestion();
+                else speakCantonese(document.getElementById('prompt-text')?.textContent || '', true);
                 return;
             }
             _origRightAction();
         };
 
-        // 連動右上角「💡 提示」掣：點亮金色柔和光圈與語音引導
-        const _origHint = triggerVisualHint;
-        window.triggerVisualHint = triggerVisualHint = function (manualClick = false) {
-            if (gameState.mode === 'categorysort') {
-                if (catSortState.questionSolved || catSortState.sessionFinished) return;
-                if (manualClick && typeof playPopSound === 'function') playPopSound(660);
-                const targetZone = catSortState.zones[0];
-                if (targetZone) targetZone.hintTimer = 2.5;
-                catSortState.optionCards.forEach(c => {
-                    if (!c.solved && (catSortState.subMode === 'dual' || c.itemObj.category === targetZone.category)) {
-                        c.hintGlow = true;
-                    }
-                });
-                return;
-            }
-            _origHint(manualClick);
-        };
-
-        // 連動頂部 1-2-3 視覺步驟流程條 (Patch Step 6)
-        if (typeof window.refreshVisualStepFlowchart === 'function') {
-            const _origFlow = window.refreshVisualStepFlowchart;
-            window.refreshVisualStepFlowchart = function (force = false) {
-                if (gameState.mode !== 'categorysort' || gameState.inLobby) {
-                    _origFlow(force);
-                    return;
-                }
-                const row = document.getElementById('visual-flowchart-row');
-                if (!row) { _origFlow(force); return; }
-                row.style.display = (gameState.settings && gameState.settings.showStepFlow === false) ? 'none' : 'flex';
-                const stepIdx = catSortState.sessionFinished ? 3 : (catSortState.questionSolved ? 2 : (catSortState.draggingCard || catSortState.selectedCard ? 1 : 0));
-                const steps = [
-                    { label: '👀 睇4張圖卡', spk: '第一步，聽題目同觀察四張圖卡' },
-                    { label: '✋ 拖入分類籃', spk: '第二步，將正確圖卡拖去上面嘅籃度' },
-                    { label: '⏭️ 撳下一題', spk: '第三步，答啱之後撳下一題繼續' }
-                ];
-                row.innerHTML = `<div class="pointer-events-auto inline-flex items-center gap-1.5 bg-white/92 backdrop-blur-md px-2.5 py-1 rounded-full border-2 border-emerald-300 shadow-md">` +
-                    steps.map((s, i) => {
-                        const cls = i < stepIdx ? 'bg-emerald-500 text-white' : (i === stepIdx ? 'bg-amber-400 text-slate-950 border-2 border-orange-500 font-black scale-105' : 'bg-slate-100 text-slate-400');
-                        return `<button type="button" onclick="window.__speakFlowStep && window.__speakFlowStep('${s.spk}')" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold ${cls}">${i < stepIdx ? '✓ ' : `${i + 1}. `}${s.label}</button>`;
-                    }).join('<span class="text-xs text-slate-300 font-black">➔</span>') +
-                    `</div>`;
-            };
-        }
-
-        // 掛入主 60FPS 迴圈
         const _origAnim = animate;
-        let _lastCatNow = performance.now();
+        let _lastT = performance.now();
         window.animate = animate = function () {
             const now = performance.now();
-            const dt = Math.min((now - _lastCatNow) / 1000, 0.1);
-            _lastCatNow = now;
-            if (categorySortGroup.visible) {
-                updateCategorySortFrame(dt, now / 1000);
-            }
+            const dt = Math.min((now - _lastT) / 1000, 0.1);
+            _lastT = now;
+            if (categorySortGroup.visible) updateSortScene(dt, now / 1000);
             _origAnim();
             if (!gameState.inLobby && gameState.mode === 'categorysort') {
                 const tb = document.getElementById('maze-tier-bar');
@@ -1407,13 +1166,11 @@
         };
     }
 
-    const bootCategoryModule = () => {
-        hookMainSystem();
-        ensureCategoryLobbyButtons();
-        bindCategoryPointerEvents();
-        if (typeof window.dockTopFloatingBars === 'function') setTimeout(window.dockTopFloatingBars, 120);
+    const boot = () => {
+        connectToWonderland();
+        injectLobbyCards();
+        bindDragEvents();
     };
-
-    if (document.readyState === 'complete') setTimeout(bootCategoryModule, 320);
-    else window.addEventListener('load', () => setTimeout(bootCategoryModule, 320));
+    if (document.readyState === 'complete') setTimeout(boot, 250);
+    else window.addEventListener('load', () => setTimeout(boot, 250));
 })();
